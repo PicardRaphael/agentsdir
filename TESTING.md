@@ -35,3 +35,4 @@ La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) enchaîne typecheck
 - **Les dépendances elles-mêmes** (citty) : on teste le comportement d'agentsdir, pas leurs internes.
 - **macOS en CI** : ubuntu couvre le mode symlink, windows couvre le mode copie (repli) ; macOS n'apporterait aucun cas supplémentaire.
 - **Aucun seuil de couverture** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage.
+- **L'interactivité `@clack/prompts`** : les tests passent par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.

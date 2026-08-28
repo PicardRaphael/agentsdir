@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify, TomlError } from "smol-toml";
-import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
+import { CliError } from "./errors.js";
 
 export const MANIFEST_FILE = ".agents.toml";
 export const MANIFEST_SCHEMA = 1;
@@ -20,10 +20,8 @@ export interface Manifest {
   projections: { mode: ProjectionMode; hashes: Record<string, string> };
 }
 
-/** User-facing manifest failure; commands map it to the environment/usage exit code. */
-export class ManifestError extends Error {
-  readonly exitCode: ExitCode = EXIT_CODES.environmentOrUsage;
-}
+/** User-facing manifest failure; carries the environment/usage exit code. */
+export class ManifestError extends CliError {}
 
 /**
  * Reads and validates `dir`/.agents.toml. Throws a ManifestError with an
