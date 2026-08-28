@@ -108,7 +108,7 @@ policy:
 
 ## 5. Format des règles
 
-Une règle est un fichier Markdown court dans `.agents/rules/`, nommé en kebab-case, dont le H1 est le nom de la règle. Le ton est impératif et direct : marqueurs **CRITICAL**, NEVER, ALWAYS ; paires d'exemples `GOOD` / `BAD` en blocs de code ; tableaux Markdown pour les références (commandes, correspondances, tailles).
+Une règle est un fichier Markdown court dans `.agents/rules/`, nommé en kebab-case, dont le H1 est le nom de la règle. La première ligne sous le H1 énonce **quand lire la règle** (« Read before… ») : c'est de cette ligne que `sync` dérive l'entrée « chemin — quand la lire » du bloc `rules-index` en le régénérant — la condition de lecture vit dans le fichier de règle, jamais seulement dans l'index. Le ton est impératif et direct : marqueurs **CRITICAL**, NEVER, ALWAYS ; paires d'exemples `GOOD` / `BAD` en blocs de code ; tableaux Markdown pour les références (commandes, correspondances, tailles).
 
 Deux mécanismes de découverte coexistent :
 

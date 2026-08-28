@@ -48,11 +48,19 @@ export interface ProjectOptions {
   dryRun?: boolean;
   /** Copy mode: fingerprints recorded by the previous run, to recognize our stale copies. */
   previousHashes?: Record<string, string>;
+  /**
+   * Copy mode: would-be content of source files (repo-relative POSIX paths),
+   * so a dry run computes the same plan as a run that writes those sources
+   * first (`sync` regenerates Codex artifacts before projecting them).
+   */
+  overlay?: Record<string, Buffer>;
 }
 
 export interface ProjectionChange {
   path: string;
   action: "link" | "write" | "unchanged";
+  /** False when the target did not exist before this run (created vs updated). */
+  existed: boolean;
 }
 
 export interface ProjectionResult {
@@ -113,13 +121,17 @@ async function projectSymlinks(
     const absTarget = toAbsolute(root, spec.target);
     const state = await classifyLinkTarget(absTarget, expected);
     if (state === "correct") {
-      changes.push({ path: spec.target, action: "unchanged" });
+      changes.push({ path: spec.target, action: "unchanged", existed: true });
       continue;
     }
     if (state === "foreign") {
       throw foreignTargetError(spec.target);
     }
-    changes.push({ path: spec.target, action: "link" });
+    changes.push({
+      path: spec.target,
+      action: "link",
+      existed: state !== "absent",
+    });
     if (options.dryRun) {
       continue;
     }
@@ -145,18 +157,22 @@ async function projectCopies(
   const previousHashes = options.previousHashes ?? {};
   const changes: ProjectionChange[] = [];
   const hashes: Record<string, string> = {};
-  for (const file of await expectedCopies(root)) {
+  for (const file of await expectedCopies(root, options.overlay ?? {})) {
     hashes[file.path] = sha256(file.content);
     const absTarget = toAbsolute(root, file.path);
     const state = await classifyCopyTarget(absTarget, file, previousHashes);
     if (state === "unchanged") {
-      changes.push({ path: file.path, action: "unchanged" });
+      changes.push({ path: file.path, action: "unchanged", existed: true });
       continue;
     }
     if (state === "foreign") {
       throw foreignTargetError(file.path);
     }
-    changes.push({ path: file.path, action: "write" });
+    changes.push({
+      path: file.path,
+      action: "write",
+      existed: state !== "absent",
+    });
     if (options.dryRun) {
       continue;
     }
@@ -253,7 +269,10 @@ interface ExpectedCopy {
   isMarkdown: boolean;
 }
 
-async function expectedCopies(root: string): Promise<ExpectedCopy[]> {
+async function expectedCopies(
+  root: string,
+  overlay: Record<string, Buffer>,
+): Promise<ExpectedCopy[]> {
   const files: ExpectedCopy[] = [
     {
       path: "CLAUDE.md",
@@ -265,24 +284,41 @@ async function expectedCopies(root: string): Promise<ExpectedCopy[]> {
     if (spec.kind !== "dir") {
       continue;
     }
+    const seenSources = new Set<string>();
     for (const source of await walkFiles(
       toAbsolute(root, spec.source),
       spec.target,
     )) {
-      const raw = await readFile(source.abs);
-      if (source.rel.endsWith(".md")) {
-        const decorated = `${MD_HEADER_LINE}\n\n${raw.toString("utf8")}`;
-        files.push({
-          path: source.rel,
-          content: Buffer.from(decorated, "utf8"),
-          isMarkdown: true,
-        });
-      } else {
-        files.push({ path: source.rel, content: raw, isMarkdown: false });
-      }
+      const sourceRel = spec.source + source.rel.slice(spec.target.length);
+      seenSources.add(sourceRel);
+      const raw = overlay[sourceRel] ?? (await readFile(source.abs));
+      files.push(toExpectedCopy(source.rel, raw));
+    }
+    // overlay entries for source files absent from disk (e.g. a regenerated
+    // artifact planned but not written yet), appended in sorted order
+    const extras = Object.keys(overlay)
+      .filter(
+        (key) => key.startsWith(`${spec.source}/`) && !seenSources.has(key),
+      )
+      .sort();
+    for (const key of extras) {
+      const rel = spec.target + key.slice(spec.source.length);
+      files.push(toExpectedCopy(rel, overlay[key] ?? Buffer.alloc(0)));
     }
   }
   return files;
+}
+
+function toExpectedCopy(rel: string, raw: Buffer): ExpectedCopy {
+  if (rel.endsWith(".md")) {
+    const decorated = `${MD_HEADER_LINE}\n\n${raw.toString("utf8")}`;
+    return {
+      path: rel,
+      content: Buffer.from(decorated, "utf8"),
+      isMarkdown: true,
+    };
+  }
+  return { path: rel, content: raw, isMarkdown: false };
 }
 
 /** Recursive, sorted by name (code units) so every output is deterministic. */
