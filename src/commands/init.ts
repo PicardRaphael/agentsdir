@@ -16,6 +16,7 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
+import { project } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
@@ -58,7 +59,8 @@ export interface InitFlags {
   mode?: string;
 }
 
-export type PlannedAction = "create" | "mkdir" | "update-block" | "skip-exists";
+export type PlannedAction =
+  "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";
 
 export interface PlannedWrite {
   /** Repo-relative path, always with forward slashes. */
@@ -85,9 +87,51 @@ export async function runInit(
   if (await pathExists(join(root, MANIFEST_FILE))) {
     return { exitCode: EXIT_CODES.ok, alreadyInitialized: true, changes: [] };
   }
+  if (answers.harnesses.includes("claude")) {
+    // preflight: a foreign projection target aborts before any write
+    await project(root, { mode: answers.mode, dryRun: true });
+  }
   const changes = await buildPlan(root, answers);
   if (!options.dryRun) {
     await applyPlan(root, changes);
+  }
+  let hashes: Record<string, string> = {};
+  if (answers.harnesses.includes("claude")) {
+    const projection = await project(root, {
+      mode: answers.mode,
+      dryRun: options.dryRun,
+    });
+    if (answers.mode === "copy") {
+      hashes = projection.hashes;
+    }
+    for (const change of projection.changes) {
+      changes.push({
+        path: change.path,
+        action:
+          change.action === "link"
+            ? "link"
+            : change.action === "write"
+              ? "project"
+              : "skip-exists",
+      });
+    }
+  }
+  const manifest: Manifest = {
+    schema: MANIFEST_SCHEMA,
+    cliVersion: CLI_VERSION,
+    project: { name: answers.productName, stack: answers.stacks },
+    harness: { enabled: answers.harnesses },
+    packs: { installed: answers.packs },
+    projections: { mode: answers.mode, hashes },
+  };
+  const manifestWrite: PlannedWrite = {
+    path: MANIFEST_FILE,
+    action: "create",
+    content: renderManifest(manifest),
+  };
+  changes.push(manifestWrite);
+  if (!options.dryRun) {
+    await applyPlan(root, [manifestWrite]);
   }
   return { exitCode: EXIT_CODES.ok, alreadyInitialized: false, changes };
 }
@@ -338,19 +382,6 @@ async function buildPlan(
     ".github/workflows/agents-check.yml",
     renderAgentsCheckWorkflow(),
   );
-  const manifest: Manifest = {
-    schema: MANIFEST_SCHEMA,
-    cliVersion: CLI_VERSION,
-    project: { name: answers.productName, stack: answers.stacks },
-    harness: { enabled: answers.harnesses },
-    packs: { installed: answers.packs },
-    projections: { mode: answers.mode, hashes: {} },
-  };
-  plan.push({
-    path: MANIFEST_FILE,
-    action: "create",
-    content: renderManifest(manifest),
-  });
   return plan;
 }
 
@@ -491,6 +522,10 @@ function actionLabel(action: PlannedAction): string {
       return "update block";
     case "skip-exists":
       return "keep        ";
+    case "link":
+      return "link        ";
+    case "project":
+      return "project     ";
   }
 }
 
