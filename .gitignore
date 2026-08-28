@@ -1,0 +1,13 @@
+# Dépendances et sorties de build (quand le code arrivera)
+node_modules/
+dist/
+coverage/
+
+# État local des agents : jamais versionné (données personnelles possibles).
+# Un modèle est versionné à part quand nécessaire.
+/.agents/memory/
+/.agents/output/
+
+# Divers
+*.log
+.DS_Store

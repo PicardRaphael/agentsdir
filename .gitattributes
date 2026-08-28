@@ -1,0 +1,6 @@
+# Fins de ligne normalisées : les scripts et les fichiers dont une empreinte
+# est calculée doivent être identiques sur toutes les machines.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
