@@ -28,7 +28,8 @@
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "citty": "^0.2.2",
-    "smol-toml": "^1.8.0"
+    "smol-toml": "^1.8.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
