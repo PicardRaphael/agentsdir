@@ -31,7 +31,7 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 
 - `README.md` — vision publique et carte de la documentation.
 - `TESTING.md` — stratégie de test : tiers retenus, nommage, commandes, non-testé.
-- `src/` — code TypeScript de la CLI (`cli.ts`, `exit-codes.ts`, `commands/`).
+- `src/` — code TypeScript de la CLI (`cli.ts`, `exit-codes.ts`, `commands/`, `core/`).
 - `docs/SPEC.md` — positionnement, principes, décisions.
 - `docs/architecture.md` — architecture technique de la CLI (document de référence).
 - `docs/commandes.md` — spécification des commandes.
