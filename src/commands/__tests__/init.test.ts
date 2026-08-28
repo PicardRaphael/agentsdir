@@ -89,6 +89,9 @@ describe("04 - init command", () => {
       ".agents/agents/.gitkeep",
       ".agents/plan/.gitkeep",
       "AGENTS.md",
+      "CLAUDE.md",
+      ".claude/rules/tasks.md",
+      ".claude/rules/memory.md",
       ".gitignore",
       ".gitattributes",
       ".github/workflows/agents-check.yml",
@@ -102,15 +105,22 @@ describe("04 - init command", () => {
     const agentsMd = await readFile(join(dir, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("**demo** — A demo product.");
     expect(agentsMd).toContain("<!-- agentsdir:begin rules-index -->");
+    const claudeMd = await readFile(join(dir, "CLAUDE.md"), "utf8");
+    expect(claudeMd).toContain("@AGENTS.md");
     const manifest = await readManifest(dir);
-    expect(manifest).toEqual({
-      schema: 1,
-      cliVersion: "0.0.0",
-      project: { name: "demo", stack: ["node"] },
-      harness: { enabled: ["claude", "codex", "cursor"] },
-      packs: { installed: ["core", "creator"] },
-      projections: { mode: "copy", hashes: {} },
-    });
+    expect(manifest.schema).toBe(1);
+    expect(manifest.cliVersion).toBe("0.0.0");
+    expect(manifest.project).toEqual({ name: "demo", stack: ["node"] });
+    expect(manifest.harness.enabled).toEqual(["claude", "codex", "cursor"]);
+    expect(manifest.packs.installed).toEqual(["core", "creator"]);
+    expect(manifest.projections.mode).toBe("copy");
+    expect(Object.keys(manifest.projections.hashes)).toEqual(
+      expect.arrayContaining([
+        "CLAUDE.md",
+        ".claude/rules/tasks.md",
+        ".claude/rules/memory.md",
+      ]),
+    );
   });
 
   it("Given an existing AGENTS.md, When init runs, Then only the managed block is appended and the user content is preserved byte for byte", async () => {
@@ -214,6 +224,37 @@ describe("04 - init command", () => {
     const copyRepo = await makeGitRepo();
     await runCli(copyRepo, ["init", "--yes", "--mode", "copy"]);
     expect((await readManifest(copyRepo)).projections.mode).toBe("copy");
+  });
+
+  it("Given --harness codex only, When init runs, Then no Claude projection is created and the manifest hashes stay empty", async () => {
+    const dir = await makeTempDir();
+    const result = await runInit(dir, answers({ harnesses: ["codex"] }), {
+      dryRun: false,
+    });
+    expect(result.changes.some((change) => change.path === "CLAUDE.md")).toBe(
+      false,
+    );
+    await expect(readFile(join(dir, "CLAUDE.md"), "utf8")).rejects.toThrow();
+    const manifest = await readManifest(dir);
+    expect(manifest.projections.hashes).toEqual({});
+  });
+
+  it("Given a foreign CLAUDE.md, When the CLI runs init, Then it stops with exit code 1 before writing anything", async () => {
+    const dir = await makeGitRepo();
+    await writeFile(join(dir, "CLAUDE.md"), "# Hand-written\n", "utf8");
+    const { code, stderr } = await runCli(dir, [
+      "init",
+      "--yes",
+      "--mode",
+      "copy",
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("CLAUDE.md");
+    await expect(readFile(join(dir, "CLAUDE.md"), "utf8")).resolves.toBe(
+      "# Hand-written\n",
+    );
+    const entries = await readdir(dir);
+    expect(entries.sort()).toEqual([".git", "CLAUDE.md"]);
   });
 
   it("Given no TTY and no --yes, When the CLI runs init --dry-run, Then defaults are used with a note and nothing is written", async () => {
