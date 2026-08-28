@@ -47,6 +47,7 @@ describe("06 - skill frontmatter", () => {
       implicit: false,
       disableModelInvocation: undefined,
       argumentHint: undefined,
+      allowedTools: undefined,
     });
     expect(body).toContain("# Mon skill");
   });

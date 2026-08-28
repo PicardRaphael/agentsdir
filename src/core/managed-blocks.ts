@@ -30,6 +30,27 @@ export function renderBlock(
   return `${begin}\n${content.replace(/\n+$/, "")}\n${end}`;
 }
 
+/** Returns the content of block `id` (markers excluded), or undefined when absent or broken. */
+export function extractBlock(
+  source: string,
+  id: string,
+  style: CommentStyle,
+): string | undefined {
+  const { begin, end } = markers(id, style);
+  const beginIndex = source.indexOf(begin);
+  if (beginIndex === -1) {
+    return undefined;
+  }
+  const endIndex = source.indexOf(end, beginIndex);
+  if (endIndex === -1) {
+    return undefined;
+  }
+  return source
+    .slice(beginIndex + begin.length, endIndex)
+    .replace(/^\n/, "")
+    .replace(/\n$/, "");
+}
+
 /**
  * Replaces the block `id` in `source`, or appends it at the end of the file
  * when absent. The rest of the file is preserved byte for byte; output always

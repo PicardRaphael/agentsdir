@@ -19,6 +19,7 @@ function fm(overrides: Partial<SkillFrontmatter> = {}): SkillFrontmatter {
     implicit: false,
     disableModelInvocation: true,
     argumentHint: undefined,
+    allowedTools: undefined,
     ...overrides,
   };
 }
