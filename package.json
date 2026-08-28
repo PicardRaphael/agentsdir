@@ -26,7 +26,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "citty": "^0.2.2"
+    "citty": "^0.2.2",
+    "smol-toml": "^1.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

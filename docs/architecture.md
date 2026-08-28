@@ -99,7 +99,7 @@ flowchart LR
 Le manifeste est le contrat local de l'installation : il enregistre ce qui a été installé, dans quel mode, et les empreintes nécessaires à la détection de dérive. Il est versionné dans le repo cible.
 
 ```toml
-# .agents.toml — manifeste agentsdir. Fichier géré par la CLI ; ne pas éditer à la main.
+# .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.
 
 # Version du schéma du manifeste (migrations gérées par `agentsdir update`).
 schema = 1
