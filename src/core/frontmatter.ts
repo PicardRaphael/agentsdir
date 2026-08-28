@@ -21,6 +21,7 @@ export interface SkillFrontmatter {
   implicit: boolean;
   disableModelInvocation: boolean | undefined;
   argumentHint: string | undefined;
+  allowedTools: string[] | undefined;
 }
 
 export interface ParsedSkill {
@@ -90,7 +91,27 @@ function validateFrontmatter(data: unknown): SkillFrontmatter {
     implicit: optionalBoolean(table, "implicit") ?? false,
     disableModelInvocation: optionalBoolean(table, "disable-model-invocation"),
     argumentHint: optionalString(table, "argument-hint"),
+    allowedTools: optionalStringArray(table, "allowed-tools"),
   };
+}
+
+function optionalStringArray(
+  table: Record<string, unknown>,
+  field: string,
+): string[] | undefined {
+  const value = table[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string")
+  ) {
+    throw invariant(
+      `Frontmatter field \`${field}\` must be a list of strings.`,
+    );
+  }
+  return value as string[];
 }
 
 function requireString(table: Record<string, unknown>, field: string): string {
