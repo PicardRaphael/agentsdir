@@ -41,7 +41,7 @@ disable-model-invocation: true
 
 # Champs agentsdir (projections Codex)
 display-name: "Mon Skill"
-short-description: "Fait X de bout en bout"
+short-description: "Fait X de bout en bout, en autonomie"
 color: "#1F4E8C"
 icon: badge-check
 default-prompt: "Use $mon-skill to do X end to end."
@@ -72,7 +72,7 @@ Format exact, dérivé du frontmatter, régénéré octet à octet par `sync`, j
 ```yaml
 interface:
   display_name: "Mon Skill"
-  short_description: "Fait X de bout en bout"
+  short_description: "Fait X de bout en bout, en autonomie"
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/icon.svg"
   brand_color: "#1F4E8C"
