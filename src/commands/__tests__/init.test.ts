@@ -224,6 +224,8 @@ describe("04 - init command", () => {
     expect(manifest.packs.installed).toEqual(["core"]);
   });
 
+  // Two full CLI inits in subprocesses (default packs include creator):
+  // slower than the sibling tests, so it carries its own timeout.
   it("Given --mode symlink or copy, When the CLI runs init, Then the detection is bypassed and the manifest records the forced mode", async () => {
     const symlinkRepo = await makeGitRepo();
     await runCli(symlinkRepo, ["init", "--yes", "--mode", "symlink"]);
@@ -231,7 +233,7 @@ describe("04 - init command", () => {
     const copyRepo = await makeGitRepo();
     await runCli(copyRepo, ["init", "--yes", "--mode", "copy"]);
     expect((await readManifest(copyRepo)).projections.mode).toBe("copy");
-  });
+  }, 20000);
 
   it("Given --harness codex only, When init runs, Then no Claude projection is created and the manifest hashes stay empty", async () => {
     const dir = await makeTempDir();
