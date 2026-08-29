@@ -5,6 +5,7 @@ import { addHookCommand } from "./commands/add-hook.js";
 import { addRuleCommand } from "./commands/add-rule.js";
 import { addSkillCommand } from "./commands/add-skill.js";
 import { checkCommand } from "./commands/check.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
@@ -60,6 +61,7 @@ const main = defineCommand({
     pack: packCommand,
     sync: syncCommand,
     check: checkCommand,
+    doctor: doctorCommand,
   },
   async run({ args }) {
     // citty also runs the root command when a subcommand matched
