@@ -178,14 +178,18 @@ installés, prochaines commandes.
 ### Synopsis
 
 ```
-npx agentsdir add skill <name> [--implicit] [--dry-run] [--json]
+npx agentsdir add skill <name> [--implicit] [--read-only] [--dry-run] [--json]
 ```
 
 ### Comportement
 
 1. Valide `<name>` (kebab-case, unique dans `.agents/skills/`).
 2. Crée `.agents/skills/<name>/SKILL.md` avec le **frontmatter étendu qui sert
-   de catalogue** (voir [conventions.md](conventions.md)) :
+   de catalogue** (voir [conventions.md](conventions.md)). Les champs sont
+   demandés interactivement — description « Use when… », nom affiché, courte
+   description (25 à 64 caractères), couleur, icône choisie dans le jeu embarqué
+   (l'invite liste les noms valides), prompt par défaut ; sans TTY, des valeurs
+   par défaut valides sont utilisées :
 
    ```yaml
    ---
@@ -209,9 +213,10 @@ npx agentsdir add skill <name> [--implicit] [--dry-run] [--json]
    fond `color`), dérivées du frontmatter — jamais éditées à la main.
 4. `--implicit` retire `disable-model-invocation` et pose
    `allow_implicit_invocation: true` côté Codex — **refusé** (code `2`, erreur
-   d'utilisation) si le gabarit choisi déclare des capacités d'écriture : seul
-   un skill en lecture seule peut être invocable implicitement, sur les deux
-   harness à la fois.
+   d'utilisation) sans la déclaration explicite `--read-only` : seul un skill
+   en lecture seule peut être invocable implicitement, sur les deux harness à
+   la fois. La déclaration est matérialisée dans le frontmatter par un
+   `allowed-tools` limité aux outils de lecture (`Read`, `Grep`, `Glob`).
 5. Exécute la passe de validation de `check` sur le skill créé avant de
    conclure.
 
@@ -268,10 +273,11 @@ npx agentsdir add agent <name> [--model <model>] [--dry-run] [--json]
 
 ### Comportement
 
-Crée `.agents/agents/<name>.md` : frontmatter `name` (PascalCase affiché),
-`description` (quand déléguer à cet agent), `color`, `model`, suivi du prompt
-système. Le fichier est exposé à Claude Code par la projection
-`.claude/agents` ; les autres harness le découvrent via `AGENTS.md`.
+Crée `.agents/agents/<name>.md` : frontmatter `name` (kebab-case, identique au
+nom du fichier — voir l'invariant 14 de [conventions.md](conventions.md)),
+`description` (quand déléguer à cet agent), `color`, `model` (défaut
+`inherit`), suivi du prompt système. Le fichier est exposé à Claude Code par la
+projection `.claude/agents` ; les autres harness le découvrent via `AGENTS.md`.
 
 ### Idempotence et codes de sortie
 
