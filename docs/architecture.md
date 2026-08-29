@@ -167,7 +167,7 @@ Fait vérifié sur la machine de développement du projet : dans un repo fraîch
 
 | Décision | Choix | Justification |
 | --- | --- | --- |
-| Langage | TypeScript strict, Node >= 20 | Écosystème des harness ; typage des contrats (frontmatter, manifeste). |
+| Langage | TypeScript strict, Node >= 22 | Écosystème des harness ; typage des contrats (frontmatter, manifeste). Plancher relevé de 20 à 22 en août 2026 (Node 20 EOL). |
 | Distribution | `npx agentsdir` — bundle unique | Zéro installation ; Node n'est requis que sur la machine du développeur, jamais par le repo cible. Binaires compilés envisageables plus tard. |
 | Dépendances de la CLI | Minimales : `citty` (parseur, choix acté à la tâche 01), `@clack/prompts` (interactif), `smol-toml` (manifeste), `yaml` (lecture du frontmatter des `SKILL.md` — YAML est le format du standard Agent Skills, le réimplémenter serait un nid à bugs ; **parse seul** : tout rendu YAML est fait main pour le déterminisme octet à octet — ajout acté à la tâche 06) — chacune ajoutée au moment où le code l'utilise | Un bundle léger se lance vite via npx et limite la surface de rupture. |
 | Dépendances du repo cible | **Aucune** | Les artefacts générés sont du Markdown, YAML, JSON et SVG purs. Un repo Python reste 100 % Python. |
