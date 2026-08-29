@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { defineCommand, runMain, showUsage } from "citty";
 import { addAgentCommand } from "./commands/add-agent.js";
+import { addHookCommand } from "./commands/add-hook.js";
 import { addRuleCommand } from "./commands/add-rule.js";
 import { addSkillCommand } from "./commands/add-skill.js";
 import { checkCommand } from "./commands/check.js";
@@ -18,6 +19,7 @@ const addCommand = defineCommand({
     skill: addSkillCommand,
     rule: addRuleCommand,
     agent: addAgentCommand,
+    hook: addHookCommand,
   },
   async run({ args }) {
     // citty also runs the group command when a subcommand matched

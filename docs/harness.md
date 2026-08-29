@@ -23,11 +23,11 @@ Lecture de la matrice : **la source de vérité `.agents/` est déjà lisible na
 
 ## 3. Hooks : un script portable, trois enregistrements
 
-Les trois harness ont convergé sur les **mêmes noms d'événements** — `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `SessionStart`… — mais leurs fichiers d'enregistrement sont incompatibles :
+Les trois harness ont convergé sur le **même jeu d'événements** — `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `SessionStart`… — mais leurs fichiers d'enregistrement sont incompatibles. Formats revalidés le 2026-08-29 contre les trois documentations officielles (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks, cursor.com/docs/hooks) ; la matrice exacte codée vit dans `src/core/hook-registries.ts` :
 
-- **Claude Code** — `.claude/settings.json` : enveloppe `hooks` avec objets `{ "matcher": "…", "hooks": [...] }` par événement.
-- **Codex** — `.codex/hooks.json` : les événements sont des clés à la racine du fichier, sans enveloppe.
-- **Cursor** — `.cursor/hooks.json` : `"version": 1` et une forme propre ; la syntaxe `matcher` de Claude n'y fonctionne pas.
+- **Claude Code** — `.claude/settings.json` : enveloppe `hooks`, groupes `{ "matcher": "…", "hooks": [{ "type": "command", "command": "…" }] }` par événement.
+- **Codex** — `.codex/hooks.json` : même enveloppe `hooks` et mêmes groupes que Claude, dans un fichier dédié. (Correction du 2026-08-29 : une version antérieure de ce document affirmait « événements à la racine, sans enveloppe » — la documentation officielle publiée par OpenAI montre l'enveloppe `hooks` ; des guides tiers divergent encore, la doc officielle prévaut.)
+- **Cursor** — `.cursor/hooks.json` : `"version": 1` obligatoire, enveloppe `hooks`, clés d'événements en lowerCamelCase avec renommages (`preToolUse`, `stop`, `sessionStart`, et `beforeSubmitPrompt` pour `UserPromptSubmit`), entrées plates `{ "command": "…" }`. Le `matcher` y existe mais avec le vocabulaire d'outils propre à Cursor (`Shell`, pas `Bash`) : un matcher écrit pour Claude n'y correspond à rien — `add hook` ne le projette donc jamais côté Cursor.
 
 Le script du hook, lui, est portable (Node sans dépendances, entrée JSON sur stdin). D'où le générateur `add hook` : écrire le script une fois, l'enregistrer trois fois.
 
@@ -35,8 +35,8 @@ Le script du hook, lui, est portable (Node sans dépendances, entrée JSON sur s
 flowchart LR
     S[".agents/hooks/&lt;nom&gt;.mjs<br/>script portable — écrit une fois"]
     S --> A[".claude/settings.json<br/>enveloppe hooks + matcher"]
-    S --> B[".codex/hooks.json<br/>événements à la racine"]
-    S --> C[".cursor/hooks.json<br/>version: 1, forme propre"]
+    S --> B[".codex/hooks.json<br/>enveloppe hooks, groupes matcher"]
+    S --> C[".cursor/hooks.json<br/>version: 1, cles lowerCamelCase"]
 ```
 
 **Avertissement** : les formats de hooks de Cursor ont déjà cassé entre deux versions de l'outil. Chaque release d'`agentsdir` doit revalider les trois formats d'enregistrement contre les documentations à jour, et `doctor` doit signaler un format inconnu plutôt que d'écrire à l'aveugle.
