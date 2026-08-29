@@ -4,6 +4,7 @@ import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
 import { CliError } from "../core/errors.js";
 import { parseSkillMarkdown } from "../core/frontmatter.js";
+import { planHookRegistrations } from "../core/hook-registries.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
@@ -121,6 +122,20 @@ export async function runSync(
     }
   }
   planned.push(await planRulesIndex(root));
+  // hook registrations: regenerated from the scripts in .agents/hooks/ —
+  // a deleted script loses its registrations here (clean deregistration)
+  for (const registry of await planHookRegistrations(
+    root,
+    manifest.harness.enabled,
+  )) {
+    planned.push({
+      path: registry.path,
+      action: registry.action,
+      ...(registry.content !== undefined
+        ? { content: Buffer.from(registry.content, "utf8") }
+        : {}),
+    });
+  }
   const lock = await planLock(root, overlay);
   if (lock !== undefined) {
     planned.push(lock);

@@ -305,28 +305,38 @@ npx agentsdir add hook <event> [--name <slug>] [--matcher "<pattern>"] [--dry-ru
    [harness.md](harness.md) pour la matrice complète et les événements propres
    à un seul harness, acceptés avec avertissement).
 2. Crée **un seul script portable Node sans dépendances** :
-   `.agents/hooks/<event>-<slug>.mjs`, qui lit le payload JSON sur stdin et
-   répond selon le protocole commun (gabarit commenté).
-3. L'enregistre sur chaque harness actif du manifeste :
-   - Claude Code — bloc géré dans `.claude/settings.json`
-     (`hooks.<event>[]`, forme `{matcher, hooks: [{type: "command", command}]}`) ;
-   - Codex — `.codex/hooks.json` (événements à la racine, sans enveloppe
-     `hooks`) ;
-   - Cursor — `.cursor/hooks.json` (`"version": 1`, forme propre à Cursor).
+   `.agents/hooks/<event>-<slug>.mjs` (slug par défaut : `hook`), qui lit le
+   payload JSON sur stdin et répond selon le protocole commun (gabarit
+   commenté). La première ligne du script est un commentaire de métadonnées
+   `// agentsdir:hook {"event": …, "matcher": …}` : c'est elle que `sync`
+   relit pour régénérer les enregistrements.
+3. L'enregistre sur chaque harness actif du manifeste. JSON ne portant pas de
+   commentaires, il n'y a pas de bloc géré : la fusion est **structurelle**,
+   et la propriété d'une entrée se reconnaît à sa commande
+   `node .agents/hooks/…` — les entrées de l'utilisateur ne sont jamais
+   touchées. Formats exacts dans [harness.md](harness.md) §3 :
+   - Claude Code — `.claude/settings.json` (`hooks.<event>[]`, groupes
+     `{matcher, hooks: [{type: "command", command}]}`) ;
+   - Codex — `.codex/hooks.json` (même enveloppe `hooks` et mêmes groupes que
+     Claude, dans un fichier dédié) ;
+   - Cursor — `.cursor/hooks.json` (`"version": 1`, clés lowerCamelCase —
+     `preToolUse` —, entrées plates `{command}`, sans matcher : son
+     vocabulaire d'outils diffère, le script filtre lui-même).
 4. La commande invoquée est identique partout : `node .agents/hooks/<fichier>`.
 
 ```mermaid
 flowchart LR
     S[.agents/hooks/pretooluse-guard.mjs<br/>un seul script Node portable]
-    S --> C1[.claude/settings.json<br/>bloc géré hooks.PreToolUse]
-    S --> C2[.codex/hooks.json<br/>événement à la racine]
-    S --> C3[.cursor/hooks.json<br/>version 1, format Cursor]
+    S --> C1[.claude/settings.json<br/>hooks.PreToolUse, groupes matcher]
+    S --> C2[.codex/hooks.json<br/>enveloppe hooks, groupes matcher]
+    S --> C3[.cursor/hooks.json<br/>version 1, preToolUse, entrées plates]
 ```
 
 ### Idempotence
 
-Script existant : refus en `2`. Les trois enregistrements sont des blocs ou
-fichiers gérés, régénérés par `sync` — pas de doublon possible.
+Script existant : refus en `2`. Les trois enregistrements sont régénérés par
+`sync` depuis les scripts de `.agents/hooks/` — pas de doublon possible, et un
+script supprimé perd ses enregistrements au `sync` suivant.
 
 ### Codes de sortie
 
