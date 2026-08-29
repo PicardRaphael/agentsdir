@@ -415,6 +415,9 @@ async function planManifest(
     project: manifest.project,
     harness: manifest.harness,
     packs: manifest.packs,
+    ...(manifest.worktrees !== undefined
+      ? { worktrees: manifest.worktrees }
+      : {}),
     projections: { mode: manifest.projections.mode, hashes },
   };
   const rendered = renderManifest(next);

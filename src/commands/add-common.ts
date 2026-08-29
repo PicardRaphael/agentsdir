@@ -12,7 +12,7 @@ import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 export interface GeneratorChange {
   /** Repo-relative path, always with forward slashes. */
   path: string;
-  action: "created" | "updated";
+  action: "created" | "updated" | "removed";
 }
 
 export interface GeneratorResult {
@@ -50,9 +50,7 @@ export function renderGeneratorReport(
 ): string {
   const lines: string[] = [];
   lines.push(
-    options.dryRun
-      ? "Dry run — nothing was written. Planned writes:"
-      : "Created:",
+    options.dryRun ? "Dry run — nothing was written. Full plan:" : "Done:",
   );
   for (const change of result.changes) {
     lines.push(`  ${change.action.padEnd(7)}  ${change.path}`);

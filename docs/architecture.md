@@ -117,6 +117,14 @@ enabled = ["claude", "codex", "cursor"]
 [packs]
 installed = ["core", "creator", "verification", "changelog", "worktrees"]
 
+# Section optionnelle, semée vide par le pack worktrees : les commandes de
+# stack (installation des dépendances, clonage d'environnement) que les
+# scripts worktree-setup/-cleanup exécutent dans l'ordre. Le pack reste
+# agnostique du langage : rien n'est codé en dur dans les scripts.
+[worktrees]
+setup = ["npm ci"]
+cleanup = []
+
 [projections]
 # Mode global, décidé à l'init après test réel de l'environnement.
 # "symlink" : liens relatifs, mode git 120000.

@@ -495,6 +495,29 @@ fichiers du pack, entrées d'index en blocs gérés, mise à jour de
 il **refuse** si des fichiers du pack ont été modifiés localement, sauf
 `--force`.
 
+Mécanique commune aux packs :
+
+- Les skills installés par un pack reçoivent leur entrée
+  `sourceType: "agentsdir"` dans `skills-lock.json` (empreinte du dossier
+  complet, artefacts Codex compris, et version installée — voir
+  [conventions.md](conventions.md) §7) ; `pack remove` retire l'entrée.
+- « Modifié localement » se constate par comparaison octet à octet contre le
+  rendu installé, fichiers ajoutés dans le dossier du skill compris.
+- **Mode copie** : `pack remove` supprime aussi les copies `.claude/` dont
+  les empreintes du manifeste prouvent qu'elles appartiennent au pack, et
+  retire ces empreintes dans la même écriture du manifeste — sans quoi
+  Claude Code continuerait de découvrir un skill supprimé.
+- Un `CHANGELOG.md` préexistant est conservé tel quel à l'installation du
+  pack `changelog` (note émise) ; à la désinstallation, un changelog qui a
+  vécu diffère de l'amorce et tombe sous le refus exit `1` — `--force`
+  supprime en connaissance de cause.
+- `creator` n'a pas encore de contenu installable : la commande le dit
+  explicitement (livré par une tâche ultérieure).
+- Le pack `worktrees` sème une section `[worktrees]` vide dans le manifeste
+  (`setup`, `cleanup` — les points d'extension des scripts de cycle de vie) ;
+  `pack remove` la retire seulement si elle est restée vide, les commandes
+  déclarées par l'utilisateur sont conservées.
+
 ### Codes de sortie
 
 `0` installé ou retiré · `1` fichiers du pack modifiés localement (sans
