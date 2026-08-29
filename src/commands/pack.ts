@@ -38,7 +38,6 @@ import {
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
-import { PACKS } from "./init.js";
 
 export interface PackResult extends GeneratorResult {
   /** Human notes (kept files…) — stderr, never stdout. */
@@ -54,11 +53,6 @@ export function resolveInstallablePack(name: string): PackContent {
   if (name === "core") {
     throw new CliError(
       'Pack "core" is the base installation: `init` installs it and it cannot be added or removed separately.',
-    );
-  }
-  if ((PACKS as readonly string[]).includes(name)) {
-    throw new CliError(
-      `Pack "${name}" has no installable content in this version yet — it ships with a later release.`,
     );
   }
   throw new CliError(

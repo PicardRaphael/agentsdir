@@ -43,7 +43,7 @@ function answers(overrides: Partial<InitAnswers> = {}): InitAnswers {
     description: "A demo product.",
     commands: { test: "npm test", lint: "npm run lint" },
     harnesses: ["claude", "codex", "cursor"],
-    packs: ["core", "creator"],
+    packs: ["core"],
     mode: "copy",
     stacks: ["node"],
     ...overrides,
@@ -112,7 +112,7 @@ describe("04 - init command", () => {
     expect(manifest.cliVersion).toBe("0.0.0");
     expect(manifest.project).toEqual({ name: "demo", stack: ["node"] });
     expect(manifest.harness.enabled).toEqual(["claude", "codex", "cursor"]);
-    expect(manifest.packs.installed).toEqual(["core", "creator"]);
+    expect(manifest.packs.installed).toEqual(["core"]);
     expect(manifest.projections.mode).toBe("copy");
     expect(Object.keys(manifest.projections.hashes)).toEqual(
       expect.arrayContaining([
@@ -198,7 +198,14 @@ describe("04 - init command", () => {
     const manifest = await readManifest(dir);
     expect(manifest.project.stack).toEqual(["node"]);
     expect(manifest.harness.enabled).toEqual(["claude", "codex", "cursor"]);
+    // creator is the default pack — since task 15 it installs its meta-skills
     expect(manifest.packs.installed).toEqual(["core", "creator"]);
+    await expect(
+      readFile(
+        join(dir, ".agents", "skills", "create-skill", "SKILL.md"),
+        "utf8",
+      ),
+    ).resolves.toContain("name: create-skill");
   });
 
   it("Given --harness claude and --packs core, When the CLI runs init, Then the questions are bypassed and the manifest records exactly those", async () => {

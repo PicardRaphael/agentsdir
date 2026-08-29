@@ -3,6 +3,7 @@ import { parseSkillMarkdown } from "../core/frontmatter.js";
 import { hashSkillFiles } from "../core/validate.js";
 import { CLI_VERSION } from "../version.js";
 import { changelogPack } from "./changelog.js";
+import { creatorPack } from "./creator.js";
 import { verificationPack } from "./verification.js";
 import { worktreesPack } from "./worktrees.js";
 
@@ -32,12 +33,16 @@ export interface PackContent {
 
 /** Packs with installable content in this version. */
 export const INSTALLABLE_PACKS = [
+  "creator",
   "verification",
   "changelog",
   "worktrees",
 ] as const;
 
 export function getPackContent(name: string): PackContent | undefined {
+  if (name === "creator") {
+    return creatorPack();
+  }
   if (name === "verification") {
     return verificationPack();
   }
