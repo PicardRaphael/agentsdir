@@ -20,6 +20,12 @@ import { project } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
+  getPackContent,
+  packInstallFiles,
+  packSkillHash,
+  renderLockSeed,
+} from "../packs/index.js";
+import {
   deriveRuleHook,
   renderAgentsMd,
   renderRulesIndexContent,
@@ -360,6 +366,50 @@ async function buildPlan(
   await planCreate(plan, root, ".agents/rules/memory.md", memoryRule);
   if (!ruleSources.has("memory.md")) {
     ruleSources.set("memory.md", memoryRule);
+  }
+  // content packs selected at init: files, rules into the index, lock entries
+  const lockEntries: { skill: string; hash: string }[] = [];
+  for (const packName of answers.packs) {
+    const pack = getPackContent(packName);
+    if (pack === undefined) {
+      continue;
+    }
+    const files = packInstallFiles(pack);
+    const skippedSkills = new Set<string>();
+    for (const skill of pack.skills) {
+      // an existing folder is kept whole — writing our artifacts next to a
+      // foreign SKILL.md would manufacture drift
+      if (await isDirectory(join(root, ".agents", "skills", skill))) {
+        skippedSkills.add(skill);
+        plan.push({
+          path: `.agents/skills/${skill}/SKILL.md`,
+          action: "skip-exists",
+        });
+      } else {
+        lockEntries.push({ skill, hash: packSkillHash(files, skill) });
+      }
+    }
+    for (const file of files) {
+      const skillFolder = file.path.match(/^\.agents\/skills\/([^/]+)\//)?.[1];
+      if (skillFolder !== undefined && skippedSkills.has(skillFolder)) {
+        continue;
+      }
+      await planCreate(plan, root, file.path, file.content);
+      if (file.path.startsWith(".agents/rules/")) {
+        const ruleFile = file.path.slice(".agents/rules/".length);
+        if (!ruleSources.has(ruleFile)) {
+          ruleSources.set(ruleFile, file.content);
+        }
+      }
+    }
+  }
+  if (lockEntries.length > 0) {
+    await planCreate(
+      plan,
+      root,
+      "skills-lock.json",
+      renderLockSeed(lockEntries),
+    );
   }
   const ruleEntries: RuleIndexEntry[] = [...ruleSources.keys()]
     .sort()

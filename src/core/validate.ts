@@ -48,13 +48,26 @@ export async function computeSkillHash(
   overlay: Record<string, Buffer> = {},
 ): Promise<string> {
   const walked = await walkSorted(dir, "");
-  const files = [...new Set([...walked, ...Object.keys(overlay)])].sort(
-    pathCompare,
-  );
+  const files: Record<string, Buffer> = {};
+  for (const rel of walked) {
+    files[rel] = overlay[rel] ?? (await readFile(join(dir, ...rel.split("/"))));
+  }
+  for (const [rel, content] of Object.entries(overlay)) {
+    files[rel] = content;
+  }
+  return hashSkillFiles(files);
+}
+
+/**
+ * Same fingerprint, computed from in-memory contents (skill-relative POSIX
+ * paths) — for folders that are not on disk yet (`pack add --dry-run`).
+ */
+export function hashSkillFiles(files: Record<string, Buffer>): string {
+  const paths = Object.keys(files).sort(pathCompare);
   const hash = createHash("sha256");
-  for (const rel of files) {
+  for (const rel of paths) {
     hash.update(rel);
-    hash.update(overlay[rel] ?? (await readFile(join(dir, ...rel.split("/")))));
+    hash.update(files[rel] ?? Buffer.alloc(0));
   }
   return hash.digest("hex");
 }

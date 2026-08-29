@@ -6,8 +6,26 @@ import { addRuleCommand } from "./commands/add-rule.js";
 import { addSkillCommand } from "./commands/add-skill.js";
 import { checkCommand } from "./commands/check.js";
 import { initCommand } from "./commands/init.js";
+import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
 import { CLI_VERSION } from "./version.js";
+
+const packCommand = defineCommand({
+  meta: {
+    name: "pack",
+    description: "Install or remove content packs (verification, changelog, …)",
+  },
+  subCommands: {
+    add: packAddCommand,
+    remove: packRemoveCommand,
+  },
+  async run({ args }) {
+    // citty also runs the group command when a subcommand matched
+    if (args._.length === 0) {
+      await showUsage(packCommand);
+    }
+  },
+});
 
 const addCommand = defineCommand({
   meta: {
@@ -39,6 +57,7 @@ const main = defineCommand({
   subCommands: {
     init: initCommand,
     add: addCommand,
+    pack: packCommand,
     sync: syncCommand,
     check: checkCommand,
   },
