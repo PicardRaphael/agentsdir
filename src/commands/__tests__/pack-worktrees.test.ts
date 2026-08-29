@@ -44,7 +44,7 @@ afterEach(async () => {
   tempDirs = [];
 });
 
-function initAnswers(packs: string[] = ["core", "creator"]): InitAnswers {
+function initAnswers(packs: string[] = ["core"]): InitAnswers {
   return {
     productName: "demo-product",
     description: "A demo product.",
@@ -68,7 +68,7 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 
 /** Initialized repo turned into a real git repo with one commit. */
 async function gitRepo(packs?: string[]): Promise<string> {
-  const dir = await initializedRepo(packs ?? ["core", "creator", "worktrees"]);
+  const dir = await initializedRepo(packs ?? ["core", "worktrees"]);
   await git(dir, "init");
   await git(dir, "config", "user.email", "ci@example.com");
   await git(dir, "config", "user.name", "CI");
@@ -400,7 +400,7 @@ describe("12 - pack worktrees", () => {
   });
 
   it("Given init selecting the worktrees pack, When it completes, Then files and the seeded manifest section are in place, the render round-trips and check reports zero violations", async () => {
-    const dir = await initializedRepo(["core", "creator", "worktrees"]);
+    const dir = await initializedRepo(["core", "worktrees"]);
     expect(
       await pathExists(
         join(dir, ...SCRIPTS.split("/"), "worktree-context.mjs"),

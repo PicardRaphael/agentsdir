@@ -36,7 +36,7 @@ afterEach(async () => {
   tempDirs = [];
 });
 
-function initAnswers(packs: string[] = ["core", "creator"]): InitAnswers {
+function initAnswers(packs: string[] = ["core"]): InitAnswers {
   return {
     productName: "demo",
     description: "A demo product.",
@@ -220,7 +220,7 @@ describe("11 - pack verification", () => {
     );
   });
 
-  it("Given usage errors, When pack add/remove run, Then they exit 2: already installed, unknown, not-yet pack, core, not installed", async () => {
+  it("Given usage errors, When pack add/remove run, Then they exit 2: already installed, unknown, core, not installed", async () => {
     const dir = await initializedRepo();
     await runPackAdd(dir, "verification", { dryRun: false });
     let error: unknown;
@@ -231,9 +231,7 @@ describe("11 - pack verification", () => {
     }
     expect(exitCodeOf(error)).toBe(2);
     expect(() => resolveInstallablePack("nope")).toThrowError(/Unknown pack/);
-    expect(() => resolveInstallablePack("creator")).toThrowError(
-      /no installable content/,
-    );
+    expect(resolveInstallablePack("creator").name).toBe("creator");
     expect(() => resolveInstallablePack("core")).toThrowError(
       /base installation/,
     );
@@ -270,7 +268,7 @@ describe("11 - pack verification", () => {
   });
 
   it("Given a copy-mode repo initialized with the pack, When pack remove runs, Then the .claude copies and their fingerprints go away and check stays clean", async () => {
-    const dir = await initializedRepo(["core", "creator", "verification"]);
+    const dir = await initializedRepo(["core", "verification"]);
     expect(
       await pathExists(join(dir, ".claude", "skills", "verify", "SKILL.md")),
     ).toBe(true);

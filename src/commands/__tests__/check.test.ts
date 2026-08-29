@@ -52,7 +52,7 @@ function answers(): InitAnswers {
     description: "A demo product.",
     commands: { test: "npm test" },
     harnesses: ["claude", "codex", "cursor"],
-    packs: ["core", "creator"],
+    packs: ["core"],
     mode: "copy",
     stacks: [],
   };
