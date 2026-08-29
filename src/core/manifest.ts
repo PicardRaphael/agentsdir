@@ -17,6 +17,11 @@ export interface Manifest {
   project: { name: string; stack: string[] };
   harness: { enabled: string[] };
   packs: { installed: string[] };
+  /**
+   * Extension points of the worktrees pack: stack-specific commands run by
+   * worktree-setup/-cleanup. Optional — seeded empty by `pack add worktrees`.
+   */
+  worktrees?: { setup: string[]; cleanup: string[] };
   projections: { mode: ProjectionMode; hashes: Record<string, string> };
 }
 
@@ -82,6 +87,14 @@ export function renderManifest(manifest: Manifest): string {
     project: { name: manifest.project.name, stack: manifest.project.stack },
     harness: { enabled: manifest.harness.enabled },
     packs: { installed: manifest.packs.installed },
+    ...(manifest.worktrees !== undefined
+      ? {
+          worktrees: {
+            setup: manifest.worktrees.setup,
+            cleanup: manifest.worktrees.cleanup,
+          },
+        }
+      : {}),
     projections,
   });
   return `${MANIFEST_HEADER}\n\n${body}`;
@@ -109,6 +122,14 @@ function validateManifest(data: unknown): Manifest {
   const harness = asTable(root["harness"], "[harness]");
   const packs = asTable(root["packs"], "[packs]");
   const projections = asTable(root["projections"], "[projections]");
+  let worktrees: { setup: string[]; cleanup: string[] } | undefined;
+  if (root["worktrees"] !== undefined) {
+    const table = asTable(root["worktrees"], "[worktrees]");
+    worktrees = {
+      setup: optionalStringArray(table, "setup", "`[worktrees].setup`"),
+      cleanup: optionalStringArray(table, "cleanup", "`[worktrees].cleanup`"),
+    };
+  }
   const mode = projections["mode"];
   if (mode !== "symlink" && mode !== "copy") {
     throw new ManifestError(
@@ -128,11 +149,23 @@ function validateManifest(data: unknown): Manifest {
     packs: {
       installed: requireStringArray(packs, "installed", "`[packs].installed`"),
     },
+    ...(worktrees !== undefined ? { worktrees } : {}),
     projections: {
       mode,
       hashes: readHashes(projections["hashes"]),
     },
   };
+}
+
+function optionalStringArray(
+  table: Record<string, unknown>,
+  key: string,
+  context: string,
+): string[] {
+  if (table[key] === undefined) {
+    return [];
+  }
+  return requireStringArray(table, key, context);
 }
 
 function readHashes(value: unknown): Record<string, string> {

@@ -130,6 +130,11 @@ export async function runPackAdd(
   const nextManifest: Manifest = {
     ...manifest,
     packs: { installed: [...manifest.packs.installed, name] },
+    // worktrees: seed the empty extension section so the extension point is
+    // visible in the file the user opens (the rule documents the values)
+    ...(name === "worktrees" && manifest.worktrees === undefined
+      ? { worktrees: { setup: [], cleanup: [] } }
+      : {}),
   };
   changes.push({ path: MANIFEST_FILE, action: "updated" });
   if (!options.dryRun) {
@@ -252,6 +257,15 @@ export async function runPackRemove(
     },
     projections: { mode: manifest.projections.mode, hashes },
   };
+  if (
+    name === "worktrees" &&
+    nextManifest.worktrees !== undefined &&
+    nextManifest.worktrees.setup.length === 0 &&
+    nextManifest.worktrees.cleanup.length === 0
+  ) {
+    // drop the seeded-but-unused section; user-declared commands are kept
+    delete nextManifest.worktrees;
+  }
   changes.push({ path: MANIFEST_FILE, action: "updated" });
   if (!options.dryRun) {
     for (const skill of pack.skills) {

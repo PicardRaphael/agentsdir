@@ -178,6 +178,7 @@ Deux valeurs de `sourceType` : `"github"` pour un skill vendoré depuis un dép�
 | --- | --- | --- |
 | `.agents/tasks/` | Tâches différées, une par fichier | oui |
 | `.agents/plan/` | Plans d'implémentation persistés | oui |
+| `.agents/scripts/` | Scripts partagés installés par les packs (ex. cycle de vie des worktrees), Node sans dépendances | oui |
 | `.agents/memory/` | État local par machine (comptes, préférences) | **non** — un modèle `.agents/memory.template/` est versionné à part |
 | `.agents/output/` | Artefacts produits par les workflows d'agents | non |
 
