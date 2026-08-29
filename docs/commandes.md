@@ -511,8 +511,12 @@ Mécanique commune aux packs :
   pack `changelog` (note émise) ; à la désinstallation, un changelog qui a
   vécu diffère de l'amorce et tombe sous le refus exit `1` — `--force`
   supprime en connaissance de cause.
-- `creator` et `worktrees` n'ont pas encore de contenu installable : la
-  commande le dit explicitement (livrés par des tâches ultérieures).
+- `creator` n'a pas encore de contenu installable : la commande le dit
+  explicitement (livré par une tâche ultérieure).
+- Le pack `worktrees` sème une section `[worktrees]` vide dans le manifeste
+  (`setup`, `cleanup` — les points d'extension des scripts de cycle de vie) ;
+  `pack remove` la retire seulement si elle est restée vide, les commandes
+  déclarées par l'utilisateur sont conservées.
 
 ### Codes de sortie
 

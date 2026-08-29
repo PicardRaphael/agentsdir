@@ -4,6 +4,7 @@ import { hashSkillFiles } from "../core/validate.js";
 import { CLI_VERSION } from "../version.js";
 import { changelogPack } from "./changelog.js";
 import { verificationPack } from "./verification.js";
+import { worktreesPack } from "./worktrees.js";
 
 /**
  * Content packs: deterministic renders installed into the target repo by
@@ -30,7 +31,11 @@ export interface PackContent {
 }
 
 /** Packs with installable content in this version. */
-export const INSTALLABLE_PACKS = ["verification", "changelog"] as const;
+export const INSTALLABLE_PACKS = [
+  "verification",
+  "changelog",
+  "worktrees",
+] as const;
 
 export function getPackContent(name: string): PackContent | undefined {
   if (name === "verification") {
@@ -38,6 +43,9 @@ export function getPackContent(name: string): PackContent | undefined {
   }
   if (name === "changelog") {
     return changelogPack();
+  }
+  if (name === "worktrees") {
+    return worktreesPack();
   }
   return undefined;
 }

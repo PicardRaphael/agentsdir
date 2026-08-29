@@ -130,6 +130,9 @@ export async function runInit(
     project: { name: answers.productName, stack: answers.stacks },
     harness: { enabled: answers.harnesses },
     packs: { installed: answers.packs },
+    ...(answers.packs.includes("worktrees")
+      ? { worktrees: { setup: [], cleanup: [] } }
+      : {}),
     projections: { mode: answers.mode, hashes },
   };
   const manifestWrite: PlannedWrite = {
