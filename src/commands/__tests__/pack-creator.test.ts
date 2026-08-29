@@ -14,6 +14,7 @@ const META_SKILLS = [
   "create-hook",
   "create-rule",
   "create-agent",
+  "setup-context",
 ] as const;
 
 let tempDirs: string[] = [];
@@ -78,7 +79,7 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 describe("15 - pack creator", () => {
-  it("Given an initialized repo, When pack add creator runs, Then the four meta-skills are installed complete, locked as agentsdir, and check reports zero violations", async () => {
+  it("Given an initialized repo, When pack add creator runs, Then the five meta-skills are installed complete, locked as agentsdir, and check reports zero violations", async () => {
     const dir = await repoWithCreator();
     for (const name of META_SKILLS) {
       for (const rel of [

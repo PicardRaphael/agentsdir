@@ -515,10 +515,11 @@ Mécanique commune aux packs :
   pack `changelog` (note émise) ; à la désinstallation, un changelog qui a
   vécu diffère de l'amorce et tombe sous le refus exit `1` — `--force`
   supprime en connaissance de cause.
-- Le pack `creator` installe les quatre méta-skills de création assistée
-  (`$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` — voir
-  [creation-assistee.md](creation-assistee.md)), chacune verrouillée
-  `sourceType: "agentsdir"` pour la protection d'`update`.
+- Le pack `creator` installe les cinq méta-skills de création assistée
+  (`$create-skill`, `$create-hook`, `$create-rule`, `$create-agent`,
+  `$setup-context` — voir [creation-assistee.md](creation-assistee.md)),
+  chacune verrouillée `sourceType: "agentsdir"` pour la protection
+  d'`update`.
 - Le pack `worktrees` sème une section `[worktrees]` vide dans le manifeste
   (`setup`, `cleanup` — les points d'extension des scripts de cycle de vie) ;
   `pack remove` la retire seulement si elle est restée vide, les commandes
