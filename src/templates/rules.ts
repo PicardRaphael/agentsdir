@@ -1,6 +1,64 @@
+import { displayNameFromKebab, quote } from "./skill.js";
+
 export interface RuleCommands {
   test?: string;
   lint?: string;
+}
+
+export interface RuleAnswers {
+  /** Kebab-case file name without `.md`. */
+  name: string;
+  /** "When to read it" sentence, written right under the H1 — `sync` derives the index entry from it. */
+  hook: string;
+  /** Scope globs for the `paths:` frontmatter; empty means a global rule. */
+  paths: string[];
+}
+
+/**
+ * Rule template of `add rule`: H1 = rule name, the read-me-when sentence under
+ * it, imperative rules, GOOD/BAD example pair and a reference table skeleton.
+ */
+export function renderRuleTemplate(answers: RuleAnswers): string {
+  const lines: string[] = [];
+  if (answers.paths.length > 0) {
+    lines.push("---", "paths:");
+    for (const glob of answers.paths) {
+      lines.push(`  - ${quote(glob)}`);
+    }
+    lines.push("---", "");
+  }
+  lines.push(
+    `# ${displayNameFromKebab(answers.name)}`,
+    "",
+    answers.hook,
+    "",
+    "## Rules",
+    "",
+    "- ALWAYS state each rule as one imperative sentence.",
+    "- NEVER leave a placeholder line of this template in a committed rule.",
+    "",
+    "## Examples",
+    "",
+    "GOOD:",
+    "",
+    "```",
+    "a minimal example that follows the rules above",
+    "```",
+    "",
+    "BAD:",
+    "",
+    "```",
+    "the same example breaking a rule, with the consequence it causes",
+    "```",
+    "",
+    "## Reference",
+    "",
+    "| Case | Do |",
+    "| --- | --- |",
+    "| Replace with a concrete case | Replace with the exact action |",
+    "",
+  );
+  return lines.join("\n");
 }
 
 /** Generic rule: how to execute tasks from `.agents/tasks/`. */

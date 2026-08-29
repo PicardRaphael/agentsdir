@@ -93,8 +93,17 @@ async function validateProjections(
   }));
 }
 
-const NAME_SPEC = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+/** Agent Skills name spec, shared with the `add` generators. */
+export const NAME_SPEC = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const WRITE_TOOL = /^(\*$|Write|Edit|NotebookEdit|Bash)/;
+
+/** Check's validation pass on one skill folder; `add skill` runs it before concluding. */
+export async function validateSkillFolder(
+  root: string,
+  folder: string,
+): Promise<Violation[]> {
+  return validateSkill(root, join(root, ".agents", "skills"), folder);
+}
 
 async function validateSkills(root: string): Promise<Violation[]> {
   const skillsDir = join(root, ".agents", "skills");
