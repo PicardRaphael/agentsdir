@@ -7,13 +7,51 @@ export interface AgentsMdInput {
   commands: { dev?: string; test?: string; lint?: string };
 }
 
+export interface RuleIndexEntry {
+  /** File name inside `.agents/rules/`, e.g. "tasks.md". */
+  file: string;
+  /** "When to read it" sentence shown after the dash. */
+  hook: string;
+}
+
+/**
+ * "When to read it" hook of a rule: the first line after the H1, minus its
+ * leading "Read" (the sentence right below the title states when to read the
+ * rule — the documented rule format). `sync` regenerates the whole index from
+ * this, so the hook must live in the rule file itself.
+ */
+export function deriveRuleHook(source: string): string {
+  let body = source;
+  const frontmatter = body.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
+  if (frontmatter !== null) {
+    body = body.slice(frontmatter[0].length);
+  }
+  let afterTitle = false;
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") {
+      continue;
+    }
+    if (!afterTitle && trimmed.startsWith("# ")) {
+      afterTitle = true;
+      continue;
+    }
+    if (trimmed.startsWith("#")) {
+      break;
+    }
+    return trimmed.replace(/^Read /, "");
+  }
+  return "read it before touching the files it covers.";
+}
+
 /** Content of the `rules-index` managed block (markers excluded). */
-export function renderRulesIndexContent(): string {
+export function renderRulesIndexContent(entries: RuleIndexEntry[]): string {
   return [
     "Read the matching rule before touching the files it covers:",
     "",
-    "- `.agents/rules/tasks.md` — before taking any task from `.agents/tasks/`.",
-    "- `.agents/rules/memory.md` — before reading or writing `.agents/memory/`.",
+    ...entries.map(
+      (entry) => `- \`.agents/rules/${entry.file}\` — ${entry.hook}`,
+    ),
   ].join("\n");
 }
 
@@ -22,7 +60,10 @@ export function renderRulesIndexContent(): string {
  * product (interview answers), stack (detection), generic (working rules and
  * the managed rules index).
  */
-export function renderAgentsMd(input: AgentsMdInput): string {
+export function renderAgentsMd(
+  input: AgentsMdInput,
+  ruleEntries: RuleIndexEntry[],
+): string {
   const description =
     input.description === ""
       ? "_One-sentence description to fill in._"
@@ -71,7 +112,7 @@ export function renderAgentsMd(input: AgentsMdInput): string {
     "",
     "## Rules index",
     "",
-    renderBlock("rules-index", renderRulesIndexContent(), "html"),
+    renderBlock("rules-index", renderRulesIndexContent(ruleEntries), "html"),
     "",
   ].join("\n");
 }

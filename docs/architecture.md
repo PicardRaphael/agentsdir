@@ -137,7 +137,7 @@ mode = "copy"
 Règles de possession :
 
 - Le manifeste appartient à la CLI (en-tête explicite) ; `check` échoue s'il est absent ou d'un schéma inconnu.
-- `.agents/` appartient à l'utilisateur — la CLI n'y écrit que sur `init`, `add` et `vendor`, jamais sur `sync`.
+- `.agents/` appartient à l'utilisateur — la CLI n'y écrit que sur `init`, `add` et `vendor`, à une exception près : les artefacts générés de chaque skill (`agents/openai.yaml`, `assets/icon.svg`), dérivés du frontmatter et régénérés par `sync`. Le contenu rédigé (`SKILL.md`, règles, sections libres d'`AGENTS.md`) n'est jamais touché par `sync` : une source invalide fait échouer `sync` avec le diagnostic de `check`, elle n'est pas « corrigée ».
 - Les projections appartiennent à la CLI ; les fichiers à blocs gérés sont partagés (l'utilisateur possède tout ce qui est hors marqueurs).
 
 ## 4. Stratégie symlink / repli

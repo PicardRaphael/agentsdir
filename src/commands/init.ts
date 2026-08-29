@@ -20,8 +20,10 @@ import { project } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
+  deriveRuleHook,
   renderAgentsMd,
   renderRulesIndexContent,
+  type RuleIndexEntry,
 } from "../templates/agents-md.js";
 import {
   renderAgentsCheckWorkflow,
@@ -341,13 +343,30 @@ async function buildPlan(
       plan.push({ path: `${dir}/`, action: "mkdir" });
     }
   }
-  await planCreate(
-    plan,
-    root,
-    ".agents/rules/tasks.md",
-    renderTasksRule(answers.commands),
-  );
-  await planCreate(plan, root, ".agents/rules/memory.md", renderMemoryRule());
+  // rule sources feeding the index: files already on disk plus planned ones
+  const ruleSources = new Map<string, string>();
+  for (const file of await listRuleFiles(root)) {
+    ruleSources.set(
+      file,
+      await readFile(join(root, ".agents", "rules", file), "utf8"),
+    );
+  }
+  const tasksRule = renderTasksRule(answers.commands);
+  await planCreate(plan, root, ".agents/rules/tasks.md", tasksRule);
+  if (!ruleSources.has("tasks.md")) {
+    ruleSources.set("tasks.md", tasksRule);
+  }
+  const memoryRule = renderMemoryRule();
+  await planCreate(plan, root, ".agents/rules/memory.md", memoryRule);
+  if (!ruleSources.has("memory.md")) {
+    ruleSources.set("memory.md", memoryRule);
+  }
+  const ruleEntries: RuleIndexEntry[] = [...ruleSources.keys()]
+    .sort()
+    .map((file) => ({
+      file,
+      hook: deriveRuleHook(ruleSources.get(file) ?? ""),
+    }));
   await planCreate(plan, root, ".agents/tasks/README.md", renderTasksReadme());
   await planCreate(
     plan,
@@ -361,9 +380,9 @@ async function buildPlan(
     }
   }
   await planUpsertOrCreate(plan, root, "AGENTS.md", {
-    create: () => renderAgentsMd(answers),
+    create: () => renderAgentsMd(answers, ruleEntries),
     blockId: "rules-index",
-    blockContent: renderRulesIndexContent(),
+    blockContent: renderRulesIndexContent(ruleEntries),
     style: "html",
   });
   await planUpsertOrCreate(plan, root, ".gitignore", {
@@ -551,5 +570,15 @@ async function isEmptyOrMissingDir(path: string): Promise<boolean> {
     return (await readdir(path)).length === 0;
   } catch {
     return true;
+  }
+}
+
+async function listRuleFiles(root: string): Promise<string[]> {
+  try {
+    return (await readdir(join(root, ".agents", "rules")))
+      .filter((file) => file.endsWith(".md"))
+      .sort();
+  } catch {
+    return [];
   }
 }

@@ -39,16 +39,42 @@ export async function validateRepo(
 /**
  * Fingerprint of a skill folder, per the documented lock algorithm: sorted
  * relative paths (excluding .git and node_modules), one rolling sha256 fed
- * with each path then its content.
+ * with each path then its content. The optional overlay (skill-relative POSIX
+ * paths) stands in for files about to be written, so `sync --dry-run` computes
+ * the same fingerprint as the real run.
  */
-export async function computeSkillHash(dir: string): Promise<string> {
-  const files = await walkSorted(dir, "");
+export async function computeSkillHash(
+  dir: string,
+  overlay: Record<string, Buffer> = {},
+): Promise<string> {
+  const walked = await walkSorted(dir, "");
+  const files = [...new Set([...walked, ...Object.keys(overlay)])].sort(
+    pathCompare,
+  );
   const hash = createHash("sha256");
   for (const rel of files) {
     hash.update(rel);
-    hash.update(await readFile(join(dir, ...rel.split("/"))));
+    hash.update(overlay[rel] ?? (await readFile(join(dir, ...rel.split("/")))));
   }
   return hash.digest("hex");
+}
+
+/**
+ * Segment-wise path order — the exact order `walkSorted` produces, so merging
+ * overlay paths never reorders the fingerprint input of files already on disk.
+ */
+function pathCompare(a: string, b: string): number {
+  const left = a.split("/");
+  const right = b.split("/");
+  const shared = Math.min(left.length, right.length);
+  for (let index = 0; index < shared; index += 1) {
+    const x = left[index] ?? "";
+    const y = right[index] ?? "";
+    if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
+  return left.length - right.length;
 }
 
 async function validateProjections(
@@ -274,7 +300,7 @@ async function validateRulesIndex(root: string): Promise<Violation[]> {
     return [
       {
         path: "AGENTS.md",
-        rule: "rules-index-missing",
+        rule: "agents-md-missing",
         message: "AGENTS.md is missing — run `agentsdir init`.",
         severity: "error",
       },
