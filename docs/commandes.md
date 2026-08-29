@@ -471,6 +471,10 @@ Lecture seule. Diagnostique la machine et le clone, pas le contenu :
 Chaque constat est assorti de la correction exacte (commande ou réglage).
 Diagnostic, pas vérification : l'échec CI appartient à `check`.
 
+La sortie `--json` porte chaque constat dans `errors[]` avec sa sévérité
+(`ok`, `info`, `warn`, `error`) ; `exitCode` reste `0` — un consommateur
+machine ne doit pas lire un `errors[]` non vide comme un échec.
+
 ### Codes de sortie
 
 `0` diagnostic rendu, même quand des anomalies sont détectées · `2`
