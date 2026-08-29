@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           # engine floor of package.json — the CI proves the oldest supported Node
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck

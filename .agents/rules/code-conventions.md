@@ -4,7 +4,7 @@
 
 ## Règles
 
-- TypeScript strict, ESM (`type: module`), Node >= 20.
+- TypeScript strict, ESM (`type: module`), Node >= 22 (le plancher suit les LTS supportées ; Node 20 est EOL depuis avril 2026).
 - **Dépendances d'exécution limitées** à `citty`, `@clack/prompts`, `smol-toml`, `yaml` (parse seul — tout rendu YAML est fait main pour le déterminisme). Toute addition exige une justification écrite dans `docs/architecture.md`, dans le même commit.
 - **Messages de la CLI en anglais** (la doc de conception est en français, pas le produit).
 - **Codes de sortie centralisés** dans `src/exit-codes.ts` : `0` ok · `1` dérive ou invariant violé · `2` erreur d'environnement ou d'utilisation. Jamais de `process.exit()` avec un littéral ailleurs.

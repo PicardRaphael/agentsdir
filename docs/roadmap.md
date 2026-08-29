@@ -16,7 +16,7 @@ flowchart LR
 
 ## v0.1 — Installable chez soi
 
-Squelette du paquet (TypeScript, Node >= 20, bundle `npx`), détection d'environnement (symlinks, stack, harness), manifeste `.agents.toml`, `init` fonctionnel (structure `.agents/`, `AGENTS.md`, projections Claude Code en mode symlink ou copie), `doctor`.
+Squelette du paquet (TypeScript, Node >= 22, bundle `npx`), détection d'environnement (symlinks, stack, harness), manifeste `.agents.toml`, `init` fonctionnel (structure `.agents/`, `AGENTS.md`, projections Claude Code en mode symlink ou copie), `doctor`.
 
 **Critère de sortie** : `npx agentsdir init` exécuté sur ce repo même (autophagie) et sur un repo Python vierge produit une structure correcte, en mode copie sur une machine Windows sans mode développeur et en mode symlink sur une machine qui le permet.
 
