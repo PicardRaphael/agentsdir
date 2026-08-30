@@ -6,6 +6,13 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Fixed
+
+- A mistyped command now exits `2` (usage error) with a message naming what was
+  not understood, instead of printing the help and exiting `1` — the code a CI
+  script reads as "drift detected". `agentsdir sinc`, `agentsdir add skil` and
+  `agentsdir pack instal` all report the alternatives.
+
 ### Internal
 
 - Consolidation after an architecture audit, with no change in behaviour: the

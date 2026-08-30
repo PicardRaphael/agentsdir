@@ -36,6 +36,12 @@ These rules apply to every command.
 | `1` | Drift or violated invariant — the repo content contradicts the source of truth or the contracts |
 | `2` | Environment or usage error — outside the repo root, git missing, unreadable manifest, insufficient permissions, name already taken in a generator |
 
+**Unknown command.** A command or subcommand the CLI does not know is a usage
+error: exit code `2`, with a message naming what was not understood and listing
+the alternatives. It is never reported as `1`, which belongs to drift and
+violated invariants — a CI script must be able to tell a typo from a repository
+that moved.
+
 **Repo root.** Every command resolves from the git repository root (walking up
 to `.git/`). Run outside a git repository: exit code `2` with an actionable
 message.
