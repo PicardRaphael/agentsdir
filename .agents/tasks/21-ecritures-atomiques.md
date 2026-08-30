@@ -1,14 +1,18 @@
-# 21 — Écritures atomiques
+# 21 — Atomicité des séquences d'écritures
 
 ## Problème
 
-Aucune écriture de la CLI n'est atomique. `init` applique jusqu'à 90 opérations
-mutantes consécutives (8 `mkdir`, 38 créations, 4 liens sur un dépôt vierge),
-`sync` 19, `pack add|remove` 9, sans journal ni reprise. Une interruption —
-Ctrl+C, coupure de courant, disque plein — laisse le dépôt à mi-chemin.
+L'atomicité **par fichier** est livrée : `writeFileAtomic`
+(`src/core/fs-utils.ts`) écrit dans un fichier temporaire voisin puis fait un
+`rename`, et `init`, `sync` et le moteur de projections l'utilisent. Un fichier
+n'est donc jamais observé à moitié écrit.
 
-La plupart de ces états sont réparables par `sync` depuis la correction des
-écritures interrompues. Deux ne le sont pas :
+Reste l'atomicité de la **séquence**. `init` applique jusqu'à 90 opérations
+mutantes consécutives (8 `mkdir`, 38 créations, 4 liens sur un dépôt vierge),
+`sync` 19, `pack add|remove` 9, sans journal ni reprise. Une interruption laisse
+le dépôt à mi-chemin — chaque fichier est intact, mais l'ensemble est partiel.
+
+La plupart de ces états sont réparables par `sync`. Deux ne le sont pas :
 
 - `add hook` écrit le script puis enregistre les trois registres l'un après
   l'autre. Interrompu après le deuxième, il laisse deux harness sur trois
@@ -41,8 +45,6 @@ dont l'état intermédiaire est invisible à `check`.
 
 ## Critères d'acceptation
 
-- Chaque écriture de fichier est atomique : la cible n'existe jamais dans un
-  état partiel, quelle que soit l'interruption.
 - `add hook` interrompu ne laisse pas un sous-ensemble de registres enregistrés,
   ou bien `check` le détecte et `sync` le répare.
 - Le déterminisme est préservé : `node dist/cli.js sync` répond
