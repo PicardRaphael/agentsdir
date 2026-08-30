@@ -8,6 +8,13 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A write killed mid-file is repairable again.** A truncated copy lost its
+  generated header, read as a foreign file, and `sync` refused the very repair
+  `check` was demanding — a dead end whose only way out was deleting the file by
+  hand. A copy that is a strict prefix of what the CLI would write is now
+  recognised as an interrupted write and regenerated; a projection someone
+  actually edited still reads as foreign and is still refused, untouched.
+
 - **`check` now inspects the hook registries, like `sync` does.** A malformed
   `.claude/settings.json` (an array, or invalid JSON) passed `check` with exit
   `0` while `sync` refused to run — CI green on a repository that could not be

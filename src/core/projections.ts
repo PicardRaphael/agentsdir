@@ -628,6 +628,17 @@ async function classifyCopyTarget(
   if (previousHashes[file.path] === sha256(current)) {
     return "stale-ours";
   }
+  // a strict prefix of what we would write is a write killed mid-file, not a
+  // file someone edited: editing adds or changes bytes, it does not truncate to
+  // an exact prefix. Repairing it keeps `check` and `sync` from deadlocking,
+  // while an actual hand edit still lands on "foreign" and is refused
+  if (
+    previousHashes[file.path] !== undefined &&
+    current.length < file.content.length &&
+    file.content.subarray(0, current.length).equals(current)
+  ) {
+    return "stale-ours";
+  }
   return "foreign";
 }
 
