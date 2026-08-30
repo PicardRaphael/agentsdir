@@ -10,7 +10,9 @@ CLI open source (MIT) qui installe dans un repo existant une architecture de con
 
 **Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** Le code est prêt — 15 défauts corrigés dont 7 de sécurité, CI verte sur ubuntu et windows, paquet npm éprouvé — mais **l'utilisateur a demandé de ne pas publier** tant que la direction produit n'est pas arrêtée. Ne pas lancer `npm publish` ni poser le tag sans sa demande explicite.
 
-**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : gouverner la configuration d'agents plutôt que se contenter de l'installer — ce que personne ne fait : vérifier que la configuration ne dérive pas (`check`/`sync`), mesurer si elle **sert** (tâche 25), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
+**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : être la référence de l'`init` **et** gouverner ce qui a été installé — ce que personne ne fait. Vérifier que la configuration ne dérive pas (`check`/`sync`), faire que l'`init` produise une proposition argumentée au lieu d'un squelette (tâche 24), mesurer si elle **sert** (collecte : tâche 25, analyse : tâche 30), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
+
+**Ordre de construction et porte de publication.** L'ordre arrêté est 26 → 24 → 25 → 28 → 30 → 27, détaillé et argumenté dans [docs/positionnement.md](docs/positionnement.md) ; les tâches 17 à 23, 31 et 32 se traitent en parallèle. La v1.0 ne sort pas avant que l'`init` produise du contenu (tâche 24) et que le critère « un inconnu installe en moins de cinq minutes en lisant le seul README » ait été vérifié pour de vrai.
 
 ## Index des règles
 
@@ -52,6 +54,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 29 (produit ; la 29 est à discuter avant implémentation).
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 30 (produit), 31 et 32 (promesses de la documentation non tenues par le code). L'ordre de prise est celui de `docs/positionnement.md`, pas l'ordre des numéros.
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.

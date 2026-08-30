@@ -477,7 +477,7 @@ async function validateLock(root: string): Promise<Violation[]> {
         path: relSkill,
         rule: "lock-local-change",
         message:
-          "agentsdir-installed content modified locally — kept as is; `agentsdir update` will propose a merge.",
+          "agentsdir-installed content modified locally — kept as is; `agentsdir update` will propose a merge when available.",
         severity: "info",
       });
     } else {
