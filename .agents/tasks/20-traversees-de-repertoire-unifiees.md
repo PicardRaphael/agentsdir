@@ -52,6 +52,16 @@ node dist/cli.js sync   # attendu : 0 created, 0 updated
 git diff --stat skills-lock.json   # attendu : aucun changement
 ```
 
+## Observation chiffrée, pour éviter une optimisation inutile
+
+`expectedCopies` est recalculé plusieurs fois par exécution : une fois par
+`verify` (dans la validation), une fois par le retrait des orphelins, une fois
+par la projection. La redondance est réelle mais son coût ne l'est pas : sur un
+repo de démonstration à 60 skills et 184 fichiers projetés, `check` prend 352 ms
+et `sync` 615 ms. Mutualiser ces passes derrière un cache ajouterait un risque
+de péremption pour un gain invisible. À ne reconsidérer que si une mesure sur un
+repo réel montre un problème.
+
 ## Hors périmètre
 
 Les performances de la traversée sur un très gros repo : à mesurer avant
