@@ -53,30 +53,40 @@ Two structural consequences:
 ```mermaid
 flowchart LR
     CLI["cli<br>command parser<br>+ interactive prompts"]
+    CMD["commands<br>one module per command<br>+ shared rules-index"]
 
     subgraph CORE["core"]
         MAN["manifest<br>.agents.toml"]
-        PROJ["projections<br>symlink | copy engine"]
+        PROJ["projections<br>symlink | copy engine<br>+ refreshProjections"]
         VAL["validate<br>invariants"]
         FM["frontmatter<br>parse SKILL.md"]
         IC["icons<br>embedded SVG"]
         MB["managed-blocks<br>managed blocks"]
         LK["lock<br>skills-lock.json"]
         DET["detect<br>stack + environment"]
+        HAR["harnesses<br>the targeted harnesses"]
+        FSU["fs-utils<br>filesystem probes"]
     end
 
+    PKS["packs<br>pack registry<br>+ rendered content"]
     FS[("file system<br>of the target repo")]
 
-    CLI --> MAN
-    CLI --> DET
-    CLI --> PROJ
-    CLI --> VAL
+    CLI --> CMD
+    CMD --> MAN
+    CMD --> DET
+    CMD --> PROJ
+    CMD --> VAL
+    CMD --> PKS
+    PKS --> FM
     PROJ --> FM
     PROJ --> IC
     PROJ --> MB
+    PROJ --> FSU
     VAL --> FM
     VAL --> LK
     VAL --> MAN
+    VAL --> PROJ
+    DET --> FSU
     MAN --> FS
     PROJ --> FS
     DET --> FS
@@ -86,7 +96,7 @@ flowchart LR
 | --- | --- | --- |
 | `cli` | Parsing of commands and flags, interactive prompts, terminal output. | Each command is a thin module that orchestrates `core`; no business logic in the CLI layer. |
 | `core/manifest` | Reading, validation and writing of the `.agents.toml` manifest. | The only module allowed to write the manifest; it carries the schema version and the manifest migrations. |
-| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
+| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. `refreshProjections` is the single orchestration of "remove what must not survive, then project", shared by `sync` and the generators. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
 | `core/validate` | The invariants (see [conventions.md](conventions.md)): name identity, invocation parity, length bounds, existence of referenced files, lock integrity. | Read-only. Used by `check` (failure = exit code 1) and replayed by mutating commands before writing. |
 | `core/frontmatter` | Parses and validates the YAML frontmatter of `SKILL.md` files. **The extended frontmatter IS the catalog**: the Codex fields (`display-name`, `color`, `icon`, `prompt`) live there, ignored by Claude Code. | Fixes the flaw of the source model (TypeScript catalog hard-coded in a script): adding a skill = creating a folder, not editing code. |
 | `core/icons` | Renders a skill's SVG icon from an embedded icon set: lucide paths vendored as static JSON in the package. | No react/lucide dependency at runtime; byte-for-byte deterministic rendering (comparable by fingerprint). |
