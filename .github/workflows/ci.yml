@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     strategy:
@@ -28,3 +31,42 @@ jobs:
       - run: node dist/cli.js check
       # ubuntu proves the symlink journeys, windows (no privileges) the copy ones
       - run: npm run test:e2e
+
+  # everything above exercises dist/cli.js from the development tree, where
+  # every dependency is installed. Nothing there proves what `npx agentsdir`
+  # actually delivers: a missing entry in `files`, a runtime dependency filed
+  # under devDependencies or a broken bin would all keep the CI green. This job
+  # installs the real tarball and runs it.
+  tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm pack
+      - name: Install the tarball outside the source tree
+        run: |
+          mkdir -p "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          npm init -y
+          npm install "$GITHUB_WORKSPACE"/agentsdir-*.tgz
+      - name: Run the installed CLI on a fresh repo
+        run: |
+          mkdir -p "$RUNNER_TEMP/demo"
+          cd "$RUNNER_TEMP/demo"
+          git init -q
+          git config user.email ci@example.com
+          git config user.name CI
+          printf '{"name":"demo","version":"1.0.0"}\n' > package.json
+          BIN="$RUNNER_TEMP/consumer/node_modules/.bin/agentsdir"
+          "$BIN" --version
+          "$BIN" init --yes --name demo --description "demo repo"
+          "$BIN" check
+      - name: The third-party notice must ship with the code it covers
+        run: |
+          cd "$RUNNER_TEMP/consumer/node_modules/agentsdir"
+          test -f THIRD-PARTY-NOTICES.txt
+          head -n 10 dist/cli.js | grep -q "lucide-static"

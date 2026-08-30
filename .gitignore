@@ -13,3 +13,6 @@ coverage/
 /.agents/memory/
 /.agents/output/
 # agentsdir:end ignore
+
+# npm pack output, produced by the tarball CI job and by local checks
+*.tgz
