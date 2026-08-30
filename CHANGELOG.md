@@ -40,6 +40,29 @@ resolved, on the first ordinary command.
 - **A rule cannot break the managed block of AGENTS.md.** A first line carrying
   a block marker split the block in two, so every `sync` appended another copy
   and `check` stayed red for good.
+- **A symlinked directory can no longer be used to escape the repository.**
+  `mkdir -p` and `readdir` both walk through one without complaining. The guard
+  that refuses to project through a linked parent existed, but covered a single
+  write path out of five. A cloned repository shipping
+  `.agents/rules/x.md → ../../.env` had the first line of a secret written into
+  the `rules-index` block of `AGENTS.md` — a file the user then commits and
+  pushes; one shipping `.claude → ~/.claude` had the user's **global** Claude
+  Code settings rewritten, with our hook registered in them. The guard now
+  covers symlink projection, hook registries, the generators, and the source
+  directories themselves — a linked `.agents/rules` was read straight through.
+- **`pack add` no longer writes through a broken symlink.** It was the last
+  generator still testing collisions with `stat`, which follows links: a broken
+  one reads as absent, and the write then lands at the far end, outside the
+  repository.
+- **The CI workflow written into your repository pins its version.** It ran
+  `npx agentsdir check` on every push, unpinned, with the repository checked out
+  and the default `GITHUB_TOKEN` in scope — executing whatever the registry
+  served that day. It is now pinned, `--yes`, and restricted to
+  `contents: read`.
+- **A mistyped option no longer runs the real thing.** citty silently ignores
+  options nobody declares, so `agentsdir init --yes --dryrun` installed the
+  whole architecture and exited 0 while the user believed they were simulating.
+  Unknown options are now a usage error naming the valid ones.
 
 ### Added
 
@@ -52,6 +75,27 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **A symlink materialized by a checkout is repaired instead of refused.** This
+  is the founding scenario of the product: a repository projected with symlinks,
+  cloned where they cannot be created, has git write the link target as the file
+  content. Such a file is ours — but it was classified as foreign, so `check`
+  said "run `agentsdir sync`" and `sync` refused, with no documented way out.
+  `sync` now restores the link, and both messages state the real fix.
+- **`check` verifies the sub-agent frontmatter (invariant 14).** A
+  `.agents/agents/*.md` without a usable `name` and `description` is silently
+  ignored by Claude Code: nothing fails, the agent is simply never offered.
+  `docs/conventions.md` announced the invariant; nothing implemented it.
+- **`init` no longer crashes on a large repository.** `git ls-files -sz` ran
+  with Node's default 1 MiB output cap; past a few tens of thousands of tracked
+  files it threw, and `init`, `sync` and `doctor` all reach it.
+- **Refusing an already-configured repository now says what to do.** The message
+  pointed at `agentsdir migrate`, which does not exist. The README gained a
+  "Before you run it" section: prerequisites, that refusal, and what `init`
+  actually writes.
+- **The third-party notice ships with the package.** The bundle embeds icon
+  paths from `lucide-static` (ISC), some derived from Feather (MIT); `files`
+  shipped `dist` alone, so the tarball redistributed them without the notice
+  both licences require in every copy.
 - **An unreadable file is no longer reported as a missing one.** A `SKILL.md`
   that could not be read was announced as absent, with the advice to "write it
   or delete the folder" — wrong on both counts for a file that is there. Same
