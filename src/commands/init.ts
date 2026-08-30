@@ -169,6 +169,17 @@ export const initCommand = defineCommand({
       type: "boolean",
       description: "Print the write plan without touching the disk",
     },
+    name: {
+      type: "string",
+      description: "Product name (default: the directory name)",
+    },
+    description: {
+      type: "string",
+      description: "One-sentence description of what this product does",
+    },
+    dev: { type: "string", description: "Dev command of this repo" },
+    test: { type: "string", description: "Test command of this repo" },
+    lint: { type: "string", description: "Lint command of this repo" },
     harness: {
       type: "string",
       description: `Comma-separated harnesses (${HARNESSES.join(",")})`,
@@ -192,8 +203,17 @@ export const initCommand = defineCommand({
         );
         return;
       }
+      const text = (value: unknown): string | undefined =>
+        typeof value === "string" && value !== "" ? value : undefined;
       const flags: InitFlags = {
         yes: args.yes === true,
+        ...(text(args.name) === undefined ? {} : { name: text(args.name) }),
+        ...(text(args.description) === undefined
+          ? {}
+          : { description: text(args.description) }),
+        ...(text(args.dev) === undefined ? {} : { dev: text(args.dev) }),
+        ...(text(args.test) === undefined ? {} : { test: text(args.test) }),
+        ...(text(args.lint) === undefined ? {} : { lint: text(args.lint) }),
         harness: typeof args.harness === "string" ? args.harness : undefined,
         packs: typeof args.packs === "string" ? args.packs : undefined,
         mode: typeof args.mode === "string" ? args.mode : undefined,

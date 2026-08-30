@@ -39,6 +39,15 @@ resolved, on the first ordinary command.
   a block marker split the block in two, so every `sync` appended another copy
   and `check` stayed red for good.
 
+### Added
+
+- **A coding agent can install agentsdir without a terminal.** Every interview
+  question now has a flag — `--name`, `--description`, `--dev`, `--test`,
+  `--lint`, on top of the existing `--harness`, `--packs` and `--mode`. An agent
+  already working in the repository has read the scripts, the CI and the README,
+  so it answers better than any default; it just needed somewhere to put the
+  answers. The README carries a prompt ready to paste.
+
 ### Fixed
 
 - **An unreadable file is no longer reported as a missing one.** A `SKILL.md`

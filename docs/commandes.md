@@ -42,6 +42,12 @@ the alternatives. It is never reported as `1`, which belongs to drift and
 violated invariants — a CI script must be able to tell a typo from a repository
 that moved.
 
+**Answering without a terminal.** Every interview question has a flag. A caller
+that already knows the repository — a coding agent asked to install agentsdir,
+a provisioning script — supplies the answers directly and never sees a prompt.
+Without a TTY the CLI falls back to the defaults, so a flag is the only way to
+give a real answer rather than a guessed one.
+
 **Repo root.** Every command resolves from the git repository root (walking up
 to `.git/`). Run outside a git repository: exit code `2` with an actionable
 message.
@@ -87,6 +93,9 @@ npx agentsdir init [options]
 | Option | Effect |
 | --- | --- |
 | `--yes` | Accepts every default, no questions asked (scriptable) |
+| `--name <name>` | Product name (default: the directory name) |
+| `--description <text>` | One-sentence description of the product |
+| `--dev`, `--test`, `--lint` | The real commands of the repo |
 | `--dry-run` | Prints the plan without writing |
 | `--harness claude,codex,cursor` | Restricts the targeted harnesses (default: all three) |
 | `--packs core,creator,verification,changelog,worktrees` | Restricts the installed packs (default: `core,creator`) |

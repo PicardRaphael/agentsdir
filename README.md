@@ -29,6 +29,22 @@ npx agentsdir check         # verifies invariants and drift (CI)
 npx agentsdir doctor        # environment diagnostic
 ```
 
+## Let a coding agent install it
+
+Every question `init` asks has a flag, so an agent already working in your
+repository can install without a terminal — and it answers better than a
+default, because it has read your scripts, your CI and your README. Paste this
+to Claude Code, Codex or Cursor:
+
+> Install agentsdir in this repository. Read the repo first, then run
+> `npx agentsdir init` with `--yes` and fill in what you found:
+> `--name`, `--description`, `--dev`, `--test`, `--lint`. Use the real commands
+> of this project, not generic ones. Then run `npx agentsdir check` and show me
+> the result.
+
+The agent ends up writing an `AGENTS.md` describing *your* project, with *your*
+commands — the part a generic scaffold always gets wrong.
+
 ## Documentation
 
 | Document | Contents |

@@ -227,3 +227,40 @@ describe("04 - init command", () => {
     expect(entries).toEqual([".git"]);
   });
 });
+
+describe("init - an agent can answer the interview without a terminal", () => {
+  it("Given every answer as a flag, When init runs, Then AGENTS.md and the manifest carry them", async () => {
+    const dir = await makeTempDir("init-agent");
+    await execFileAsync("git", ["-C", dir, "init"]);
+    await writeFile(
+      join(dir, "package.json"),
+      '{ "name": "mon-app" }\n',
+      "utf8",
+    );
+
+    const { code } = await runCli(dir, [
+      "init",
+      "--yes",
+      "--mode",
+      "copy",
+      "--name",
+      "Mon App",
+      "--description",
+      "Tableau de bord de suivi.",
+      "--dev",
+      "pnpm dev",
+      "--test",
+      "pnpm test",
+      "--lint",
+      "pnpm lint",
+    ]);
+    expect(code).toBe(0);
+
+    const agentsMd = await readFile(join(dir, "AGENTS.md"), "utf8");
+    expect(agentsMd).toContain("**Mon App** — Tableau de bord de suivi.");
+    expect(agentsMd).toContain("pnpm test");
+    expect(await readFile(join(dir, ".agents.toml"), "utf8")).toContain(
+      'name = "Mon App"',
+    );
+  });
+});

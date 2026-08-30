@@ -27,8 +27,20 @@ export interface InitAnswers {
   stacks: string[];
 }
 
+/**
+ * Every answer the interview collects has a flag, so a caller that already
+ * knows the repository can install without a terminal. That caller is often a
+ * coding agent asked to "install agentsdir here": it has read the README, the
+ * scripts and the CI, so it answers better than a default ever could — but only
+ * if it has somewhere to put the answers.
+ */
 export interface InitFlags {
   yes: boolean;
+  name?: string;
+  description?: string;
+  dev?: string;
+  test?: string;
+  lint?: string;
   harness?: string;
   packs?: string;
   mode?: string;
@@ -41,10 +53,16 @@ export async function collectAnswers(
 ): Promise<InitAnswers> {
   const stacks = await detectStack(root);
   const stackIds = stacks.map((stack) => stack.id);
+  const suggested = { ...(stacks[0]?.suggestions ?? {}) };
   const defaults: InitAnswers = {
-    productName: basename(root),
-    description: "",
-    commands: { ...(stacks[0]?.suggestions ?? {}) },
+    productName: flags.name ?? basename(root),
+    description: flags.description ?? "",
+    commands: {
+      ...suggested,
+      ...(flags.dev === undefined ? {} : { dev: flags.dev }),
+      ...(flags.test === undefined ? {} : { test: flags.test }),
+      ...(flags.lint === undefined ? {} : { lint: flags.lint }),
+    },
     harnesses:
       flags.harness === undefined
         ? [...HARNESSES]
@@ -66,31 +84,41 @@ export async function collectAnswers(
     return defaults;
   }
   prompts.intro("agentsdir init");
-  const productName = ensureAnswer(
-    await prompts.text({
-      message: "Product name?",
-      initialValue: defaults.productName,
-    }),
-  );
-  const description = ensureAnswer(
-    await prompts.text({
-      message: "One-sentence description?",
-      defaultValue: "",
-      placeholder: "What this product does",
-    }),
-  );
-  const dev = await askCommand(
-    "Dev command? (leave empty to skip)",
-    defaults.commands.dev,
-  );
-  const test = await askCommand(
-    "Test command? (leave empty to skip)",
-    defaults.commands.test,
-  );
-  const lint = await askCommand(
-    "Lint command? (leave empty to skip)",
-    defaults.commands.lint,
-  );
+  const productName =
+    flags.name ??
+    ensureAnswer(
+      await prompts.text({
+        message: "Product name?",
+        initialValue: defaults.productName,
+      }),
+    );
+  const description =
+    flags.description ??
+    ensureAnswer(
+      await prompts.text({
+        message: "One-sentence description?",
+        defaultValue: "",
+        placeholder: "What this product does",
+      }),
+    );
+  const dev =
+    flags.dev ??
+    (await askCommand(
+      "Dev command? (leave empty to skip)",
+      defaults.commands.dev,
+    ));
+  const test =
+    flags.test ??
+    (await askCommand(
+      "Test command? (leave empty to skip)",
+      defaults.commands.test,
+    ));
+  const lint =
+    flags.lint ??
+    (await askCommand(
+      "Lint command? (leave empty to skip)",
+      defaults.commands.lint,
+    ));
   let harnesses = defaults.harnesses;
   if (flags.harness === undefined) {
     harnesses = ensureAnswer(
