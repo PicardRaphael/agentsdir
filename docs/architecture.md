@@ -105,7 +105,7 @@ The manifest is the local contract of the installation: it records what was inst
 schema = 1
 
 # Version of the CLI that produced the last write.
-cli-version = "0.1.0"
+cli-version = "1.0.0"
 
 [project]
 name = "my-product"           # derived from the folder or entered at init; parameterizes the templates

@@ -55,7 +55,7 @@ only touches its delimited blocks:
 
 ```markdown
 <!-- agentsdir:begin rules-index -->
-… contenu régénérable …
+… regenerable content …
 <!-- agentsdir:end rules-index -->
 ```
 
@@ -197,7 +197,7 @@ npx agentsdir add skill <name> [--implicit] [--read-only] [--dry-run] [--json]
    display-name: "…"
    short-description: "…"      # 25 to 64 characters
    color: "#RRGGBB"
-   icon: <icone-du-jeu-embarque>
+   icon: <icon-from-the-embedded-set>
    default-prompt: "Use $<name> to …"   # must contain $<name>
    disable-model-invocation: true       # default: explicit invocation
    implicit: false                      # optional; true reserved for read-only skills
@@ -324,7 +324,7 @@ npx agentsdir add hook <event> [--name <slug>] [--matcher "<pattern>"] [--dry-ru
    - Cursor — `.cursor/hooks.json` (`"version": 1`, lowerCamelCase keys —
      `preToolUse` —, flat entries `{command}`, with no matcher: its tool
      vocabulary differs, the script filters by itself).
-4. The invoked command is identical everywhere: `node .agents/hooks/<fichier>`.
+4. The invoked command is identical everywhere: `node .agents/hooks/<file>`.
 
 ```mermaid
 flowchart LR
@@ -544,7 +544,7 @@ Mechanics common to all packs:
 ## `vendor <owner/repo>` — v1.x (abridged specification)
 
 ```
-npx agentsdir vendor <owner/repo> [--path <sous-chemin>] [--dry-run]
+npx agentsdir vendor <owner/repo> [--path <subpath>] [--dry-run]
 ```
 
 Imports a skill published in an external GitHub repository into
@@ -593,7 +593,7 @@ The acquisition channel: switches an existing configuration over to the
    `.cursor/rules`, `.cursorrules`, an existing `AGENTS.md`.
 2. **Classification**: each element is mapped to its destination
    (`instructions → AGENTS.md`, `skills → .agents/skills/`,
-   `agents → .agents/agents/`, `règles → .agents/rules/`), duplicates between
+   `agents → .agents/agents/`, `rules → .agents/rules/`), duplicates between
    sources are detected and arbitrated interactively.
 3. **Switch-over**: writing of the source of truth, then an internal `init`
    (manifest, projections, CI) and replacement of the originals by the

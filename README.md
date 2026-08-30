@@ -16,13 +16,14 @@
 
 `AGENTS.md` has become a standard (Agentic AI Foundation / Linux Foundation) read by more than thirty agents, and `.agents/skills/` is the skills convention that Codex, Cursor and opencode discover natively. But no tool installs this complete architecture into a repo, handles the fallback when symlinks are not available (Windows without developer mode), generates the Codex metadata per skill, or registers a single hook in all three harnesses. That is the gap `agentsdir` fills — the full study is in [`docs/recherche/paysage-open-source.md`](docs/recherche/paysage-open-source.md).
 
-## Overview (v1 target)
+## Overview
 
 ```bash
 npx agentsdir init          # installs the architecture, interactive
-npx agentsdir add skill ma-procedure
-npx agentsdir add rule conventions-api --paths "src/api/**"
+npx agentsdir add skill my-procedure
+npx agentsdir add rule api-conventions --paths "src/api/**"
 npx agentsdir add hook PreToolUse
+npx agentsdir pack add verification
 npx agentsdir sync          # regenerates the projections
 npx agentsdir check         # verifies invariants and drift (CI)
 npx agentsdir doctor        # environment diagnostic
@@ -40,11 +41,11 @@ npx agentsdir doctor        # environment diagnostic
 | [`docs/harness.md`](docs/harness.md) | Claude Code / Codex / Cursor integration matrix |
 | [`docs/roadmap.md`](docs/roadmap.md) | v0.1 → v1 → v1.x → v2 milestones and acceptance criteria |
 | [`docs/recherche/`](docs/recherche/) | Analysis of the source model (NowStack) and competitive landscape |
-| [`.agents/tasks/`](.agents/tasks/) | v1 backlog, one self-contained task per file |
+| [`CHANGELOG.md`](CHANGELOG.md) | What each version adds |
 
-This repo applies its own architecture today: the agents working in it read [`AGENTS.md`](AGENTS.md).
+This repo applies its own architecture today: the agents working in it read [`AGENTS.md`](AGENTS.md), and its CI runs `check` against the local build.
 
-> Note: the documentation is written in French during the design phase. The README, the public documentation and the CLI messages will be published in English before the first release (see the dedicated backlog task).
+> Note: the public documentation and the CLI messages are in English. The internal working documents — `AGENTS.md`, `.agents/rules/`, `docs/recherche/` and the archived [`docs/readme-fr.md`](docs/readme-fr.md) — stay in French.
 
 ## License
 
