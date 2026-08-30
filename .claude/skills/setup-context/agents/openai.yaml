@@ -1,0 +1,10 @@
+interface:
+  display_name: "Setup Context"
+  short_description: "Assisted authoring of the AGENTS.md entry point"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#9D174D"
+  default_prompt: "Use $setup-context to build or improve AGENTS.md by guided interview."
+
+policy:
+  allow_implicit_invocation: false

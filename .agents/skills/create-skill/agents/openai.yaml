@@ -1,0 +1,10 @@
+interface:
+  display_name: "Create Skill"
+  short_description: "Assisted creation of a skill that passes check"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#7C3AED"
+  default_prompt: "Use $create-skill to create a new skill by guided interview."
+
+policy:
+  allow_implicit_invocation: false

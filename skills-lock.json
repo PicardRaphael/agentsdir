@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "create-agent": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/create-agent/SKILL.md",
+      "computedHash": "d2e89de7ae6ed8062d5c3caadaffe553aa77911364efa23963b1a581b35a040c"
+    },
+    "create-hook": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/create-hook/SKILL.md",
+      "computedHash": "91790a8a68478d0e9273e9f835ad5941541ec97b701ffb6727be8cfb8f45b1e7"
+    },
+    "create-rule": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/create-rule/SKILL.md",
+      "computedHash": "f59622a4b9c20b864ba095de9ebb6cf2c070b1702facef35f3a8018240819920"
+    },
+    "create-skill": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/create-skill/SKILL.md",
+      "computedHash": "c2e5129bf331a70c22b12639cc59440c03e1205d9331ab7f6f0e201c0ec98bb8"
+    },
+    "setup-context": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/setup-context/SKILL.md",
+      "computedHash": "8ca908676fbfa038e1de5c8d6118e777b5bc96174dad3e99e2c0159918024549"
+    }
+  }
+}

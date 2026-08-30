@@ -1,0 +1,17 @@
+# Interview bank — hook
+
+Ask only what the code cannot answer. The five discriminating questions:
+
+1. Prevent or react? (Prevent → blocking event + exit 2; react →
+   PostToolUse and kin, which cancel nothing.)
+2. When the script itself fails, should the action pass (fail-open) or
+   be blocked (fail-closed)? Document the choice in the script.
+3. Is this a hard security ban? (Then it is NOT a hook: point to the
+   harness permission settings and stop.)
+4. Which tools or commands exactly should trigger it? (Feeds the
+   matcher; remember Cursor uses its own tool vocabulary.)
+5. How long does the work take at worst, and must the agent wait for it?
+   (Feeds the timeout and the blocking/async choice.)
+
+Follow up with the concrete payload: ask for one real example of the
+event (the command, the file, the prompt) and design against it.

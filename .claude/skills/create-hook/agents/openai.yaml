@@ -1,0 +1,10 @@
+interface:
+  display_name: "Create Hook"
+  short_description: "Assisted creation of a multi-harness lifecycle hook"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#B45309"
+  default_prompt: "Use $create-hook to create a portable hook by guided interview."
+
+policy:
+  allow_implicit_invocation: false

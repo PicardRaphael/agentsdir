@@ -1,0 +1,10 @@
+interface:
+  display_name: "Create Agent"
+  short_description: "Assisted creation of a focused sub-agent"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#0F766E"
+  default_prompt: "Use $create-agent to create a focused sub-agent by guided interview."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,65 @@
+---
+name: create-skill
+description: "Creates a complete, high-quality skill through inventory, targeted interview, draft, critique and mechanical validation. Use when the user asks to create, design or improve a skill, a slash command or a reusable agent workflow."
+disable-model-invocation: true
+display-name: "Create Skill"
+short-description: "Assisted creation of a skill that passes check"
+color: "#7C3AED"
+icon: sparkles
+default-prompt: "Use $create-skill to create a new skill by guided interview."
+implicit: false
+---
+
+# Create Skill
+
+The CLI guarantees the structure (`agentsdir add skill`); this meta-skill
+guides the content. Nothing is delivered before `agentsdir check` passes.
+Follow the six steps in order — never skip the critique or the check.
+
+## 1. Inventory before creating
+
+- Read AGENTS.md, the rules index and every folder under `.agents/skills/`
+  before writing anything. Never write over existing material: if a
+  similar skill exists, propose improving it instead of duplicating it.
+- Note the project's terminology and commands — the new skill must reuse
+  them, not invent parallel vocabulary.
+
+## 2. Targeted interview
+
+- Ask ONLY what the code cannot answer. The question bank is in
+  references/interview.md — pick the discriminating questions, dig into
+  the hard points the user did not anticipate, skip the obvious.
+
+## 3. Routing
+
+- Qualify the need before creating anything: advisory knowledge belongs in
+  a rule (use $create-rule); an on-demand workflow is a skill (continue);
+  something guaranteed to run every time is a hook (use $create-hook);
+  bulky, isolable work is a sub-agent (use $create-agent). A misrouted
+  need produces a dead artifact — reroute instead of pressing on.
+
+## 4. Draft, then critique
+
+- Draft the body from the answers, then criticize it line by line with
+  the filter question: "if this line is deleted, will the agent make a mistake?"
+  Remove every line whose deletion would cause no mistake.
+- Run the trigger test: collect at least 3 user phrases that MUST trigger
+  the skill and at least 2 near-miss phrases that must NOT. Rework the
+  description until it separates them: third person, what + when, the
+  user's own keywords — never "Helps with…".
+- Check the draft against every criterion of references/rubrique.md.
+
+## 5. Generate, then write
+
+- Run `agentsdir add skill <name> --json` to create a valid skeleton and
+  its Codex projections, then replace the template body with the drafted
+  content and set the frontmatter fields from the interview (description,
+  display-name, short-description, color, icon, default-prompt).
+- Run `agentsdir sync` so the Codex artifacts match the final frontmatter.
+- Show the result to the user before finalizing (the generators accept
+  `--dry-run` when the user wants to preview the skeleton first).
+
+## 6. Mechanical validation — mandatory
+
+- Run `agentsdir check`. Any deviation goes back to step 4: never conclude
+  with a failing check, and paste the passing check output when done.
