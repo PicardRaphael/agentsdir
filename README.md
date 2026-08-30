@@ -18,6 +18,22 @@
 
 `AGENTS.md` has become a standard (Agentic AI Foundation / Linux Foundation) read by more than thirty agents, and `.agents/skills/` is the skills convention that Codex, Cursor and opencode discover natively. But no tool installs this complete architecture into a repo, handles the fallback when symlinks are not available (Windows without developer mode), generates the Codex metadata per skill, or registers a single hook in all three harnesses. That is the gap `agentsdir` fills — the full study is in [`docs/recherche/paysage-open-source.md`](docs/recherche/paysage-open-source.md).
 
+## Before you run it
+
+- **A git repository is required** — `init` resolves the repo root and refuses
+  to run outside one. Node 22 or later.
+- **`init` refuses a repository that already has a `CLAUDE.md`, or a
+  `.claude/rules`, `.claude/skills` or `.claude/agents` of its own.** It will
+  not overwrite work it did not write. Move that content into `.agents/`
+  (rules, skills) or into `AGENTS.md`, delete the old file or folder, then run
+  `init` again. Importing an existing configuration in one step is what
+  `migrate` will do, once it exists.
+- **`init` writes into your repository**: `.agents/`, `AGENTS.md`,
+  `.agents.toml`, the per-harness projections, a managed block in
+  `.gitignore`, and a GitHub Actions workflow that runs `check`. Run
+  `init --dry-run` first to see the full list without touching the disk, and
+  commit before you run it for real.
+
 ## Overview
 
 ```bash
