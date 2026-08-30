@@ -8,7 +8,7 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 prête à publier.** Le backlog v1 de `.agents/tasks/` est vidé : les quatorze tâches sont livrées (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. La suite (`vendor`, `update`, pack `logs`, puis `migrate`) est décrite dans [docs/roadmap.md](docs/roadmap.md) ; une nouvelle tâche s'ouvre dans `.agents/tasks/` au moment de l'attaquer.
+**Phase actuelle : v1.0.0 prête à publier.** Le backlog v1 de `.agents/tasks/` est vidé : les seize tâches sont livrées (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. La suite (`vendor`, `update`, pack `logs`, puis `migrate`) est décrite dans [docs/roadmap.md](docs/roadmap.md) ; une nouvelle tâche s'ouvre dans `.agents/tasks/` au moment de l'attaquer.
 
 ## Index des règles
 

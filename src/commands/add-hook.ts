@@ -18,6 +18,7 @@ import { renderHookScript } from "../templates/hook.js";
 import {
   ensureValidName,
   renderGeneratorReport,
+  resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
@@ -110,7 +111,13 @@ export async function runAddHook(
     );
   }
   return {
-    changes,
+    // .agents/hooks/ is not a projected directory, so this closing step only
+    // catches staleness and orphans left by earlier writes — same contract as
+    // the other generators
+    changes: [
+      ...changes,
+      ...(await resyncProjections(root, manifest, options)),
+    ],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
     warnings,
