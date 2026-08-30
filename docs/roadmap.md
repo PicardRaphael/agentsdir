@@ -56,6 +56,13 @@ Public documentation and CLI messages in English, end-to-end tests on demonstrat
 
 **Exit criterion**: a stranger installs the architecture in their repo in less than five minutes by reading the README only.
 
+> **Révision du 30 août 2026.** `vendor` et `migrate` sont livrés par la
+> concurrence (`npx skills add`, `rulesync import`) : les poursuivre est du
+> rattrapage. La direction retenue est décrite dans
+> [positionnement.md](positionnement.md) — gouverner la configuration plutôt que
+> l'installer : mesurer si elle sert, ce qu'elle coûte, et prouver qu'elle
+> fonctionne.
+
 ## v1.x — Ecosystem
 
 `vendor <owner/repo>` (external skills locked in `skills-lock.json`), `update` (manifest schema migrations), `logs` pack, `conductor.json`.

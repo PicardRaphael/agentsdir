@@ -10,7 +10,7 @@ CLI open source (MIT) qui installe dans un repo existant une architecture de con
 
 **Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** Le code est prêt — 15 défauts corrigés dont 7 de sécurité, CI verte sur ubuntu et windows, paquet npm éprouvé — mais **l'utilisateur a demandé de ne pas publier** tant que la direction produit n'est pas arrêtée. Ne pas lancer `npm publish` ni poser le tag sans sa demande explicite.
 
-**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est celle d'une référence pour les équipes qui installent et gouvernent des skills, agents et hooks sur plusieurs harness — ce que personne ne fait : vérifier que la configuration ne dérive pas (`check`/`sync`), mesurer si elle **sert** (tâche 25), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
+**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : gouverner la configuration d'agents plutôt que se contenter de l'installer — ce que personne ne fait : vérifier que la configuration ne dérive pas (`check`/`sync`), mesurer si elle **sert** (tâche 25), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
 
 ## Index des règles
 
@@ -44,6 +44,7 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `docs/creation-assistee.md` — création assistée : protocole, rubriques de qualité, banques d'interview.
 - `docs/conventions.md` — contrats installés et validés dans les repos cibles.
 - `docs/harness.md` — matrice d'intégration par harness.
+- `docs/positionnement.md` — la direction produit : le cycle installer → vérifier → mesurer → décider → prouver.
 - `docs/roadmap.md` — jalons et critères d'acceptation.
 - `docs/recherche/` — analyse du modèle source (NowStack) et paysage concurrentiel.
 - `e2e/` — scénarios de bout en bout sur repos de démonstration (voir `TESTING.md`).
