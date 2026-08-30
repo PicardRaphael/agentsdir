@@ -1,4 +1,4 @@
-import { pathExists } from "../core/fs-utils.js";
+import { entryExists } from "../core/fs-utils.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
@@ -39,7 +39,7 @@ export async function runAddRule(
   const manifest = await readManifest(root);
   const ruleFile = `${answers.name}.md`;
   const rulePath = `.agents/rules/${ruleFile}`;
-  if (await pathExists(join(root, ".agents", "rules", ruleFile))) {
+  if (await entryExists(join(root, ".agents", "rules", ruleFile))) {
     throw new CliError(
       `Rule "${answers.name}" already exists (${rulePath}). Pick another name, or edit the existing file — \`sync\` keeps the index in step.`,
     );

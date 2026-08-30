@@ -1,4 +1,4 @@
-import { pathExists } from "../core/fs-utils.js";
+import { entryExists } from "../core/fs-utils.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defineCommand } from "citty";
@@ -65,7 +65,7 @@ export async function runAddHook(
   }
   const file = `${answers.event.name.toLowerCase()}-${answers.slug}.mjs`;
   const scriptPath = `${HOOKS_DIR}/${file}`;
-  if (await pathExists(join(root, ...scriptPath.split("/")))) {
+  if (await entryExists(join(root, ...scriptPath.split("/")))) {
     throw new CliError(
       `Hook script ${scriptPath} already exists. Pick another name with --name, or edit the existing script — \`sync\` keeps the registrations in step.`,
     );
