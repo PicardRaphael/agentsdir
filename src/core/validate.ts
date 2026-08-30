@@ -100,15 +100,25 @@ async function validateSkill(
   let source: string;
   try {
     source = await readFile(join(skillsDir, folder, "SKILL.md"), "utf8");
-  } catch {
+  } catch (error) {
+    // absent and unreadable call for opposite fixes, so say which one it is:
+    // "write it or delete the folder" is bad advice for a file that is there
+    const code = (error as NodeJS.ErrnoException).code;
     return [
-      {
-        path: relSkill,
-        rule: "skill-md-missing",
-        message:
-          "skill folder has no SKILL.md — every skill folder needs one; write it or delete the folder.",
-        severity: "error",
-      },
+      code === "ENOENT"
+        ? {
+            path: relSkill,
+            rule: "skill-md-missing",
+            message:
+              "skill folder has no SKILL.md — every skill folder needs one; write it or delete the folder.",
+            severity: "error",
+          }
+        : {
+            path: skillPath,
+            rule: "skill-md-unreadable",
+            message: `SKILL.md cannot be read (${code ?? "unknown error"}) — fix its permissions or restore it; the file is there.`,
+            severity: "error",
+          },
     ];
   }
   let open;

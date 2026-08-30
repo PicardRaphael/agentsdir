@@ -471,11 +471,17 @@ async function verifyCopies(
     let current: Buffer;
     try {
       current = await readFile(toAbsolute(root, path));
-    } catch {
+    } catch (error) {
+      // an unreadable projection is not a missing one, and `sync` will not
+      // recreate it: say which of the two the user is looking at
+      const code = (error as NodeJS.ErrnoException).code;
       drifts.push({
         path,
         kind: "missing",
-        detail: "projection missing — run `agentsdir sync`.",
+        detail:
+          code === "ENOENT"
+            ? "projection missing — run `agentsdir sync`."
+            : `projection cannot be read (${code ?? "unknown error"}) — fix its permissions or restore it; \`sync\` cannot repair what it cannot read.`,
       });
       continue;
     }
