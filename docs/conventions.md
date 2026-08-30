@@ -96,7 +96,7 @@ Exhaustive list:
 
 1. **Name identity**: folder name = frontmatter `name` = `$<name>` token present in `default-prompt` = displayed name. No alias. The name follows the Agent Skills spec: 1 to 64 characters, `a-z 0-9 -`, no leading or trailing dash.
 2. **Invocation parity across harnesses**: `implicit: true` in the frontmatter ⟺ `allow_implicit_invocation: true` in `openai.yaml` ⟺ absence of `disable-model-invocation`. The three express the same decision; otherwise a skill blocked on one platform stays discoverable on the other.
-3. **Implicit reserved for read-only**: an implicit skill must declare `implicit: true` in its frontmatter **and** be read-only; any skill able to write is explicit.
+3. **Implicit reserved for read-only**: an implicit skill must declare `implicit: true` in its frontmatter **and** be read-only. It must therefore list its `allowed-tools` explicitly, none of them write-capable: an absent list means *no restriction*, which is the opposite of read-only. Any skill able to write is explicit.
 4. **Frontmatter ⟷ projections bijection**: every folder containing a `SKILL.md` has its generated artifacts, and no orphan artifact remains for a deleted skill.
 5. **`short_description` bounds**: between 25 and 64 characters (Unicode code points).
 6. **Valid color**: `color` follows `#RRGGBB` (six-digit hexadecimal).

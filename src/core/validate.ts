@@ -9,6 +9,7 @@ import {
 } from "./frontmatter.js";
 import {
   HOOK_REGISTRY_PATHS,
+  planHookRegistrations,
   registryProblem,
   type HookHarness,
 } from "./hook-registries.js";
@@ -291,17 +292,28 @@ async function validateSkill(
       severity: "error",
     });
   }
-  if (
-    frontmatter.implicit &&
-    frontmatter.allowedTools?.some((tool) => WRITE_TOOL.test(tool)) === true
-  ) {
-    violations.push({
-      path: skillPath,
-      rule: "skill-implicit-read-only",
-      message:
-        "an implicit skill must be read-only, but `allowed-tools` declares write-capable tools (Write/Edit/NotebookEdit/Bash or *) — make the skill explicit or drop those tools.",
-      severity: "error",
-    });
+  if (frontmatter.implicit) {
+    // `allowed-tools` is optional, and its absence means "no restriction" —
+    // every tool, writes included. Testing only the declared list therefore let
+    // the dangerous case through: an implicit skill free to write.
+    const declared = frontmatter.allowedTools;
+    if (declared === undefined || declared.length === 0) {
+      violations.push({
+        path: skillPath,
+        rule: "skill-implicit-read-only",
+        message:
+          "an implicit skill must be read-only, but declares no `allowed-tools` — an absent list means no restriction at all. List the read-only tools it needs, or make the skill explicit.",
+        severity: "error",
+      });
+    } else if (declared.some((tool) => WRITE_TOOL.test(tool))) {
+      violations.push({
+        path: skillPath,
+        rule: "skill-implicit-read-only",
+        message:
+          "an implicit skill must be read-only, but `allowed-tools` declares write-capable tools (Write/Edit/NotebookEdit/Bash or *) — make the skill explicit or drop those tools.",
+        severity: "error",
+      });
+    }
   }
   const significantLines = parsed.body
     .split("\n")
@@ -637,5 +649,42 @@ async function validateHookRegistries(
       });
     }
   }
-  return violations;
+  // a malformed registry cannot be planned against: report the shape first and
+  // let `sync` be the one to rewrite it
+  if (violations.length > 0) {
+    return violations;
+  }
+  return [...violations, ...(await compareHookRegistrations(root, manifest))];
+}
+
+/**
+ * Compares the registrations on disk to the ones the scripts of `.agents/hooks/`
+ * imply — the very plan `sync` applies. Checking only the shape of the file let
+ * both directions of drift through: a script added without a `sync` was
+ * registered nowhere, so no harness ever ran it and CI stayed green; a deleted
+ * script left registrations the three harnesses would still try to execute.
+ */
+async function compareHookRegistrations(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  let plans;
+  try {
+    plans = await planHookRegistrations(root, manifest.harness.enabled);
+  } catch {
+    // an unreadable registry: already the business of the shape pass above and
+    // of `sync`, which refuses rather than overwriting what it cannot read
+    return [];
+  }
+  return plans
+    .filter((plan) => plan.action !== "ok")
+    .map((plan) => ({
+      path: plan.path,
+      rule: "hook-registration-drift",
+      message:
+        plan.action === "created"
+          ? "hook scripts in .agents/hooks/ are registered nowhere — no harness will ever run them; run `agentsdir sync`."
+          : "registrations differ from the scripts in .agents/hooks/ — a script was added, renamed or deleted without a sync; run `agentsdir sync`.",
+      severity: "error" as const,
+    }));
 }
