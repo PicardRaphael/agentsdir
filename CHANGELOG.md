@@ -4,7 +4,9 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 1.0.0
+
+First public release.
 
 ### Fixed
 
@@ -61,10 +63,6 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
   live in one place. `src/__tests__/layering.test.ts` fails the build if `core/`
   ever imports from `commands/` or `packs/`, or if two modules import each other
   at runtime. Test helpers moved to `src/test-support/`.
-
-## 1.0.0
-
-First public release.
 
 ### Added
 

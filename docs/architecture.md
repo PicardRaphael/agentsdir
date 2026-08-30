@@ -105,6 +105,10 @@ flowchart LR
 | `core/detect` | Detection of the target repo (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`…) to pre-fill the dev/test/lint commands, and of the environment (symlink support, `core.symlinks`, platform). | Detection parameterizes the templates; it never imposes a runtime on the target repo. |
 
 | `core/harnesses` | The single list of targeted harnesses and their configuration directories. | `init`, the hook registries and the diagnostics read the same list, so they can never disagree on what "every harness" means. |
+| `core/skill-hash` | The sha256 fingerprint of a skill folder, from disk or from rendered contents. | Outside the validator on purpose: `pack add` and `sync` fingerprint folders to fill the lock, which is a calculation, not a check. |
+| `core/errors` | `CliError` plus `asUserFacingError`, which turns a filesystem failure into the promised message and exit code. | A `TypeError` is a bug in this CLI, not something the user can act on: it keeps its stack trace. |
+| `commands/init-interview` | The questions `init` asks, the flags that replace them, and the probes filling the defaults. | Separate from the writing side so the plan can be tested without a terminal. |
+| `command-tree` | The command names, and the check that rejects a typo before citty prints the help. | A mistyped command is a usage error (exit 2), never drift (exit 1) — a CI script must be able to tell them apart. |
 | `core/fs-utils` | The filesystem probes shared by every layer: `pathExists`, `entryExists` (a broken symlink still counts), `isDirectory`. | Absence is a normal answer in this CLI, never an exception re-caught at each call site. |
 | `commands/rules-index` | Composes the `rules-index` block of AGENTS.md: the rules on disk, plus the ones the command is about to write, minus the ones it removes. | Shared by `init`, `sync`, `add rule` and `pack add|remove`, which all need the same entries. It sits in `commands/` because it needs both `core` and `templates`. |
 
