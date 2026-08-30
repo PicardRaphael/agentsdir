@@ -86,6 +86,58 @@ export async function project(
     : projectCopies(root, options);
 }
 
+export interface RefreshOptions {
+  /** Mode to project into — the one the manifest will record. */
+  mode: ProjectionMode;
+  /** Mode currently recorded; when it differs from `mode`, this is a switch. */
+  previousMode: ProjectionMode;
+  /** Fingerprints recorded by the previous run. */
+  previousHashes: Record<string, string>;
+  /** Would-be content of source files about to be written (repo-relative POSIX). */
+  overlay?: Record<string, Buffer>;
+  dryRun?: boolean;
+}
+
+export interface RefreshResult extends ProjectionResult {
+  /** Projections removed before this run projected: stale mode, or orphans. */
+  removed: string[];
+}
+
+/**
+ * Brings the projections back in line with the source of truth: first removes
+ * what must not survive — the previous mode's projections on a switch, the
+ * copies whose source is gone otherwise — then projects. `sync` and the
+ * generators share this single orchestration; the caller stays responsible for
+ * recording the returned fingerprints in the manifest.
+ */
+export async function refreshProjections(
+  root: string,
+  options: RefreshOptions,
+): Promise<RefreshResult> {
+  const switching = options.mode !== options.previousMode;
+  const { removed } = switching
+    ? await unproject(root, {
+        mode: options.previousMode,
+        dryRun: options.dryRun,
+        previousHashes: options.previousHashes,
+      })
+    : await removeOrphanProjections(root, {
+        mode: options.mode,
+        hashes: options.previousHashes,
+        dryRun: options.dryRun,
+      });
+  const projection = await project(root, {
+    mode: options.mode,
+    dryRun: options.dryRun,
+    // on a switch the recorded fingerprints describe the mode being left
+    previousHashes: switching ? {} : options.previousHashes,
+    ...(options.overlay === undefined ? {} : { overlay: options.overlay }),
+    // a dry run plans against the clean slate the removal above would leave
+    ...(switching && options.dryRun === true ? { assumeAbsent: true } : {}),
+  });
+  return { ...projection, removed };
+}
+
 export interface UnprojectOptions {
   /** Mode whose projections are being removed — the one leaving the manifest. */
   mode: ProjectionMode;

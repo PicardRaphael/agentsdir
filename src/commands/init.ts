@@ -24,6 +24,7 @@ import {
   getPackContent,
   packInstallFiles,
   packSkillHash,
+  PACKS,
   renderLockSeed,
 } from "../packs/index.js";
 import {
@@ -43,13 +44,6 @@ import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
 
 export const HARNESSES = ["claude", "codex", "cursor"] as const;
-export const PACKS = [
-  "core",
-  "creator",
-  "verification",
-  "changelog",
-  "worktrees",
-] as const;
 
 export interface InitAnswers {
   productName: string;

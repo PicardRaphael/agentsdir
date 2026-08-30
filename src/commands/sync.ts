@@ -18,11 +18,7 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import {
-  project,
-  removeOrphanProjections,
-  unproject,
-} from "../core/projections.js";
+import { refreshProjections } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import {
   computeSkillHash,
@@ -90,9 +86,9 @@ export async function runSync(
 ): Promise<SyncResult> {
   const manifest = await readManifest(root);
   const previousMode = manifest.projections.mode;
+  // an explicit --mode is the only way the mode ever changes (never recomputed);
+  // refreshProjections turns the difference into the removal it implies
   const mode = options.mode ?? previousMode;
-  // an explicit switch is the only way the mode ever changes (never recomputed)
-  const switching = mode !== previousMode;
   const violations = await validateRepo(root, manifest);
   const blocking = violations.filter(
     (violation) =>
@@ -113,37 +109,18 @@ export async function runSync(
     planned.push(artifact);
   }
   let projectionHashes: Record<string, string> = {};
+  let removed: string[] = [];
   const claudeEnabled = manifest.harness.enabled.includes("claude");
-  // a switch removes the previous mode's projections first: a stale symlink
-  // would otherwise be written *through* to its source, and a stale copy would
-  // read as a foreign target
-  const removed = !claudeEnabled
-    ? []
-    : switching
-      ? (
-          await unproject(root, {
-            mode: previousMode,
-            dryRun: true,
-            previousHashes: manifest.projections.hashes,
-          })
-        ).removed
-      : // same mode: only the copies whose source was deleted
-        (
-          await removeOrphanProjections(root, {
-            mode,
-            hashes: manifest.projections.hashes,
-            dryRun: true,
-          })
-        ).removed;
   if (claudeEnabled) {
-    const plan = await project(root, {
+    const plan = await refreshProjections(root, {
       mode,
-      dryRun: true,
-      previousHashes: switching ? {} : manifest.projections.hashes,
+      previousMode,
+      previousHashes: manifest.projections.hashes,
       overlay,
-      ...(switching ? { assumeAbsent: true } : {}),
+      dryRun: true,
     });
     projectionHashes = plan.hashes;
+    removed = plan.removed;
     for (const change of plan.changes) {
       planned.push({
         path: change.path,
@@ -192,21 +169,10 @@ export async function runSync(
       }
     }
     if (claudeEnabled) {
-      if (switching) {
-        await unproject(root, {
-          mode: previousMode,
-          previousHashes: manifest.projections.hashes,
-        });
-      } else {
-        await removeOrphanProjections(root, {
-          mode,
-          hashes: manifest.projections.hashes,
-        });
-      }
-      await project(root, {
+      await refreshProjections(root, {
         mode,
-        dryRun: false,
-        previousHashes: switching ? {} : manifest.projections.hashes,
+        previousMode,
+        previousHashes: manifest.projections.hashes,
         overlay,
       });
     }

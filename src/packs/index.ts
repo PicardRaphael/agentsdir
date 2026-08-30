@@ -31,28 +31,28 @@ export interface PackContent {
   keepExisting: string[];
 }
 
+/**
+ * The single pack registry: adding a pack means adding one entry here and its
+ * render module — no list to keep in sync elsewhere.
+ */
+const PACK_REGISTRY = {
+  creator: creatorPack,
+  verification: verificationPack,
+  changelog: changelogPack,
+  worktrees: worktreesPack,
+} as const satisfies Record<string, () => PackContent>;
+
 /** Packs with installable content in this version. */
-export const INSTALLABLE_PACKS = [
-  "creator",
-  "verification",
-  "changelog",
-  "worktrees",
-] as const;
+export const INSTALLABLE_PACKS = Object.keys(
+  PACK_REGISTRY,
+) as (keyof typeof PACK_REGISTRY)[];
+
+/** `core` is the always-installed baseline; it has no render module of its own. */
+export const PACKS = ["core", ...INSTALLABLE_PACKS] as const;
 
 export function getPackContent(name: string): PackContent | undefined {
-  if (name === "creator") {
-    return creatorPack();
-  }
-  if (name === "verification") {
-    return verificationPack();
-  }
-  if (name === "changelog") {
-    return changelogPack();
-  }
-  if (name === "worktrees") {
-    return worktreesPack();
-  }
-  return undefined;
+  const render = PACK_REGISTRY[name as keyof typeof PACK_REGISTRY];
+  return render === undefined ? undefined : render();
 }
 
 /** Fingerprint of a pack skill folder, computed from the rendered files (dry-run safe). */
