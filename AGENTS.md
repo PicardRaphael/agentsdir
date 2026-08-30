@@ -52,6 +52,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 28 (produit).
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 29 (produit ; la 29 est à discuter avant implémentation).
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
