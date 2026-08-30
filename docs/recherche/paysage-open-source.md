@@ -1,5 +1,10 @@
 # Paysage open source : standards, concurrents, positionnement
 
+> **Relevé du 27 août 2026, partiellement infirmé.** Sa conclusion sur la
+> migration `.claude/` → `.agents/` comme meilleur canal d'acquisition a été
+> renversée par [paysage-2026-08.md](paysage-2026-08.md), qui fait foi. Ce
+> document est conservé comme trace de l'analyse de conception.
+
 État des lieux vérifié le **27 août 2026**. Les étoiles GitHub ont été relevées ce jour-là via l'API GitHub ; les chiffres d'adoption (« 60 000 repos », « 32 outils ») proviennent d'articles secondaires de 2026, plausibles mais non recomptés. La disponibilité des noms npm a été vérifiée le même jour sur le registre.
 
 Voir aussi : [../roadmap.md](../roadmap.md) (ce que ce paysage implique pour le calendrier), [../harness.md](../harness.md) (la matrice technique par harness).

@@ -4,9 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 1.0.0
+## 1.0.0 — unreleased
 
-First public release.
+First release, built and verified but not published to npm yet: publication is
+held until `init` proposes content fit for the repository rather than an empty
+skeleton. This entry gets its date on the day it ships.
 
 ### Security
 

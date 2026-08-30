@@ -10,7 +10,9 @@
 
 ## Status
 
-**v1.0.0.** The CLI is implemented (`init`, `add skill` / `rule` / `agent` / `hook`, `pack add` / `remove`, `sync`, `check`, `doctor`), tested (Vitest unit tests plus end-to-end tests on ubuntu and windows) and this repo is managed by its own CLI. The entry point is [`docs/roadmap.md`](docs/roadmap.md).
+**v1.0.0 — built and verified, not published yet.** The CLI is implemented (`init`, `add skill` / `rule` / `agent` / `hook`, `pack add` / `remove`, `sync`, `check`, `doctor`), tested (Vitest unit tests plus end-to-end tests on ubuntu and windows) and this repo is managed by its own CLI. The entry point is [`docs/roadmap.md`](docs/roadmap.md).
+
+> **The package is not on npm yet, so the `npx agentsdir …` commands below do not work from a clone.** Publication is deliberately held until `init` produces a proposed set of rules, hooks and sub-agents fit for your repository, instead of an empty skeleton — the reasoning is in [`docs/positionnement.md`](docs/positionnement.md) (French). Until then, build from source: `npm install && npm run build`, then call `node dist/cli.js <command>` in place of `npx agentsdir <command>`.
 
 ## Why
 
@@ -56,13 +58,22 @@ commands — the part a generic scaffold always gets wrong.
 | [`docs/conventions.md`](docs/conventions.md) | Installed and validated contracts: skills, rules, managed blocks, lock |
 | [`docs/harness.md`](docs/harness.md) | Claude Code / Codex / Cursor integration matrix |
 | [`docs/roadmap.md`](docs/roadmap.md) | v0.1 → v1 → v1.x → v2 milestones and acceptance criteria |
+| [`docs/positionnement.md`](docs/positionnement.md) | Product direction, build order and publication gate (French) |
 | [`docs/recherche/`](docs/recherche/) | Analysis of the source model (NowStack) and competitive landscape |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each version adds |
 
 This repo applies its own architecture today: the agents working in it read [`AGENTS.md`](AGENTS.md), and its CI runs `check` against the local build.
 
-> Note: the public documentation and the CLI messages are in English. The internal working documents — `AGENTS.md`, `.agents/rules/`, `docs/recherche/` and the archived [`docs/readme-fr.md`](docs/readme-fr.md) — stay in French.
+> Note: the public documentation and the CLI messages are in English. The internal working documents — `AGENTS.md`, `.agents/rules/`, `docs/recherche/`, [`docs/positionnement.md`](docs/positionnement.md) and the archived [`docs/readme-fr.md`](docs/readme-fr.md) — stay in French.
 
 ## License
 
 [MIT](LICENSE) © 2026 Raphael Picard
+
+### Third-party
+
+The published bundle embeds icon paths from [lucide-static](https://lucide.dev)
+1.35.0 (ISC, © Lucide Icons and Contributors); some of those icons are derived
+from [Feather](https://feathericons.com) (MIT, © Cole Bemis). Both notices ship
+with the package in [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt) and in
+the header of `dist/cli.js`.

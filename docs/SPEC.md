@@ -45,6 +45,8 @@ The tagline: **"installs into any repo the agent architecture that Codex, Cursor
 | Assisted creation | In v1: `creator` pack + `$setup-context`, hybrid approach (CLI = structure, meta-skills = interview) | 2026-08-28 |
 | Repo analysis | `$setup-context` has the agent analyze the code to pre-draft AGENTS.md | 2026-08-28 |
 | `update` | Upgrades untouched CLI content (tracked by fingerprint), preserves and reports the modified ones | 2026-08-28 |
+| Product direction | Be the reference for `init` **and** govern what was installed: no race on harness count, `vendor` and `migrate` demoted to catching up. See [positionnement.md](positionnement.md) | 2026-08-30 |
+| Publication gate | v1.0.0 is held until `init` proposes content fit for the repository (task 24) and the "five minutes with the README alone" criterion has actually been verified | 2026-08-30 |
 
 ## Origin
 

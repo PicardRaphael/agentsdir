@@ -9,9 +9,9 @@ flowchart LR
     v03 --> v04["v0.4<br/>add hook<br/>multi-harness"]
     v04 --> v05["v0.5<br/>packs verification,<br/>changelog, worktrees"]
     v05 --> v06["v0.6<br/>assisted creation:<br/>creator pack + setup-context"]
-    v06 --> v1["v1.0<br/>EN docs, e2e,<br/>npm publication"]
-    v1 --> v1x["v1.x<br/>vendor, update,<br/>logs pack"]
-    v1x --> v2["v2<br/>migrate<br/>.claude/ to .agents/"]
+    v06 --> v1["v1.0<br/>EN docs, e2e,<br/>publication held"]
+    v1 --> gov["after v1<br/>prove, propose,<br/>measure, plug in MCP"]
+    gov --> later["deferred<br/>update, then vendor<br/>and migrate if ever"]
 ```
 
 ## v0.1 — Installable in-house
@@ -56,20 +56,35 @@ Public documentation and CLI messages in English, end-to-end tests on demonstrat
 
 **Exit criterion**: a stranger installs the architecture in their repo in less than five minutes by reading the README only.
 
-> **Révision du 30 août 2026.** `vendor` et `migrate` sont livrés par la
-> concurrence (`npx skills add`, `rulesync import`) : les poursuivre est du
-> rattrapage. La direction retenue est décrite dans
-> [positionnement.md](positionnement.md) — gouverner la configuration plutôt que
-> l'installer : mesurer si elle sert, ce qu'elle coûte, et prouver qu'elle
-> fonctionne.
+> **Revised on 2026-08-30.** `vendor` and `migrate` are already shipped by
+> competitors (`npx skills add`, `rulesync import`): chasing them is catching up,
+> not differentiating. The direction retained is described in
+> [positionnement.md](positionnement.md) (French) — be the reference for `init`
+> **and** govern what was installed: measure whether it serves, what it costs,
+> and prove that it works. The milestones below predate that revision; the
+> sections marked *deferred* are kept for the record, not as a plan.
 
-## v1.x — Ecosystem
+## After v1 — Govern what was installed
 
-`vendor <owner/repo>` (external skills locked in `skills-lock.json`), `update` (manifest schema migrations), `logs` pack, `conductor.json`.
+The line actually being built, in order: prove that a harness really loads what
+the CLI writes, make `init` propose a coherent set, measure usage, measure
+context cost, then plug in MCP. The order and its reasoning are in
+[positionnement.md](positionnement.md); the tasks are in `.agents/tasks/`.
 
-## v2 — Migration
+## v1.x — `update`
 
-`migrate`: inventory of an existing `.claude/`, `.cursor/rules` or `CLAUDE.md`, deduplication, switch to `.agents/` + projections, report. This is the main acquisition channel: the installed base of Claude Code configurations is the largest pool of users.
+`update` (manifest schema migrations) is the one v1.x item still on the line:
+the CLI already writes `sourceType: "agentsdir"` entries in `skills-lock.json`
+that nothing consumes without it.
+
+## Deferred — `vendor`, `migrate`, and the rest
+
+`vendor <owner/repo>` and `migrate` (inventory of an existing `.claude/`,
+`.cursor/rules` or `CLAUDE.md`, switch to `.agents/` + projections) are shipped
+elsewhere, better resourced. Reconsider one day as a convenience, never as an
+argument. The `logs` pack and `conductor.json`, inherited from the source model,
+are dropped: the `usage` pack (tasks 25 and 30) covers that ground differently,
+locally and without telemetry.
 
 ## Tracked risks
 
