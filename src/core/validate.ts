@@ -426,6 +426,17 @@ async function validateLock(root: string): Promise<Violation[]> {
     const entry = (entryRaw ?? {}) as Record<string, unknown>;
     const recorded = entry["computedHash"];
     const relSkill = `.agents/skills/${name}`;
+    // the key becomes a path segment: a lock from a cloned repo could otherwise
+    // point the reader at a directory outside the repository
+    if (!NAME_SPEC.test(name)) {
+      violations.push({
+        path: "skills-lock.json",
+        rule: "lock-invalid",
+        message: `lock entry "${name}" is not a valid skill name (1 to 64 characters of a-z, 0-9 and -) — a lock key is a folder name, never a path.`,
+        severity: "error",
+      });
+      continue;
+    }
     if (typeof recorded !== "string") {
       violations.push({
         path: relSkill,

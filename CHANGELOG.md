@@ -30,6 +30,11 @@ resolved, on the first ordinary command.
 - **Hook script names are validated before registration.** The name is
   interpolated into the `node .agents/hooks/<file>` command a harness will run;
   a name carrying shell syntax is now refused rather than registered.
+- **A lock key is a folder name, never a path.** The keys of
+  `skills-lock.json` were used as path segments, so an entry naming a traversal
+  had a directory outside the repository read and fingerprinted, its digest
+  written back into the lock. Keys are now held to the skill-name grammar and
+  refused before any disk access.
 - **A rule cannot break the managed block of AGENTS.md.** A first line carrying
   a block marker split the block in two, so every `sync` appended another copy
   and `check` stayed red for good.

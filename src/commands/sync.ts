@@ -22,7 +22,7 @@ import { refreshProjections } from "../core/projections.js";
 import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { computeSkillHash } from "../core/skill-hash.js";
-import { validateRepo, type Violation } from "../core/validate.js";
+import { NAME_SPEC, validateRepo, type Violation } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import { CLI_VERSION } from "../version.js";
 
@@ -395,6 +395,11 @@ async function planLock(
   for (const [name, entryRaw] of Object.entries(skills)) {
     const entry = entryRaw as Record<string, unknown>;
     if (entry["sourceType"] === "agentsdir") {
+      continue;
+    }
+    // validateRepo already refused an invalid key; belt and braces, since this
+    // one builds a path that reads and hashes a directory
+    if (!NAME_SPEC.test(name)) {
       continue;
     }
     const prefix = `.agents/skills/${name}/`;
