@@ -1,58 +1,21 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { CliError } from "../../core/errors.js";
 import { readManifest } from "../../core/manifest.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+} from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runPackAdd, runPackRemove } from "../pack.js";
 
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-pack-changelog-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function initAnswers(): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-  };
-}
-
 async function initializedRepo(): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("pack-changelog");
   await runInit(dir, initAnswers(), { dryRun: false });
   return dir;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 describe("11 - pack changelog", () => {

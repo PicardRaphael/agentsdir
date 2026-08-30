@@ -14,9 +14,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   renderOpenAiYaml,
   renderSkillIcon,
@@ -26,53 +25,20 @@ import { CliError } from "../../core/errors.js";
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
 import { MANIFEST_FILE } from "../../core/manifest.js";
 import { computeSkillHash } from "../../core/validate.js";
+import { initAnswers, makeTempDir, runCli } from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runSync } from "../sync.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
 
 const probeDir = await mkdtemp(join(tmpdir(), "agentsdir-sync-probe-"));
 const symlinkSupported = (await detectSymlinkSupport(probeDir)).supported;
 await rm(probeDir, { recursive: true, force: true });
 
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-sync-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function answers(overrides: Partial<InitAnswers> = {}): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-    ...overrides,
-  };
-}
-
 async function initializedRepo(): Promise<string> {
-  const dir = await makeTempDir();
-  await runInit(dir, answers(), { dryRun: false });
+  const dir = await makeTempDir("sync");
+  await runInit(dir, initAnswers(), { dryRun: false });
   return dir;
 }
 
@@ -125,30 +91,6 @@ async function addSkill(
 
 function actionsByPath(changes: { path: string; action: string }[]) {
   return new Map(changes.map((change) => [change.path, change.action]));
-}
-
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [cliPath, ...args],
-      { cwd },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== "number") {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout,
-          stderr,
-          code: typeof error?.code === "number" ? error.code : 0,
-        });
-      },
-    );
-  });
 }
 
 async function snapshotTree(dir: string): Promise<Map<string, string>> {
@@ -420,7 +362,7 @@ describe("08 - sync command", () => {
   it.runIf(symlinkSupported)(
     "Given symlink mode with a deleted link and a re-pointed link, When sync runs, Then the links are recreated per the manifest and check exits 0",
     async () => {
-      const dir = await makeTempDir();
+      const dir = await makeTempDir("sync");
       await execFileAsync("git", ["-C", dir, "init"]);
       await execFileAsync("git", [
         "-C",
@@ -429,7 +371,7 @@ describe("08 - sync command", () => {
         "core.symlinks",
         "true",
       ]);
-      await runInit(dir, answers({ mode: "symlink" }), { dryRun: false });
+      await runInit(dir, initAnswers({ mode: "symlink" }), { dryRun: false });
       await addSkill(dir, "demo", skillSource("demo"));
       await unlink(join(dir, "CLAUDE.md"));
       await unlink(join(dir, ".claude", "agents"));
@@ -448,8 +390,10 @@ describe("08 - sync command", () => {
   );
 
   it("Given the codex harness only, When sync runs, Then Codex artifacts are regenerated but no Claude projection is created, and check exits 0", async () => {
-    const dir = await makeTempDir();
-    await runInit(dir, answers({ harnesses: ["codex"] }), { dryRun: false });
+    const dir = await makeTempDir("sync");
+    await runInit(dir, initAnswers({ harnesses: ["codex"] }), {
+      dryRun: false,
+    });
     await addSkill(dir, "demo", skillSource("demo"));
     await rm(join(dir, ".agents", "skills", "demo", "assets", "icon.svg"));
     const result = await runSync(dir, { dryRun: false });
@@ -489,7 +433,7 @@ describe("08 - sync command", () => {
   });
 
   it("Given a git repo without a manifest, When the CLI runs sync, Then it exits 2 pointing to agentsdir init", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("sync");
     await execFileAsync("git", ["-C", dir, "init"]);
     const { code, stderr } = await runCli(dir, ["sync"]);
     expect(code).toBe(2);
@@ -529,7 +473,7 @@ describe("14 - sync --mode switches the projection mode", () => {
   it.runIf(symlinkSupported)(
     "Given a repo in copy mode, When sync --mode symlink runs, Then the copies are replaced by real symlinks, the manifest records the new mode, and check exits 0",
     async () => {
-      const dir = await makeTempDir();
+      const dir = await makeTempDir("sync");
       await execFileAsync("git", ["-C", dir, "init"]);
       await execFileAsync("git", [
         "-C",
@@ -538,7 +482,7 @@ describe("14 - sync --mode switches the projection mode", () => {
         "core.symlinks",
         "true",
       ]);
-      await runInit(dir, answers({ mode: "copy" }), { dryRun: false });
+      await runInit(dir, initAnswers({ mode: "copy" }), { dryRun: false });
       expect((await lstat(join(dir, "CLAUDE.md"))).isSymbolicLink()).toBe(
         false,
       );
@@ -557,7 +501,7 @@ describe("14 - sync --mode switches the projection mode", () => {
   it.runIf(symlinkSupported)(
     "Given a repo in symlink mode, When sync --mode copy runs, Then the links become copies and AGENTS.md is never written through the link",
     async () => {
-      const dir = await makeTempDir();
+      const dir = await makeTempDir("sync");
       await execFileAsync("git", ["-C", dir, "init"]);
       await execFileAsync("git", [
         "-C",
@@ -566,7 +510,7 @@ describe("14 - sync --mode switches the projection mode", () => {
         "core.symlinks",
         "true",
       ]);
-      await runInit(dir, answers({ mode: "symlink" }), { dryRun: false });
+      await runInit(dir, initAnswers({ mode: "symlink" }), { dryRun: false });
       const sourceBefore = await readFile(join(dir, "AGENTS.md"), "utf8");
       const result = await runSync(dir, { dryRun: false, mode: "copy" });
       expect(result.exitCode).toBe(0);

@@ -1,18 +1,9 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   renderOpenAiYaml,
   renderSkillIcon,
@@ -20,48 +11,16 @@ import {
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
 import { computeSkillHash } from "../../core/validate.js";
 import { renderAgentsCheckWorkflow } from "../../templates/bootstrap.js";
+import { initAnswers, makeTempDir, runCli } from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runSync } from "../sync.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
-
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-check-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function answers(): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-  };
-}
 
 async function initializedRepo(): Promise<string> {
-  const dir = await makeTempDir();
-  await runInit(dir, answers(), { dryRun: false });
+  const dir = await makeTempDir("check");
+  await runInit(dir, initAnswers(), { dryRun: false });
   return dir;
 }
 
@@ -120,30 +79,6 @@ async function addSkill(
 
 function rules(violations: { rule: string }[]): string[] {
   return violations.map((violation) => violation.rule);
-}
-
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [cliPath, ...args],
-      { cwd },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== "number") {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout,
-          stderr,
-          code: typeof error?.code === "number" ? error.code : 0,
-        });
-      },
-    );
-  });
 }
 
 async function snapshotTree(dir: string): Promise<Map<string, string>> {
@@ -408,7 +343,7 @@ describe("07 - check command", () => {
   });
 
   it("Given a git repo without a manifest, When the CLI runs check, Then it exits 2 pointing to agentsdir init", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("check");
     await execFileAsync("git", ["-C", dir, "init"]);
     const { code, stderr } = await runCli(dir, ["check"]);
     expect(code).toBe(2);

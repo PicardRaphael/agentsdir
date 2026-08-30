@@ -3,10 +3,10 @@ import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { cliPath } from "../test-support/index.js";
 
 const execFileAsync = promisify(execFile);
 const distDir = fileURLToPath(new URL("../../dist", import.meta.url));
-const cliPath = fileURLToPath(new URL("../../dist/cli.js", import.meta.url));
 
 describe("01 - package skeleton (walking skeleton)", () => {
   it("Given the built bundle, When node dist/cli.js --help runs, Then it prints the CLI help and exits with code 0", async () => {

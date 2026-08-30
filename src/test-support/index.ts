@@ -70,9 +70,7 @@ export function runCli(cwd: string, args: string[]): Promise<CliRun> {
 }
 
 /** The answers `init --yes` would collect on a bare repo, overridable per test. */
-export function initAnswers(
-  overrides: Partial<InitAnswers> = {},
-): InitAnswers {
+export function initAnswers(overrides: Partial<InitAnswers> = {}): InitAnswers {
   return {
     productName: "demo",
     description: "A demo product.",

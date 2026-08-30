@@ -13,7 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { makeTempDir } from "../../test-support/index.js";
 import { detectSymlinkSupport } from "../detect.js";
 import { CliError } from "../errors.js";
 import {
@@ -28,26 +29,6 @@ const execFileAsync = promisify(execFile);
 const probeDir = await mkdtemp(join(tmpdir(), "agentsdir-proj-probe-"));
 const symlinkSupported = (await detectSymlinkSupport(probeDir)).supported;
 await rm(probeDir, { recursive: true, force: true });
-
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-proj-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
 
 async function makeSources(dir: string): Promise<void> {
   await writeFile(
@@ -76,7 +57,7 @@ async function makeSources(dir: string): Promise<void> {
 }
 
 async function makeGitRepo(coreSymlinks: "true" | "false"): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("proj");
   await execFileAsync("git", ["-C", dir, "init"]);
   await execFileAsync("git", [
     "-C",
@@ -95,7 +76,7 @@ function sha256(content: Buffer): string {
 
 describe("05 - projections engine (copy mode)", () => {
   it("Given copy mode, When project runs, Then CLAUDE.md contains the @AGENTS.md import followed by the generated header, not a copy of the content", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     await project(dir, { mode: "copy" });
     const claudeMd = await readFile(join(dir, "CLAUDE.md"), "utf8");
@@ -106,7 +87,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given Markdown and non-Markdown sources, When project runs in copy mode, Then Markdown copies carry the generated header and other files are byte-identical", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     await project(dir, { mode: "copy" });
     const ruleCopy = await readFile(
@@ -123,7 +104,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given copy mode, When project runs, Then every generated file's sha256 fingerprint is returned for [projections.hashes]", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     const result = await project(dir, { mode: "copy" });
     expect(Object.keys(result.hashes)).toEqual([
@@ -140,7 +121,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given a repo already projected, When project reruns, Then every change is unchanged (byte-for-byte idempotence)", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     const first = await project(dir, { mode: "copy" });
     const second = await project(dir, {
@@ -154,7 +135,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given a source edited since the last run, When project reruns with the previous fingerprints, Then the stale copy is rewritten", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     const first = await project(dir, { mode: "copy" });
     await writeFile(
@@ -178,7 +159,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given a projection edited by hand, When project reruns, Then it refuses with exit code 1 instead of overwriting", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     const first = await project(dir, { mode: "copy" });
     await writeFile(
@@ -203,7 +184,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given a foreign CLAUDE.md, When project runs in copy mode, Then it refuses with exit code 1 and points to the source of truth", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     await writeFile(join(dir, "CLAUDE.md"), "# My own instructions\n", "utf8");
     const error = await project(dir, { mode: "copy" }).catch(
@@ -215,7 +196,7 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given projected copies later deleted, modified or stripped of their header, When verify runs, Then it reports missing, modified and header-removed", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("proj");
     await makeSources(dir);
     const { hashes } = await project(dir, { mode: "copy" });
     await rm(join(dir, ".claude", "skills", "demo", "icon.svg"));
@@ -239,8 +220,8 @@ describe("05 - projections engine (copy mode)", () => {
   });
 
   it("Given two different repos, When project runs in copy mode, Then the CLAUDE.md fingerprint is identical because the bridge content is constant", async () => {
-    const dirA = await makeTempDir();
-    const dirB = await makeTempDir();
+    const dirA = await makeTempDir("proj");
+    const dirB = await makeTempDir("proj");
     await makeSources(dirA);
     await makeSources(dirB);
     await writeFile(join(dirB, "AGENTS.md"), "# Different content\n", "utf8");

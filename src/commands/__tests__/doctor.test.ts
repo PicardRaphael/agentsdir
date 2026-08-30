@@ -1,60 +1,19 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GitSymlinksInfo, SymlinkSupport } from "../../core/detect.js";
 import { readManifest } from "../../core/manifest.js";
+import { cliPath, initAnswers, makeTempDir } from "../../test-support/index.js";
 import { runDoctor, type DoctorFinding } from "../doctor.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
-
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-doctor-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function initAnswers(): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-  };
-}
 
 async function initializedRepo(): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("doctor");
   await runInit(dir, initAnswers(), { dryRun: false });
   return dir;
 }
@@ -213,7 +172,7 @@ describe("13 - doctor command", () => {
   });
 
   it("Given a repo that is not initialized, When doctor runs, Then it reports it as a finding and still exits 0", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("doctor");
     const result = await runDoctor(dir, probes({}));
     expect(result.exitCode).toBe(0);
     expect(result.mode).toBeNull();

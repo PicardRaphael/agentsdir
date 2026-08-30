@@ -1,88 +1,26 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { CliError } from "../../core/errors.js";
 import { defaultAgentAnswers } from "../../templates/agent.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+  runCli,
+} from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runAddAgent } from "../add-agent.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
-
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-add-agent-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function initAnswers(): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-  };
-}
 
 async function initializedRepo(): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("add-agent");
   await runInit(dir, initAnswers(), { dryRun: false });
   return dir;
-}
-
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [cliPath, ...args],
-      { cwd },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== "number") {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout,
-          stderr,
-          code: typeof error?.code === "number" ? error.code : 0,
-        });
-      },
-    );
-  });
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 describe("09 - add agent", () => {
