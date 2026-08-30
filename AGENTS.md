@@ -8,7 +8,7 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : implémentation de la v1.** Le squelette du paquet est livré (`src/`, tests Vitest, CI GitHub Actions ubuntu + windows) ; le backlog vit dans `.agents/tasks/`, l'ordre d'exécution dans `.agents/plan/v1.md`.
+**Phase actuelle : v1.0.0 prête à publier.** Le backlog v1 de `.agents/tasks/` est vidé : les quatorze tâches sont livrées (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. La suite (`vendor`, `update`, pack `logs`, puis `migrate`) est décrite dans [docs/roadmap.md](docs/roadmap.md) ; une nouvelle tâche s'ouvre dans `.agents/tasks/` au moment de l'attaquer.
 
 ## Index des règles
 
@@ -24,7 +24,8 @@ Read the matching rule before touching the files it covers:
 ## Règles de travail
 
 - **Décisions actées** (ne pas rouvrir sans demande explicite de l'utilisateur) : nom `agentsdir`, licence MIT, distribution `npx`, harness v1 = Claude Code + Codex + Cursor, pack worktrees inclus en v1, symlinks avec détection et repli en copies synchronisées, catalogue des skills dans le frontmatter (jamais de catalogue codé en dur). Le tableau complet est dans `docs/SPEC.md`.
-- **Périmètre** : suivre l'ordre du plan `.agents/plan/v1.md` ; aucune commande réelle avant la tâche `04-commande-init.md` ; pas de feature hors backlog sans demande explicite de l'utilisateur.
+- **Périmètre** : pas de feature hors backlog sans demande explicite de l'utilisateur. Une nouvelle tâche naît dans `.agents/tasks/` avec ses critères d'acceptation avant d'être implémentée.
+- **Langues** : produit et documentation publique en anglais, documentation de travail interne en français. Le détail du partage est dans `.agents/rules/documentation.md`.
 
 ## Definition of Done
 
@@ -47,6 +48,7 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents.toml` — manifeste écrit par `agentsdir init` (mode de projection, packs, empreintes).
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
-- `.agents/plan/v1.md` — plan d'exécution de la v1 (ordre et dépendances des tâches).
-- `.agents/tasks/` — backlog v1.
+- `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
+- `.agents/tasks/` — backlog ; vide depuis la livraison de la v1.
+- `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
