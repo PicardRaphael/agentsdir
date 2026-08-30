@@ -1,5 +1,6 @@
+import { isFile } from "../core/fs-utils.js";
 import { execFile } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { defineCommand } from "citty";
@@ -377,11 +378,3 @@ export const doctorCommand = defineCommand({
     }
   },
 });
-
-async function isFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
-}

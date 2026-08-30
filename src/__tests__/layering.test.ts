@@ -39,10 +39,21 @@ function layerOf(absolute: string): Layer {
   return "root";
 }
 
-function internalImports(file: string): string[] {
+/**
+ * Resolved paths of the internal imports of `file`, as .ts source paths —
+ * imports are written with the emitted `.js` extension. `typeOnly: false` drops
+ * `import type`, which the compiler erases: it cannot create a runtime cycle.
+ */
+function internalImports(
+  file: string,
+  options: { typeOnly: boolean } = { typeOnly: true },
+): string[] {
   const source = readFileSync(file, "utf8");
-  return [...source.matchAll(/from "(\.[^"]+)"/g)].map((match) =>
-    normalize(join(dirname(file), match[1] ?? "")),
+  const pattern = options.typeOnly
+    ? /(?:^|\n)import\s(?:[\s\S]*?)from "(\.[^"]+)"/g
+    : /(?:^|\n)import\s(?!type\s)(?:[\s\S]*?)from "(\.[^"]+)"/g;
+  return [...source.matchAll(pattern)].map((match) =>
+    normalize(join(dirname(file), (match[1] ?? "").replace(/\.js$/, ".ts"))),
   );
 }
 
@@ -77,18 +88,15 @@ describe("architecture - layering", () => {
     expect(violations).toEqual([]);
   });
 
-  it("Given the source tree, When every file is inspected, Then no module imports itself through a cycle of two", () => {
+  it("Given the source tree, When value imports are inspected, Then no two modules import each other at runtime", () => {
     const imports = new Map<string, string[]>();
     for (const file of sourceFiles(srcRoot)) {
-      imports.set(
-        file,
-        internalImports(file).map((target) => `${target}.ts`),
-      );
+      imports.set(file, internalImports(file, { typeOnly: false }));
     }
     const cycles: string[] = [];
     for (const [file, targets] of imports) {
       for (const target of targets) {
-        if (imports.get(target)?.includes(`${file.replace(/\.ts$/, "")}.ts`)) {
+        if (imports.get(target)?.includes(file) === true) {
           cycles.push(`${file} <-> ${target}`);
         }
       }

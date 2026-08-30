@@ -94,6 +94,7 @@ flowchart LR
 | `core/lock` | `skills-lock.json`: provenance and sha256 fingerprint of vendored skills (sorted relative paths, content included, `.git` and `node_modules` excluded). | Detects local drift in an imported skill; it does not download anything itself. |
 | `core/detect` | Detection of the target repo (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`…) to pre-fill the dev/test/lint commands, and of the environment (symlink support, `core.symlinks`, platform). | Detection parameterizes the templates; it never imposes a runtime on the target repo. |
 
+| `core/harnesses` | The single list of targeted harnesses and their configuration directories. | `init`, the hook registries and the diagnostics read the same list, so they can never disagree on what "every harness" means. |
 | `core/fs-utils` | The filesystem probes shared by every layer: `pathExists`, `entryExists` (a broken symlink still counts), `isDirectory`. | Absence is a normal answer in this CLI, never an exception re-caught at each call site. |
 | `commands/rules-index` | Composes the `rules-index` block of AGENTS.md: the rules on disk, plus the ones the command is about to write, minus the ones it removes. | Shared by `init`, `sync`, `add rule` and `pack add|remove`, which all need the same entries. It sits in `commands/` because it needs both `core` and `templates`. |
 

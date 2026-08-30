@@ -34,3 +34,12 @@ export async function isDirectory(path: string): Promise<boolean> {
     return false;
   }
 }
+
+/** True when the path exists and is a regular file. */
+export async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}

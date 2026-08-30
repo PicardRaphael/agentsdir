@@ -1,4 +1,6 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { HARNESSES } from "../core/harnesses.js";
+import { isDirectory, pathExists } from "../core/fs-utils.js";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -42,8 +44,6 @@ import {
 } from "../templates/bootstrap.js";
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
-
-export const HARNESSES = ["claude", "codex", "cursor"] as const;
 
 export interface InitAnswers {
   productName: string;
@@ -586,23 +586,6 @@ function actionLabel(action: PlannedAction): string {
       return "link        ";
     case "project":
       return "project     ";
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
   }
 }
 

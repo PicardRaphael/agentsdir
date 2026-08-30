@@ -1,3 +1,4 @@
+import { HARNESSES, type Harness } from "./harnesses.js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
@@ -58,8 +59,8 @@ export const HOOK_EVENTS: readonly HookEventSpec[] = [
   { name: "Notification", claude: true, codex: false, cursor: undefined },
 ];
 
-export const HOOK_HARNESSES = ["claude", "codex", "cursor"] as const;
-export type HookHarness = (typeof HOOK_HARNESSES)[number];
+export const HOOK_HARNESSES = HARNESSES;
+export type HookHarness = Harness;
 
 export const HOOK_REGISTRY_PATHS: Record<HookHarness, string> = {
   claude: ".claude/settings.json",
