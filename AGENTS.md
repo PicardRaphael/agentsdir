@@ -8,7 +8,7 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 prête à publier, dette de structure suivie.** Le backlog v1 est livré (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. Un audit d'architecture et de robustesse a rouvert `.agents/tasks/` : les tâches 17 à 20 suppriment des duplications constatées, les tâches 21 à 23 traitent l'atomicité des écritures, l'exactitude des diagnostics et l'absence de tests de panne. Les défauts qui détruisaient des données ou rendaient la CI mensongère ont été corrigés avant la publication, pas différés. La suite fonctionnelle (`vendor`, `update`, pack `logs`, puis `migrate`) est dans [docs/roadmap.md](docs/roadmap.md).
+**Phase actuelle : v1.0.0 prête à publier, dette de structure suivie.** Le backlog v1 est livré (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. Un audit d'architecture, de robustesse et de sécurité a rouvert `.agents/tasks/` : les tâches 17 à 23 traitent la dette technique constatée, les tâches 24 à 27 la suite produit — proposition d'ensemble après `init`, pack `usage` (savoir si la configuration sert), validation par un agent réel, projection des serveurs MCP. Les défauts qui détruisaient des données, sortaient du dépôt ou rendaient la CI mensongère ont été corrigés avant la publication, pas différés ; le relevé du paysage concurrentiel qui motive les tâches produit est dans [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md).
 
 ## Index des règles
 
@@ -49,6 +49,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog ; tâches 17 à 23 issues de l'audit d'architecture et de robustesse.
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 27 (produit).
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
