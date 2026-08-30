@@ -6,11 +6,9 @@ Plusieurs messages affirment une cause qu'ils n'ont pas vérifiée. Le motif est
 toujours le même : un `catch` traite l'échec de lecture comme une absence, et le
 message décrit l'absence.
 
-- `src/core/validate.ts` — un `SKILL.md` illisible produit « skill folder has no
-  SKILL.md — write it or delete the folder ». Le fichier est là ; le conseil est
-  faux et envoie l'utilisateur dans la mauvaise direction.
-- `src/core/projections.ts` — une projection illisible produit « projection
-  missing — run `agentsdir sync` », puis `sync` échoue à la recréer.
+Deux des quatre sont corrigés (voir le CHANGELOG 1.0.0) : un `SKILL.md`
+illisible et une projection illisible nomment désormais l'erreur au lieu de se
+déclarer absents. Restent :
 - `src/core/hook-registries.ts` — une métadonnée `agentsdir:hook` en JSON
   invalide fait ignorer le hook en silence : aucun message, le hook n'est
   simplement jamais enregistré.

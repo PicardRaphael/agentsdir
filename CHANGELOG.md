@@ -41,6 +41,12 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **An unreadable file is no longer reported as a missing one.** A `SKILL.md`
+  that could not be read was announced as absent, with the advice to "write it
+  or delete the folder" — wrong on both counts for a file that is there. Same
+  for a projection: `sync` cannot recreate what it cannot read, so the message
+  now names the error instead of sending the user in circles.
+
 - **A file too large to read no longer advises fixing permissions.** Exceeding
   the maximum string length of the runtime raised a `RangeError`, which was
   reported with the message written for filesystem errors — advice that had
