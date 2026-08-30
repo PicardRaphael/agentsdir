@@ -2,7 +2,7 @@
 
 Une tâche différée par fichier. Chaque fichier est auto-suffisant : il énonce le problème, les fichiers concernés, les critères d'acceptation et la vérification.
 
-Prendre les tâches dans l'ordre du plan ([`../plan/v1.md`](../plan/v1.md)) sauf mention `Dépend de :` contraire.
+Prendre les tâches dans l'ordre du plan ([`../plan/v1.md`](../plan/v1.md)) sauf mention `Dépend de :` contraire. Le plan v1 est clos ; les tâches 17 et suivantes sont indépendantes entre elles et peuvent être prises dans n'importe quel ordre.
 
 ## Conventions
 

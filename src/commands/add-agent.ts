@@ -1,4 +1,5 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { entryExists } from "../core/fs-utils.js";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -33,7 +34,7 @@ export async function runAddAgent(
   const manifest = await readManifest(root);
   const agentFile = `${answers.name}.md`;
   const agentPath = `.agents/agents/${agentFile}`;
-  if (await pathExists(join(root, ".agents", "agents", agentFile))) {
+  if (await entryExists(join(root, ".agents", "agents", agentFile))) {
     throw new CliError(
       `Agent "${answers.name}" already exists (${agentPath}). Pick another name, or edit the existing file.`,
     );
@@ -123,12 +124,3 @@ export const addAgentCommand = defineCommand({
     });
   },
 });
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}

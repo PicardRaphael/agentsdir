@@ -1,6 +1,7 @@
+import { isDirectory, isFile } from "./fs-utils.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat, rm, stat, symlink } from "node:fs/promises";
+import { lstat, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -200,22 +201,6 @@ async function findMaterializedSymlinks(dir: string): Promise<string[]> {
     }
   }
   return materialized;
-}
-
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function isFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
 }
 
 function errorCode(error: unknown): string {

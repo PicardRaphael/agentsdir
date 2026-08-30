@@ -1,17 +1,12 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { entryExists } from "../core/fs-utils.js";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
-import { upsertBlock } from "../core/managed-blocks.js";
 import { readManifest } from "../core/manifest.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
-import {
-  deriveRuleHook,
-  renderRulesIndexContent,
-  type RuleIndexEntry,
-} from "../templates/agents-md.js";
 import { renderRuleTemplate, type RuleAnswers } from "../templates/rules.js";
 import {
   ensureAnswer,
@@ -23,6 +18,7 @@ import {
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
+import { planRulesIndex } from "./rules-index.js";
 
 export const DEFAULT_RULE_HOOK =
   "Read before touching the files this rule covers.";
@@ -43,51 +39,24 @@ export async function runAddRule(
   const manifest = await readManifest(root);
   const ruleFile = `${answers.name}.md`;
   const rulePath = `.agents/rules/${ruleFile}`;
-  if (await pathExists(join(root, ".agents", "rules", ruleFile))) {
+  if (await entryExists(join(root, ".agents", "rules", ruleFile))) {
     throw new CliError(
       `Rule "${answers.name}" already exists (${rulePath}). Pick another name, or edit the existing file — \`sync\` keeps the index in step.`,
     );
   }
-  let agentsMd: string;
-  try {
-    agentsMd = await readFile(join(root, "AGENTS.md"), "utf8");
-  } catch {
-    throw new CliError(
-      "AGENTS.md is missing — run `agentsdir init` first.",
-      EXIT_CODES.driftOrInvariant,
-    );
-  }
   const source = renderRuleTemplate(answers);
-  const ruleSources = new Map<string, string>([[ruleFile, source]]);
-  for (const file of await listRuleFiles(root)) {
-    if (!ruleSources.has(file)) {
-      ruleSources.set(
-        file,
-        await readFile(join(root, ".agents", "rules", file), "utf8"),
-      );
-    }
-  }
-  const entries: RuleIndexEntry[] = [...ruleSources.keys()]
-    .sort()
-    .map((file) => ({
-      file,
-      hook: deriveRuleHook(ruleSources.get(file) ?? ""),
-    }));
-  const nextAgentsMd = upsertBlock(
-    agentsMd,
-    "rules-index",
-    renderRulesIndexContent(entries),
-    "html",
-  );
+  const indexPlan = await planRulesIndex(root, {
+    add: [{ file: ruleFile, content: source }],
+  });
   const changes: GeneratorChange[] = [{ path: rulePath, action: "created" }];
-  if (nextAgentsMd !== agentsMd) {
+  if (indexPlan !== undefined) {
     changes.push({ path: "AGENTS.md", action: "updated" });
   }
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "rules"), { recursive: true });
     await writeFile(join(root, ".agents", "rules", ruleFile), source, "utf8");
-    if (nextAgentsMd !== agentsMd) {
-      await writeFile(join(root, "AGENTS.md"), nextAgentsMd, "utf8");
+    if (indexPlan !== undefined) {
+      await writeFile(join(root, "AGENTS.md"), indexPlan.next, "utf8");
     }
   }
   return {
@@ -183,22 +152,3 @@ export const addRuleCommand = defineCommand({
     });
   },
 });
-
-async function listRuleFiles(root: string): Promise<string[]> {
-  try {
-    return (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    return [];
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}

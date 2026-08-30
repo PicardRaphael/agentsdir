@@ -1,3 +1,5 @@
+import { HARNESSES, type Harness } from "./harnesses.js";
+import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
@@ -58,8 +60,8 @@ export const HOOK_EVENTS: readonly HookEventSpec[] = [
   { name: "Notification", claude: true, codex: false, cursor: undefined },
 ];
 
-export const HOOK_HARNESSES = ["claude", "codex", "cursor"] as const;
-export type HookHarness = (typeof HOOK_HARNESSES)[number];
+export const HOOK_HARNESSES = HARNESSES;
+export type HookHarness = Harness;
 
 export const HOOK_REGISTRY_PATHS: Record<HookHarness, string> = {
   claude: ".claude/settings.json",
@@ -195,10 +197,19 @@ export async function planHookRegistrations(
     const expectedHere = registrations.filter((entry) =>
       supports(harness, entry.event),
     );
+    // an absent registry is normal (nothing registered yet); an unreadable one
+    // must stop the run — treating it as absent would rewrite the file from
+    // scratch and drop whatever the user had registered there
     let raw: string | undefined;
     try {
       raw = await readFile(join(root, ...path.split("/")), "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new CliError(
+          `Cannot read ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to overwrite a registry it cannot read.`,
+          EXIT_CODES.environmentOrUsage,
+        );
+      }
       raw = undefined;
     }
     if (raw === undefined && expectedHere.length === 0) {
@@ -236,24 +247,33 @@ async function listHookScripts(
   overlay: Record<string, string>,
 ): Promise<HookScriptSource[]> {
   const sources = new Map<string, string>();
+  const hooksDir = join(root, ".agents", "hooks");
+  // no hooks directory is normal; one that cannot be listed is not — reading it
+  // as empty would deregister every hook from all three registries, silently
+  // Dirent explicitly: `ReturnType<typeof readdir>` picks the Buffer overload
+  let entries: Dirent[] | undefined;
   try {
-    const entries = await readdir(join(root, ".agents", "hooks"), {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".mjs")) {
-        sources.set(
-          entry.name,
-          await readFile(join(root, ".agents", "hooks", entry.name), "utf8"),
-        );
-      }
+    entries = await readdir(hooksDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw new CliError(
+        `Cannot read ${HOOKS_DIR} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to deregister hooks it cannot see.`,
+        EXIT_CODES.environmentOrUsage,
+      );
     }
-  } catch {
-    // no hooks directory yet
+  }
+  for (const entry of entries ?? []) {
+    if (entry.isFile() && isRegistrableScript(entry.name)) {
+      sources.set(
+        entry.name,
+        await readFile(join(hooksDir, entry.name), "utf8"),
+      );
+    }
   }
   for (const [key, content] of Object.entries(overlay)) {
-    if (key.startsWith(`${HOOKS_DIR}/`) && key.endsWith(".mjs")) {
-      sources.set(key.slice(HOOKS_DIR.length + 1), content);
+    const name = key.slice(HOOKS_DIR.length + 1);
+    if (key.startsWith(`${HOOKS_DIR}/`) && isRegistrableScript(name)) {
+      sources.set(name, content);
     }
   }
   return [...sources.keys()]
@@ -277,6 +297,20 @@ function attributeScript(
   const prefix = file.replace(/\.mjs$/, "").split("-")[0] ?? "";
   const event = resolveHookEvent(prefix);
   return event === undefined ? undefined : { file, event, matcher: undefined };
+}
+
+/**
+ * Why the registries a harness owns are read-only checked as well as merged:
+ * `sync` refuses a malformed registry, so `check` must refuse it too. Otherwise
+ * CI stays green on a repository the next `sync` cannot repair.
+ */
+export function registryProblem(raw: string, path: string): string | undefined {
+  try {
+    parseRegistry(raw, path);
+    return undefined;
+  } catch (error) {
+    return error instanceof CliError ? error.message : String(error);
+  }
 }
 
 function parseRegistry(raw: string, path: string): Record<string, unknown> {
@@ -543,4 +577,15 @@ function makeGroup(registration: HookRegistration): unknown {
 /** Cursor entry: flat, and never a matcher — Cursor's matcher vocabulary differs. */
 function makeFlat(registration: HookRegistration): unknown {
   return { command: `node .agents/hooks/${registration.file}` };
+}
+
+/**
+ * Whether a script file may be registered. The name is interpolated into the
+ * `node .agents/hooks/<file>` command the harness will run, so anything the
+ * shell could interpret is refused rather than escaped — a file dropped by a
+ * cloned repository must never become part of a command line. The grammar is
+ * the one `add hook` already enforces on the names it generates.
+ */
+export function isRegistrableScript(name: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*\.mjs$/.test(name);
 }

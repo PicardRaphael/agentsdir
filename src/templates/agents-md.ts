@@ -39,9 +39,28 @@ export function deriveRuleHook(source: string): string {
     if (trimmed.startsWith("#")) {
       break;
     }
-    return trimmed.replace(/^Read /, "");
+    return sanitizeHook(trimmed.replace(/^Read /, ""));
   }
-  return "read it before touching the files it covers.";
+  return DEFAULT_HOOK;
+}
+
+const DEFAULT_HOOK = "read it before touching the files it covers.";
+
+/**
+ * Neutralises what a rule file could otherwise smuggle into the managed block.
+ * The first line of a rule is repository content and the block is delimited by
+ * HTML comments: a line carrying an end marker split the block in two, so every
+ * `sync` appended another copy and `check` stayed red for good. Comment markers
+ * are dropped rather than escaped — a rules index has no use for them.
+ */
+function sanitizeHook(hook: string): string {
+  const collapsed = hook
+    .replaceAll(/[\r\n]+/g, " ")
+    .replaceAll("<!--", "")
+    .replaceAll("-->", "")
+    .replaceAll(/\s{2,}/g, " ")
+    .trim();
+  return collapsed === "" ? DEFAULT_HOOK : collapsed;
 }
 
 /** Content of the `rules-index` managed block (markers excluded). */

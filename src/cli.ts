@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { defineCommand, runMain, showUsage } from "citty";
+import { defineCommand, runMain, showUsage, type CommandDef } from "citty";
 import { addAgentCommand } from "./commands/add-agent.js";
 import { addHookCommand } from "./commands/add-hook.js";
 import { addRuleCommand } from "./commands/add-rule.js";
@@ -9,7 +9,18 @@ import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
+import { unknownCommand } from "./command-tree.js";
+import { EXIT_CODES } from "./exit-codes.js";
 import { CLI_VERSION } from "./version.js";
+
+async function usageOrUnknown(
+  group: CommandDef,
+  positionals: string[],
+): Promise<void> {
+  if (positionals.length === 0) {
+    await showUsage(group);
+  }
+}
 
 const packCommand = defineCommand({
   meta: {
@@ -21,10 +32,7 @@ const packCommand = defineCommand({
     remove: packRemoveCommand,
   },
   async run({ args }) {
-    // citty also runs the group command when a subcommand matched
-    if (args._.length === 0) {
-      await showUsage(packCommand);
-    }
+    await usageOrUnknown(packCommand, args._);
   },
 });
 
@@ -41,10 +49,7 @@ const addCommand = defineCommand({
     hook: addHookCommand,
   },
   async run({ args }) {
-    // citty also runs the group command when a subcommand matched
-    if (args._.length === 0) {
-      await showUsage(addCommand);
-    }
+    await usageOrUnknown(addCommand, args._);
   },
 });
 
@@ -64,11 +69,14 @@ const main = defineCommand({
     doctor: doctorCommand,
   },
   async run({ args }) {
-    // citty also runs the root command when a subcommand matched
-    if (args._.length === 0) {
-      await showUsage(main);
-    }
+    await usageOrUnknown(main, args._);
   },
 });
 
-await runMain(main);
+const unknown = unknownCommand(process.argv.slice(2));
+if (unknown === undefined) {
+  await runMain(main);
+} else {
+  console.error(unknown);
+  process.exit(EXIT_CODES.environmentOrUsage);
+}

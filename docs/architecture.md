@@ -53,30 +53,40 @@ Two structural consequences:
 ```mermaid
 flowchart LR
     CLI["cli<br>command parser<br>+ interactive prompts"]
+    CMD["commands<br>one module per command<br>+ shared rules-index"]
 
     subgraph CORE["core"]
         MAN["manifest<br>.agents.toml"]
-        PROJ["projections<br>symlink | copy engine"]
+        PROJ["projections<br>symlink | copy engine<br>+ refreshProjections"]
         VAL["validate<br>invariants"]
         FM["frontmatter<br>parse SKILL.md"]
         IC["icons<br>embedded SVG"]
         MB["managed-blocks<br>managed blocks"]
         LK["lock<br>skills-lock.json"]
         DET["detect<br>stack + environment"]
+        HAR["harnesses<br>the targeted harnesses"]
+        FSU["fs-utils<br>filesystem probes"]
     end
 
+    PKS["packs<br>pack registry<br>+ rendered content"]
     FS[("file system<br>of the target repo")]
 
-    CLI --> MAN
-    CLI --> DET
-    CLI --> PROJ
-    CLI --> VAL
+    CLI --> CMD
+    CMD --> MAN
+    CMD --> DET
+    CMD --> PROJ
+    CMD --> VAL
+    CMD --> PKS
+    PKS --> FM
     PROJ --> FM
     PROJ --> IC
     PROJ --> MB
+    PROJ --> FSU
     VAL --> FM
     VAL --> LK
     VAL --> MAN
+    VAL --> PROJ
+    DET --> FSU
     MAN --> FS
     PROJ --> FS
     DET --> FS
@@ -86,13 +96,39 @@ flowchart LR
 | --- | --- | --- |
 | `cli` | Parsing of commands and flags, interactive prompts, terminal output. | Each command is a thin module that orchestrates `core`; no business logic in the CLI layer. |
 | `core/manifest` | Reading, validation and writing of the `.agents.toml` manifest. | The only module allowed to write the manifest; it carries the schema version and the manifest migrations. |
-| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
+| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. `refreshProjections` is the single orchestration of "remove what must not survive, then project", shared by `sync` and the generators. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
 | `core/validate` | The invariants (see [conventions.md](conventions.md)): name identity, invocation parity, length bounds, existence of referenced files, lock integrity. | Read-only. Used by `check` (failure = exit code 1) and replayed by mutating commands before writing. |
 | `core/frontmatter` | Parses and validates the YAML frontmatter of `SKILL.md` files. **The extended frontmatter IS the catalog**: the Codex fields (`display-name`, `color`, `icon`, `prompt`) live there, ignored by Claude Code. | Fixes the flaw of the source model (TypeScript catalog hard-coded in a script): adding a skill = creating a folder, not editing code. |
 | `core/icons` | Renders a skill's SVG icon from an embedded icon set: lucide paths vendored as static JSON in the package. | No react/lucide dependency at runtime; byte-for-byte deterministic rendering (comparable by fingerprint). |
 | `core/managed-blocks` | Inserts and updates the managed blocks `<!-- agentsdir:begin X -->` / `<!-- agentsdir:end X -->` in files owned by the user (AGENTS.md, .gitignore, CI workflow). | Everything outside the markers belongs to the user and is never touched — a mechanism proven by `convex ai-files`. |
 | `core/lock` | `skills-lock.json`: provenance and sha256 fingerprint of vendored skills (sorted relative paths, content included, `.git` and `node_modules` excluded). | Detects local drift in an imported skill; it does not download anything itself. |
 | `core/detect` | Detection of the target repo (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`…) to pre-fill the dev/test/lint commands, and of the environment (symlink support, `core.symlinks`, platform). | Detection parameterizes the templates; it never imposes a runtime on the target repo. |
+
+| `core/harnesses` | The single list of targeted harnesses and their configuration directories. | `init`, the hook registries and the diagnostics read the same list, so they can never disagree on what "every harness" means. |
+| `core/skill-hash` | The sha256 fingerprint of a skill folder, from disk or from rendered contents. | Outside the validator on purpose: `pack add` and `sync` fingerprint folders to fill the lock, which is a calculation, not a check. |
+| `core/errors` | `CliError` plus `asUserFacingError`, which turns a filesystem failure into the promised message and exit code. | A `TypeError` is a bug in this CLI, not something the user can act on: it keeps its stack trace. |
+| `commands/init-interview` | The questions `init` asks, the flags that replace them, and the probes filling the defaults. | Separate from the writing side so the plan can be tested without a terminal. |
+| `command-tree` | The command names, and the check that rejects a typo before citty prints the help. | A mistyped command is a usage error (exit 2), never drift (exit 1) — a CI script must be able to tell them apart. |
+| `core/fs-utils` | The filesystem probes shared by every layer: `pathExists`, `entryExists` (a broken symlink still counts), `isDirectory`. | Absence is a normal answer in this CLI, never an exception re-caught at each call site. |
+| `commands/rules-index` | Composes the `rules-index` block of AGENTS.md: the rules on disk, plus the ones the command is about to write, minus the ones it removes. | Shared by `init`, `sync`, `add rule` and `pack add|remove`, which all need the same entries. It sits in `commands/` because it needs both `core` and `templates`. |
+
+### Direction of dependencies
+
+The layers depend in one direction only:
+
+```
+cli -> commands -> { core, templates, packs } -> core
+```
+
+`core/` is the engine and stays usable on its own: it never imports from
+`commands/` or `packs/`. `templates/` renders content and may use `core/`, never
+the reverse. A shared behaviour that needs both `core` and `templates` -- the
+rules index composition, for instance -- belongs to `commands/`, the only layer
+allowed to depend on both.
+
+This is not a convention left to good will: `src/__tests__/layering.test.ts`
+fails the build on the first import that reverses an arrow, and on any cycle
+between two modules.
 
 ## 3. The `.agents.toml` manifest
 

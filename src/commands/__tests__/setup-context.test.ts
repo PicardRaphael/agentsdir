@@ -1,47 +1,19 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
 import { FILTER_QUESTION } from "../../packs/creator.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+} from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runPackAdd } from "../pack.js";
 
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-setup-context-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function initAnswers(): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
-    stacks: [],
-  };
-}
-
 async function repoWithCreator(): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("setup-context");
   await runInit(dir, initAnswers(), { dryRun: false });
   await runPackAdd(dir, "creator", { dryRun: false });
   return dir;
@@ -60,15 +32,6 @@ async function reference(root: string, file: string): Promise<string> {
     join(root, ".agents", "skills", "setup-context", "references", file),
     "utf8",
   );
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 describe("16 - meta-skill setup-context", () => {

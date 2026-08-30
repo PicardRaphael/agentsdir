@@ -1,15 +1,8 @@
-import {
-  readdir,
-  readFile,
-  mkdir,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { pathExists, resolveInsideRepo } from "../core/fs-utils.js";
+import { readdir, readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
-import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   readManifest,
@@ -28,17 +21,13 @@ import {
   type PackFile,
 } from "../packs/index.js";
 import {
-  deriveRuleHook,
-  renderRulesIndexContent,
-  type RuleIndexEntry,
-} from "../templates/agents-md.js";
-import {
   renderGeneratorReport,
   resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
+import { planRulesIndex } from "./rules-index.js";
 
 export interface PackResult extends GeneratorResult {
   /** Human notes (kept files…) — stderr, never stdout. */
@@ -282,10 +271,11 @@ export async function runPackRemove(
       if (path.startsWith(".agents/skills/")) {
         continue; // removed with the folder
       }
-      await rm(join(root, ...path.split("/")), { force: true });
+      await rm(resolveInsideRepo(root, path), { force: true });
     }
     for (const key of copiesToDelete) {
-      await rm(join(root, ...key.split("/")), { force: true });
+      // keys come from the manifest of a possibly cloned repo: confine them
+      await rm(resolveInsideRepo(root, key), { force: true });
     }
     for (const skill of pack.skills) {
       await removeIfNoFilesLeft(join(root, ".claude", "skills", skill));
@@ -406,47 +396,7 @@ async function planRulesIndexWith(
     remove: string[];
   },
 ): Promise<string | undefined> {
-  let agentsMd: string;
-  try {
-    agentsMd = await readFile(join(root, "AGENTS.md"), "utf8");
-  } catch {
-    throw new CliError(
-      "AGENTS.md is missing — run `agentsdir init` first.",
-      EXIT_CODES.driftOrInvariant,
-    );
-  }
-  const ruleSources = new Map<string, string>();
-  try {
-    for (const file of (await readdir(join(root, ".agents", "rules"))).sort()) {
-      if (file.endsWith(".md")) {
-        ruleSources.set(
-          file,
-          await readFile(join(root, ".agents", "rules", file), "utf8"),
-        );
-      }
-    }
-  } catch {
-    // no rules directory yet
-  }
-  for (const entry of delta.add) {
-    ruleSources.set(entry.file, entry.content);
-  }
-  for (const file of delta.remove) {
-    ruleSources.delete(file);
-  }
-  const entries: RuleIndexEntry[] = [...ruleSources.keys()]
-    .sort()
-    .map((file) => ({
-      file,
-      hook: deriveRuleHook(ruleSources.get(file) ?? ""),
-    }));
-  const next = upsertBlock(
-    agentsMd,
-    "rules-index",
-    renderRulesIndexContent(entries),
-    "html",
-  );
-  return next === agentsMd ? undefined : next;
+  return (await planRulesIndex(root, delta))?.next;
 }
 
 /**
@@ -537,11 +487,20 @@ function sortChanges(changes: GeneratorChange[]): GeneratorChange[] {
 }
 
 async function walkFiles(absDir: string): Promise<string[]> {
+  // this feeds the guard that spots locally modified pack files before a
+  // removal: reading an unreadable directory as empty would make `pack remove`
+  // delete without asking for --force
   let entries;
   try {
     entries = await readdir(absDir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new CliError(
+      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to remove files it cannot inspect.`,
+      EXIT_CODES.environmentOrUsage,
+    );
   }
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const files: string[] = [];
@@ -565,14 +524,5 @@ async function removeIfNoFilesLeft(dir: string): Promise<void> {
     }
   } catch {
     // absent or not a directory: nothing to clean
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
   }
 }

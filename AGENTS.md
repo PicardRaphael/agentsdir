@@ -8,7 +8,9 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 prête à publier.** Le backlog v1 de `.agents/tasks/` est vidé : les seize tâches sont livrées (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. La suite (`vendor`, `update`, pack `logs`, puis `migrate`) est décrite dans [docs/roadmap.md](docs/roadmap.md) ; une nouvelle tâche s'ouvre dans `.agents/tasks/` au moment de l'attaquer.
+**Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** Le code est prêt — 15 défauts corrigés dont 7 de sécurité, CI verte sur ubuntu et windows, paquet npm éprouvé — mais **l'utilisateur a demandé de ne pas publier** tant que la direction produit n'est pas arrêtée. Ne pas lancer `npm publish` ni poser le tag sans sa demande explicite.
+
+**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : gouverner la configuration d'agents plutôt que se contenter de l'installer — ce que personne ne fait : vérifier que la configuration ne dérive pas (`check`/`sync`), mesurer si elle **sert** (tâche 25), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
 
 ## Index des règles
 
@@ -42,6 +44,7 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `docs/creation-assistee.md` — création assistée : protocole, rubriques de qualité, banques d'interview.
 - `docs/conventions.md` — contrats installés et validés dans les repos cibles.
 - `docs/harness.md` — matrice d'intégration par harness.
+- `docs/positionnement.md` — la direction produit : le cycle installer → vérifier → mesurer → décider → prouver.
 - `docs/roadmap.md` — jalons et critères d'acceptation.
 - `docs/recherche/` — analyse du modèle source (NowStack) et paysage concurrentiel.
 - `e2e/` — scénarios de bout en bout sur repos de démonstration (voir `TESTING.md`).
@@ -49,6 +52,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog ; vide depuis la livraison de la v1.
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 29 (produit ; la 29 est à discuter avant implémentation).
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.

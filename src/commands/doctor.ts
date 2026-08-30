@@ -1,5 +1,6 @@
+import { isFile } from "../core/fs-utils.js";
 import { execFile } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { defineCommand } from "citty";
@@ -10,7 +11,7 @@ import {
   type GitSymlinksInfo,
   type SymlinkSupport,
 } from "../core/detect.js";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError } from "../core/errors.js";
 import {
   MANIFEST_SCHEMA,
   ManifestError,
@@ -349,8 +350,9 @@ export const doctorCommand = defineCommand({
         console.log(renderDoctorReport(result));
       }
       process.exitCode = result.exitCode;
-    } catch (error) {
-      if (error instanceof CliError) {
+    } catch (rawError) {
+      const error = asUserFacingError(rawError);
+      if (error !== undefined) {
         if (json) {
           console.log(
             JSON.stringify({
@@ -373,15 +375,7 @@ export const doctorCommand = defineCommand({
         process.exitCode = error.exitCode;
         return;
       }
-      throw error;
+      throw rawError;
     }
   },
 });
-
-async function isFile(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
-}

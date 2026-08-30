@@ -10,38 +10,22 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { detectSymlinkSupport } from "../src/core/detect.js";
+import { makeTempDir, runCli } from "../src/test-support/index.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
 const probeDir = await mkdtemp(join(tmpdir(), "agentsdir-e2e-probe-"));
 const symlinkSupported = (await detectSymlinkSupport(probeDir)).supported;
 await rm(probeDir, { recursive: true, force: true });
 
-let tempDirs: string[] = [];
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
 type Stack = "typescript" | "python";
 
 /** A demo repo of the given stack: a git repo plus the stack marker file. */
 async function makeDemoRepo(stack: Stack): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), `agentsdir-e2e-${stack}-`));
-  tempDirs.push(dir);
+  const dir = await makeTempDir(`e2e-${stack}`);
   await execFileAsync("git", ["-C", dir, "init"]);
   if (stack === "typescript") {
     await writeFile(
@@ -57,30 +41,6 @@ async function makeDemoRepo(stack: Stack): Promise<string> {
     );
   }
   return dir;
-}
-
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [cliPath, ...args],
-      { cwd },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== "number") {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout,
-          stderr,
-          code: typeof error?.code === "number" ? error.code : 0,
-        });
-      },
-    );
-  });
 }
 
 /** The release journey from the task: init --yes, then add skill, then check. */

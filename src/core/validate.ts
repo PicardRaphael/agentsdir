@@ -1,9 +1,15 @@
-import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { pathExists } from "./fs-utils.js";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
 import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
+import {
+  HOOK_REGISTRY_PATHS,
+  registryProblem,
+  type HookHarness,
+} from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
+import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
 import { verify } from "./projections.js";
 
@@ -33,61 +39,8 @@ export async function validateRepo(
   violations.push(...(await validateSkills(root)));
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
+  violations.push(...(await validateHookRegistries(root, manifest)));
   return violations;
-}
-
-/**
- * Fingerprint of a skill folder, per the documented lock algorithm: sorted
- * relative paths (excluding .git and node_modules), one rolling sha256 fed
- * with each path then its content. The optional overlay (skill-relative POSIX
- * paths) stands in for files about to be written, so `sync --dry-run` computes
- * the same fingerprint as the real run.
- */
-export async function computeSkillHash(
-  dir: string,
-  overlay: Record<string, Buffer> = {},
-): Promise<string> {
-  const walked = await walkSorted(dir, "");
-  const files: Record<string, Buffer> = {};
-  for (const rel of walked) {
-    files[rel] = overlay[rel] ?? (await readFile(join(dir, ...rel.split("/"))));
-  }
-  for (const [rel, content] of Object.entries(overlay)) {
-    files[rel] = content;
-  }
-  return hashSkillFiles(files);
-}
-
-/**
- * Same fingerprint, computed from in-memory contents (skill-relative POSIX
- * paths) — for folders that are not on disk yet (`pack add --dry-run`).
- */
-export function hashSkillFiles(files: Record<string, Buffer>): string {
-  const paths = Object.keys(files).sort(pathCompare);
-  const hash = createHash("sha256");
-  for (const rel of paths) {
-    hash.update(rel);
-    hash.update(files[rel] ?? Buffer.alloc(0));
-  }
-  return hash.digest("hex");
-}
-
-/**
- * Segment-wise path order — the exact order `walkSorted` produces, so merging
- * overlay paths never reorders the fingerprint input of files already on disk.
- */
-function pathCompare(a: string, b: string): number {
-  const left = a.split("/");
-  const right = b.split("/");
-  const shared = Math.min(left.length, right.length);
-  for (let index = 0; index < shared; index += 1) {
-    const x = left[index] ?? "";
-    const y = right[index] ?? "";
-    if (x !== y) {
-      return x < y ? -1 : 1;
-    }
-  }
-  return left.length - right.length;
 }
 
 async function validateProjections(
@@ -147,15 +100,25 @@ async function validateSkill(
   let source: string;
   try {
     source = await readFile(join(skillsDir, folder, "SKILL.md"), "utf8");
-  } catch {
+  } catch (error) {
+    // absent and unreadable call for opposite fixes, so say which one it is:
+    // "write it or delete the folder" is bad advice for a file that is there
+    const code = (error as NodeJS.ErrnoException).code;
     return [
-      {
-        path: relSkill,
-        rule: "skill-md-missing",
-        message:
-          "skill folder has no SKILL.md — every skill folder needs one; write it or delete the folder.",
-        severity: "error",
-      },
+      code === "ENOENT"
+        ? {
+            path: relSkill,
+            rule: "skill-md-missing",
+            message:
+              "skill folder has no SKILL.md — every skill folder needs one; write it or delete the folder.",
+            severity: "error",
+          }
+        : {
+            path: skillPath,
+            rule: "skill-md-unreadable",
+            message: `SKILL.md cannot be read (${code ?? "unknown error"}) — fix its permissions or restore it; the file is there.`,
+            severity: "error",
+          },
     ];
   }
   let open;
@@ -473,6 +436,17 @@ async function validateLock(root: string): Promise<Violation[]> {
     const entry = (entryRaw ?? {}) as Record<string, unknown>;
     const recorded = entry["computedHash"];
     const relSkill = `.agents/skills/${name}`;
+    // the key becomes a path segment: a lock from a cloned repo could otherwise
+    // point the reader at a directory outside the repository
+    if (!NAME_SPEC.test(name)) {
+      violations.push({
+        path: "skills-lock.json",
+        rule: "lock-invalid",
+        message: `lock entry "${name}" is not a valid skill name (1 to 64 characters of a-z, 0-9 and -) — a lock key is a folder name, never a path.`,
+        severity: "error",
+      });
+      continue;
+    }
     if (typeof recorded !== "string") {
       violations.push({
         path: relSkill,
@@ -524,35 +498,46 @@ function referencedPaths(body: string): string[] {
     body.match(/(?:references|scripts|steps)\/[A-Za-z0-9_\-./]+/g) ?? [];
   return [
     ...new Set(matches.map((match) => match.replace(/[.,)`]+$/, ""))),
-  ].filter((path) => path !== "");
+  ].filter(
+    // a mention is a reference inside the skill, never a way to probe the disk
+    // outside it: a `..` segment is dropped rather than resolved
+    (path) => path !== "" && !path.split("/").includes(".."),
+  );
 }
 
-async function walkSorted(
-  absDir: string,
-  relPrefix: string,
-): Promise<string[]> {
-  const entries = await readdir(absDir, { withFileTypes: true });
-  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.name === ".git" || entry.name === "node_modules") {
+// re-exported so `check` keeps a single entry point for its callers
+export { computeSkillHash, hashSkillFiles };
+
+/**
+ * The hook registries of the enabled harnesses, held to the same contract
+ * `sync` applies. Without this, `check` passed on a repo whose registries
+ * `sync` refuses — a green CI on a repository that cannot be synced.
+ */
+async function validateHookRegistries(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  const violations: Violation[] = [];
+  for (const harness of manifest.harness.enabled) {
+    const path = HOOK_REGISTRY_PATHS[harness as HookHarness];
+    if (path === undefined) {
       continue;
     }
-    const rel = relPrefix === "" ? entry.name : `${relPrefix}/${entry.name}`;
-    if (entry.isDirectory()) {
-      files.push(...(await walkSorted(join(absDir, entry.name), rel)));
-    } else if (entry.isFile()) {
-      files.push(rel);
+    let raw: string;
+    try {
+      raw = await readFile(join(root, ...path.split("/")), "utf8");
+    } catch {
+      continue; // no registry yet is the normal state
+    }
+    const problem = registryProblem(raw, path);
+    if (problem !== undefined) {
+      violations.push({
+        path,
+        rule: "hook-registry-invalid",
+        message: problem,
+        severity: "error",
+      });
     }
   }
-  return files;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
+  return violations;
 }

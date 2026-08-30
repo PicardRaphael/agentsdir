@@ -1,14 +1,13 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError } from "../core/errors.js";
 import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
 } from "../core/frontmatter.js";
 import { planHookRegistrations } from "../core/hook-registries.js";
-import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
@@ -18,23 +17,13 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import {
-  project,
-  removeOrphanProjections,
-  unproject,
-} from "../core/projections.js";
+import { writeFileAtomic } from "../core/fs-utils.js";
+import { refreshProjections } from "../core/projections.js";
+import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
-import {
-  computeSkillHash,
-  validateRepo,
-  type Violation,
-} from "../core/validate.js";
+import { computeSkillHash } from "../core/skill-hash.js";
+import { NAME_SPEC, validateRepo, type Violation } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
-import {
-  deriveRuleHook,
-  renderRulesIndexContent,
-  type RuleIndexEntry,
-} from "../templates/agents-md.js";
 import { CLI_VERSION } from "../version.js";
 
 export type SyncAction = "created" | "updated" | "removed" | "ok";
@@ -90,9 +79,9 @@ export async function runSync(
 ): Promise<SyncResult> {
   const manifest = await readManifest(root);
   const previousMode = manifest.projections.mode;
+  // an explicit --mode is the only way the mode ever changes (never recomputed);
+  // refreshProjections turns the difference into the removal it implies
   const mode = options.mode ?? previousMode;
-  // an explicit switch is the only way the mode ever changes (never recomputed)
-  const switching = mode !== previousMode;
   const violations = await validateRepo(root, manifest);
   const blocking = violations.filter(
     (violation) =>
@@ -113,37 +102,18 @@ export async function runSync(
     planned.push(artifact);
   }
   let projectionHashes: Record<string, string> = {};
+  let removed: string[] = [];
   const claudeEnabled = manifest.harness.enabled.includes("claude");
-  // a switch removes the previous mode's projections first: a stale symlink
-  // would otherwise be written *through* to its source, and a stale copy would
-  // read as a foreign target
-  const removed = !claudeEnabled
-    ? []
-    : switching
-      ? (
-          await unproject(root, {
-            mode: previousMode,
-            dryRun: true,
-            previousHashes: manifest.projections.hashes,
-          })
-        ).removed
-      : // same mode: only the copies whose source was deleted
-        (
-          await removeOrphanProjections(root, {
-            mode,
-            hashes: manifest.projections.hashes,
-            dryRun: true,
-          })
-        ).removed;
   if (claudeEnabled) {
-    const plan = await project(root, {
+    const plan = await refreshProjections(root, {
       mode,
-      dryRun: true,
-      previousHashes: switching ? {} : manifest.projections.hashes,
+      previousMode,
+      previousHashes: manifest.projections.hashes,
       overlay,
-      ...(switching ? { assumeAbsent: true } : {}),
+      dryRun: true,
     });
     projectionHashes = plan.hashes;
+    removed = plan.removed;
     for (const change of plan.changes) {
       planned.push({
         path: change.path,
@@ -159,7 +129,7 @@ export async function runSync(
   for (const path of removed) {
     planned.push({ path, action: "removed" });
   }
-  planned.push(await planRulesIndex(root));
+  planned.push(await planRulesIndexFile(root));
   // hook registrations: regenerated from the scripts in .agents/hooks/ —
   // a deleted script loses its registrations here (clean deregistration)
   for (const registry of await planHookRegistrations(
@@ -192,21 +162,10 @@ export async function runSync(
       }
     }
     if (claudeEnabled) {
-      if (switching) {
-        await unproject(root, {
-          mode: previousMode,
-          previousHashes: manifest.projections.hashes,
-        });
-      } else {
-        await removeOrphanProjections(root, {
-          mode,
-          hashes: manifest.projections.hashes,
-        });
-      }
-      await project(root, {
+      await refreshProjections(root, {
         mode,
-        dryRun: false,
-        previousHashes: switching ? {} : manifest.projections.hashes,
+        previousMode,
+        previousHashes: manifest.projections.hashes,
         overlay,
       });
     }
@@ -320,8 +279,9 @@ export const syncCommand = defineCommand({
         console.log(renderSyncReport(result, { dryRun }));
       }
       process.exitCode = result.exitCode;
-    } catch (error) {
-      if (error instanceof CliError) {
+    } catch (rawError) {
+      const error = asUserFacingError(rawError);
+      if (error !== undefined) {
         if (json) {
           console.log(
             JSON.stringify({
@@ -348,7 +308,7 @@ export const syncCommand = defineCommand({
         process.exitCode = error.exitCode;
         return;
       }
-      throw error;
+      throw rawError;
     }
   },
 });
@@ -398,38 +358,15 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
 }
 
 /** Rules index managed block of AGENTS.md, regenerated from `.agents/rules/`. */
-async function planRulesIndex(root: string): Promise<PlannedFile> {
-  let current: string;
-  try {
-    current = await readFile(join(root, "AGENTS.md"), "utf8");
-  } catch {
-    throw new CliError(
-      "AGENTS.md is missing — run `agentsdir init`.",
-      EXIT_CODES.driftOrInvariant,
-    );
-  }
-  const entries: RuleIndexEntry[] = [];
-  for (const file of await listRuleFiles(root)) {
-    entries.push({
-      file,
-      hook: deriveRuleHook(
-        await readFile(join(root, ".agents", "rules", file), "utf8"),
-      ),
-    });
-  }
-  const next = upsertBlock(
-    current,
-    "rules-index",
-    renderRulesIndexContent(entries),
-    "html",
-  );
-  if (next === current) {
+async function planRulesIndexFile(root: string): Promise<PlannedFile> {
+  const plan = await planRulesIndex(root);
+  if (plan === undefined) {
     return { path: "AGENTS.md", action: "ok" };
   }
   return {
     path: "AGENTS.md",
     action: "updated",
-    content: Buffer.from(next, "utf8"),
+    content: Buffer.from(plan.next, "utf8"),
   };
 }
 
@@ -458,6 +395,11 @@ async function planLock(
   for (const [name, entryRaw] of Object.entries(skills)) {
     const entry = entryRaw as Record<string, unknown>;
     if (entry["sourceType"] === "agentsdir") {
+      continue;
+    }
+    // validateRepo already refused an invalid key; belt and braces, since this
+    // one builds a path that reads and hashes a directory
+    if (!NAME_SPEC.test(name)) {
       continue;
     }
     const prefix = `.agents/skills/${name}/`;
@@ -522,7 +464,7 @@ async function applyPlannedFile(
   }
   const abs = join(root, ...file.path.split("/"));
   await mkdir(dirname(abs), { recursive: true });
-  await writeFile(abs, file.content);
+  await writeFileAtomic(abs, file.content);
 }
 
 async function compareToDisk(
@@ -537,14 +479,4 @@ async function compareToDisk(
     return "created";
   }
   return current.equals(expected) ? "ok" : "updated";
-}
-
-async function listRuleFiles(root: string): Promise<string[]> {
-  try {
-    return (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    return [];
-  }
 }

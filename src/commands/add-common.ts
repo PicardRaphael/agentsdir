@@ -1,11 +1,11 @@
 import * as prompts from "@clack/prompts";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError, CliError } from "../core/errors.js";
 import {
   writeManifest,
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { project, removeOrphanProjections } from "../core/projections.js";
+import { refreshProjections } from "../core/projections.js";
 import { NAME_SPEC } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 
@@ -49,25 +49,22 @@ export async function resyncProjections(
     return [];
   }
   const mode = manifest.projections.mode;
-  const changes: GeneratorChange[] = [];
-  const orphans = await removeOrphanProjections(root, {
-    mode,
-    hashes: manifest.projections.hashes,
-    dryRun: options.dryRun,
-  });
-  for (const path of orphans.removed) {
-    changes.push({ path, action: "removed" });
-  }
   const overlay: Record<string, Buffer> = {};
   for (const [path, content] of Object.entries(options.overlay ?? {})) {
     overlay[path] = Buffer.from(content, "utf8");
   }
-  const projection = await project(root, {
+  const projection = await refreshProjections(root, {
     mode,
-    dryRun: options.dryRun,
+    // a generator never switches mode: that is `sync --mode`
+    previousMode: mode,
     previousHashes: manifest.projections.hashes,
     overlay,
+    dryRun: options.dryRun,
   });
+  const changes: GeneratorChange[] = projection.removed.map((path) => ({
+    path,
+    action: "removed" as const,
+  }));
   for (const change of projection.changes) {
     if (change.action === "unchanged") {
       continue;
@@ -152,8 +149,9 @@ export async function runGeneratorCli(
       console.log(report);
     }
     process.exitCode = result.exitCode;
-  } catch (error) {
-    if (error instanceof CliError) {
+  } catch (rawError) {
+    const error = asUserFacingError(rawError);
+    if (error !== undefined) {
       if (json) {
         console.log(
           JSON.stringify({
@@ -180,6 +178,6 @@ export async function runGeneratorCli(
       process.exitCode = error.exitCode;
       return;
     }
-    throw error;
+    throw rawError;
   }
 }

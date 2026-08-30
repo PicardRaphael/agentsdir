@@ -1,21 +1,25 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
-import * as prompts from "@clack/prompts";
-import { defineCommand } from "citty";
 import {
-  detectGitSymlinks,
-  detectStack,
-  detectSymlinkSupport,
-} from "../core/detect.js";
-import { CliError } from "../core/errors.js";
+  entryExists,
+  isDirectory,
+  pathExists,
+  writeFileAtomic,
+} from "../core/fs-utils.js";
+import { HARNESSES } from "../core/harnesses.js";
+import {
+  collectAnswers,
+  type InitAnswers,
+  type InitFlags,
+} from "./init-interview.js";
+import { mkdir, readdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { defineCommand } from "citty";
+import { asUserFacingError, CliError } from "../core/errors.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
-  parseMode,
   renderManifest,
   type Manifest,
-  type ProjectionMode,
 } from "../core/manifest.js";
 import { project } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
@@ -24,6 +28,7 @@ import {
   getPackContent,
   packInstallFiles,
   packSkillHash,
+  PACKS,
   renderLockSeed,
 } from "../packs/index.js";
 import {
@@ -41,32 +46,6 @@ import {
 } from "../templates/bootstrap.js";
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
-
-export const HARNESSES = ["claude", "codex", "cursor"] as const;
-export const PACKS = [
-  "core",
-  "creator",
-  "verification",
-  "changelog",
-  "worktrees",
-] as const;
-
-export interface InitAnswers {
-  productName: string;
-  description: string;
-  commands: { dev?: string; test?: string; lint?: string };
-  harnesses: string[];
-  packs: string[];
-  mode: ProjectionMode;
-  stacks: string[];
-}
-
-export interface InitFlags {
-  yes: boolean;
-  harness?: string;
-  packs?: string;
-  mode?: string;
-}
 
 export type PlannedAction =
   "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";
@@ -148,104 +127,6 @@ export async function runInit(
   return { exitCode: EXIT_CODES.ok, alreadyInitialized: false, changes };
 }
 
-/** Collects the interview answers, or the defaults with `--yes` / no TTY. */
-export async function collectAnswers(
-  root: string,
-  flags: InitFlags,
-): Promise<InitAnswers> {
-  const stacks = await detectStack(root);
-  const stackIds = stacks.map((stack) => stack.id);
-  const defaults: InitAnswers = {
-    productName: basename(root),
-    description: "",
-    commands: { ...(stacks[0]?.suggestions ?? {}) },
-    harnesses:
-      flags.harness === undefined
-        ? [...HARNESSES]
-        : parseList(flags.harness, HARNESSES, "--harness"),
-    packs:
-      flags.packs === undefined
-        ? ["core", "creator"]
-        : withCore(parseList(flags.packs, PACKS, "--packs")),
-    mode:
-      flags.mode === undefined ? await detectMode(root) : parseMode(flags.mode),
-    stacks: stackIds,
-  };
-  const interactive =
-    !flags.yes && process.stdin.isTTY === true && process.stdout.isTTY === true;
-  if (!interactive) {
-    if (!flags.yes) {
-      console.error("stdin is not a TTY — using defaults (same as --yes).");
-    }
-    return defaults;
-  }
-  prompts.intro("agentsdir init");
-  const productName = ensureAnswer(
-    await prompts.text({
-      message: "Product name?",
-      initialValue: defaults.productName,
-    }),
-  );
-  const description = ensureAnswer(
-    await prompts.text({
-      message: "One-sentence description?",
-      defaultValue: "",
-      placeholder: "What this product does",
-    }),
-  );
-  const dev = await askCommand(
-    "Dev command? (leave empty to skip)",
-    defaults.commands.dev,
-  );
-  const test = await askCommand(
-    "Test command? (leave empty to skip)",
-    defaults.commands.test,
-  );
-  const lint = await askCommand(
-    "Lint command? (leave empty to skip)",
-    defaults.commands.lint,
-  );
-  let harnesses = defaults.harnesses;
-  if (flags.harness === undefined) {
-    harnesses = ensureAnswer(
-      await prompts.multiselect({
-        message: "Target harnesses?",
-        options: HARNESSES.map((name) => ({
-          value: name as string,
-          label: name,
-        })),
-        initialValues: [...HARNESSES] as string[],
-        required: true,
-      }),
-    );
-  }
-  let packs = defaults.packs;
-  if (flags.packs === undefined) {
-    const optional = ensureAnswer(
-      await prompts.multiselect({
-        message: "Packs to install? (core is always installed)",
-        options: PACKS.filter((name) => name !== "core").map((name) => ({
-          value: name as string,
-          label: name,
-        })),
-        initialValues: ["creator"],
-        required: false,
-      }),
-    );
-    packs = withCore(optional);
-  }
-  prompts.outro("Answers collected.");
-  return {
-    productName,
-    description,
-    commands: { dev, test, lint },
-    harnesses,
-    packs,
-    mode: defaults.mode,
-    stacks: stackIds,
-  };
-}
-
 /** Human report for the collected result; the last lines advise the next commands. */
 export function renderReport(
   result: InitResult,
@@ -288,6 +169,17 @@ export const initCommand = defineCommand({
       type: "boolean",
       description: "Print the write plan without touching the disk",
     },
+    name: {
+      type: "string",
+      description: "Product name (default: the directory name)",
+    },
+    description: {
+      type: "string",
+      description: "One-sentence description of what this product does",
+    },
+    dev: { type: "string", description: "Dev command of this repo" },
+    test: { type: "string", description: "Test command of this repo" },
+    lint: { type: "string", description: "Lint command of this repo" },
     harness: {
       type: "string",
       description: `Comma-separated harnesses (${HARNESSES.join(",")})`,
@@ -311,8 +203,17 @@ export const initCommand = defineCommand({
         );
         return;
       }
+      const text = (value: unknown): string | undefined =>
+        typeof value === "string" && value !== "" ? value : undefined;
       const flags: InitFlags = {
         yes: args.yes === true,
+        ...(text(args.name) === undefined ? {} : { name: text(args.name) }),
+        ...(text(args.description) === undefined
+          ? {}
+          : { description: text(args.description) }),
+        ...(text(args.dev) === undefined ? {} : { dev: text(args.dev) }),
+        ...(text(args.test) === undefined ? {} : { test: text(args.test) }),
+        ...(text(args.lint) === undefined ? {} : { lint: text(args.lint) }),
         harness: typeof args.harness === "string" ? args.harness : undefined,
         packs: typeof args.packs === "string" ? args.packs : undefined,
         mode: typeof args.mode === "string" ? args.mode : undefined,
@@ -322,13 +223,14 @@ export const initCommand = defineCommand({
       const result = await runInit(root, answers, { dryRun });
       console.log(renderReport(result, answers, { dryRun }));
       process.exitCode = result.exitCode;
-    } catch (error) {
-      if (error instanceof CliError) {
+    } catch (rawError) {
+      const error = asUserFacingError(rawError);
+      if (error !== undefined) {
         console.error(error.message);
         process.exitCode = error.exitCode;
         return;
       }
-      throw error;
+      throw rawError;
     }
   },
 });
@@ -471,18 +373,28 @@ async function applyPlan(root: string, changes: PlannedWrite[]): Promise<void> {
       change.content !== undefined
     ) {
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, change.content, "utf8");
+      // exclusive on a create: the target must not exist, symlink included, so
+      // the CLI cannot write through a link and escape the repo it resolved
+      await writeFileAtomic(target, change.content, {
+        exclusive: change.action === "create",
+      });
     }
   }
 }
 
+/**
+ * A symlink — even a broken one — is an existing entry, so `entryExists`
+ * (lstat) decides here rather than `pathExists` (stat, which follows the link).
+ * With stat, a dangling `AGENTS.md -> /elsewhere/file` reads as absent, and the
+ * write below lands outside the repository the CLI resolved.
+ */
 async function planCreate(
   plan: PlannedWrite[],
   root: string,
   path: string,
   content: string,
 ): Promise<void> {
-  if (await pathExists(join(root, path))) {
+  if (await entryExists(join(root, path))) {
     plan.push({ path, action: "skip-exists" });
   } else {
     plan.push({ path, action: "create", content });
@@ -501,9 +413,17 @@ async function planUpsertOrCreate(
   },
 ): Promise<void> {
   const target = join(root, path);
-  if (!(await pathExists(target))) {
+  // entryExists, not pathExists: a dangling symlink is an entry, and planning a
+  // "create" over it would write through the link, outside the repository
+  if (!(await entryExists(target))) {
     plan.push({ path, action: "create", content: spec.create() });
     return;
+  }
+  if (!(await pathExists(target))) {
+    throw new CliError(
+      `${path} is a symlink to a target that does not exist. Remove it or point it at a real file, then run \`agentsdir init\` again — refusing to write through it.`,
+      EXIT_CODES.driftOrInvariant,
+    );
   }
   const current = await readFile(target, "utf8");
   const next = upsertBlock(
@@ -517,65 +437,6 @@ async function planUpsertOrCreate(
   } else {
     plan.push({ path, action: "update-block", content: next });
   }
-}
-
-async function detectMode(root: string): Promise<ProjectionMode> {
-  const support = await detectSymlinkSupport(root);
-  if (!support.supported) {
-    return "copy";
-  }
-  const git = await detectGitSymlinks(root);
-  return git.coreSymlinks === "false" ? "copy" : "symlink";
-}
-
-function parseList(
-  raw: string,
-  allowed: readonly string[],
-  flag: string,
-): string[] {
-  const values = raw
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value !== "");
-  if (values.length === 0) {
-    throw new CliError(
-      `${flag} needs at least one value (allowed: ${allowed.join(", ")}).`,
-    );
-  }
-  for (const value of values) {
-    if (!allowed.includes(value)) {
-      throw new CliError(
-        `Unknown value "${value}" for ${flag} (allowed: ${allowed.join(", ")}).`,
-      );
-    }
-  }
-  return [...new Set(values)];
-}
-
-function withCore(packs: string[]): string[] {
-  return packs.includes("core") ? packs : ["core", ...packs];
-}
-
-async function askCommand(
-  message: string,
-  initial: string | undefined,
-): Promise<string | undefined> {
-  const value = ensureAnswer(
-    await prompts.text({
-      message,
-      initialValue: initial ?? "",
-      defaultValue: "",
-    }),
-  );
-  return value === "" ? undefined : value;
-}
-
-function ensureAnswer<T>(value: T | symbol): T {
-  if (prompts.isCancel(value)) {
-    prompts.cancel("Init cancelled.");
-    throw new CliError("Init cancelled.");
-  }
-  return value as T;
 }
 
 function actionLabel(action: PlannedAction): string {
@@ -592,23 +453,6 @@ function actionLabel(action: PlannedAction): string {
       return "link        ";
     case "project":
       return "project     ";
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
   }
 }
 
@@ -629,3 +473,6 @@ async function listRuleFiles(root: string): Promise<string[]> {
     return [];
   }
 }
+
+// the interview is the other half of this command; callers import both here
+export { collectAnswers, type InitAnswers, type InitFlags };

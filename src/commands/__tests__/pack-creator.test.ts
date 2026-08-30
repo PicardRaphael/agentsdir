@@ -1,11 +1,15 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
 import { FILTER_QUESTION } from "../../packs/creator.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+} from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runPackAdd, runPackRemove } from "../pack.js";
 import { runSync } from "../sync.js";
 
@@ -17,41 +21,11 @@ const META_SKILLS = [
   "setup-context",
 ] as const;
 
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-creator-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
-function initAnswers(packs: string[] = ["core"]): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs,
-    mode: "copy",
-    stacks: [],
-  };
-}
-
 async function initializedRepo(packs?: string[]): Promise<string> {
-  const dir = await makeTempDir();
-  await runInit(dir, initAnswers(packs), { dryRun: false });
+  const dir = await makeTempDir("creator");
+  await runInit(dir, initAnswers({ packs: packs ?? ["core"] }), {
+    dryRun: false,
+  });
   return dir;
 }
 
@@ -67,15 +41,6 @@ async function metaSkillBody(root: string, name: string): Promise<string> {
     "utf8",
   );
   return parseSkillMarkdown(source).body;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 describe("15 - pack creator", () => {

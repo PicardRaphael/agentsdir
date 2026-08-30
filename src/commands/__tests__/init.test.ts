@@ -1,83 +1,33 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readManifest } from "../../core/manifest.js";
+import { initAnswers, makeTempDir, runCli } from "../../test-support/index.js";
 import { CLI_VERSION } from "../../version.js";
 import { runInit, type InitAnswers } from "../init.js";
 
 const execFileAsync = promisify(execFile);
-const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
-
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-init-"));
-  tempDirs.push(dir);
-  return dir;
-}
 
 async function makeGitRepo(): Promise<string> {
-  const dir = await makeTempDir();
+  const dir = await makeTempDir("init");
   await execFileAsync("git", ["-C", dir, "init"]);
   return dir;
 }
 
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 100,
-    });
-  }
-  tempDirs = [];
-});
-
+/** The shared defaults plus what this suite exercises: a lint command and a stack. */
 function answers(overrides: Partial<InitAnswers> = {}): InitAnswers {
-  return {
-    productName: "demo",
-    description: "A demo product.",
+  return initAnswers({
     commands: { test: "npm test", lint: "npm run lint" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs: ["core"],
-    mode: "copy",
     stacks: ["node"],
     ...overrides,
-  };
-}
-
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [cliPath, ...args],
-      { cwd },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== "number") {
-          reject(error);
-          return;
-        }
-        resolve({
-          stdout,
-          stderr,
-          code: typeof error?.code === "number" ? error.code : 0,
-        });
-      },
-    );
   });
 }
 
 describe("04 - init command", () => {
   it("Given a fresh repo, When init runs, Then it generates the .agents tree, AGENTS.md, repo hygiene files and the manifest", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const result = await runInit(dir, answers(), { dryRun: false });
     expect(result.exitCode).toBe(0);
     expect(result.alreadyInitialized).toBe(false);
@@ -125,7 +75,7 @@ describe("04 - init command", () => {
   });
 
   it("Given an existing AGENTS.md, When init runs, Then only the managed block is appended and the user content is preserved byte for byte", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const original = "# Existing instructions\n\nDo not touch this.\n";
     await writeFile(join(dir, "AGENTS.md"), original, "utf8");
     const result = await runInit(dir, answers(), { dryRun: false });
@@ -138,7 +88,7 @@ describe("04 - init command", () => {
   });
 
   it("Given an existing .gitignore, When init runs, Then agentsdir lines are appended without deduplicating the user's lines", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const original = "node_modules/\n/.agents/memory/\n";
     await writeFile(join(dir, ".gitignore"), original, "utf8");
     await runInit(dir, answers(), { dryRun: false });
@@ -149,7 +99,7 @@ describe("04 - init command", () => {
   });
 
   it("Given existing .gitattributes and tasks/README.md, When init runs, Then no user file is overwritten, ever", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     await writeFile(join(dir, ".gitattributes"), "*.png binary\n", "utf8");
     const result = await runInit(dir, answers(), { dryRun: false });
     await expect(readFile(join(dir, ".gitattributes"), "utf8")).resolves.toBe(
@@ -162,7 +112,7 @@ describe("04 - init command", () => {
   });
 
   it("Given an already initialized repo, When init reruns, Then nothing changes and it reports already initialized with exit 0", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     await runInit(dir, answers(), { dryRun: false });
     const manifestBefore = await readFile(join(dir, ".agents.toml"));
     const result = await runInit(dir, answers({ productName: "other" }), {
@@ -176,14 +126,14 @@ describe("04 - init command", () => {
   });
 
   it("Given --dry-run on a fresh repo, When init runs, Then the plan is returned and nothing is written to disk", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const result = await runInit(dir, answers(), { dryRun: true });
     expect(result.changes.length).toBeGreaterThan(0);
     await expect(readdir(dir)).resolves.toEqual([]);
   });
 
   it("Given a directory outside any git repo, When the CLI runs init, Then it exits with code 2 and an actionable message", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const { code, stderr } = await runCli(dir, ["init", "--yes"]);
     expect(code).toBe(2);
     expect(stderr).toContain("git repository");
@@ -237,7 +187,7 @@ describe("04 - init command", () => {
   }, 20000);
 
   it("Given --harness codex only, When init runs, Then no Claude projection is created and the manifest hashes stay empty", async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir("init");
     const result = await runInit(dir, answers({ harnesses: ["codex"] }), {
       dryRun: false,
     });
@@ -275,5 +225,42 @@ describe("04 - init command", () => {
     expect(stdout).toContain("Dry run — nothing was written.");
     const entries = await readdir(dir);
     expect(entries).toEqual([".git"]);
+  });
+});
+
+describe("init - an agent can answer the interview without a terminal", () => {
+  it("Given every answer as a flag, When init runs, Then AGENTS.md and the manifest carry them", async () => {
+    const dir = await makeTempDir("init-agent");
+    await execFileAsync("git", ["-C", dir, "init"]);
+    await writeFile(
+      join(dir, "package.json"),
+      '{ "name": "mon-app" }\n',
+      "utf8",
+    );
+
+    const { code } = await runCli(dir, [
+      "init",
+      "--yes",
+      "--mode",
+      "copy",
+      "--name",
+      "Mon App",
+      "--description",
+      "Tableau de bord de suivi.",
+      "--dev",
+      "pnpm dev",
+      "--test",
+      "pnpm test",
+      "--lint",
+      "pnpm lint",
+    ]);
+    expect(code).toBe(0);
+
+    const agentsMd = await readFile(join(dir, "AGENTS.md"), "utf8");
+    expect(agentsMd).toContain("**Mon App** — Tableau de bord de suivi.");
+    expect(agentsMd).toContain("pnpm test");
+    expect(await readFile(join(dir, ".agents.toml"), "utf8")).toContain(
+      'name = "Mon App"',
+    );
   });
 });

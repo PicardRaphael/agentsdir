@@ -11,6 +11,21 @@ Les tiers de tests retenus, les conventions de nommage, comment lancer chaque ni
 
 Le smoke test « walking skeleton » garantit que la chaîne build + test existe avant toute feature : `node dist/cli.js --help` traverse parseur → sortie.
 
+## Socle partagé des tests
+
+`src/test-support/index.ts` porte ce dont chaque fichier de test a besoin pour
+piloter la CLI : `makeTempDir(prefix)` (répertoire jetable, nettoyé par un
+`afterEach` interne au module), `runCli(cwd, args)` (exécute le binaire compilé,
+un code de sortie non nul est un résultat, pas une exception), `initAnswers()`
+(les réponses que `init --yes` collecterait, surchargeables) et `pathExists`.
+
+Ces helpers vivaient auparavant en seize exemplaires. Les garder en un seul
+endroit signifie qu'un changement de contrat — un champ de plus dans
+`InitAnswers`, une autre convention de code de sortie — se fait une fois. Un
+fichier de test qui a besoin d'un comportement différent passe des overrides
+(`initAnswers({ stacks: ["node"] })`) plutôt que de redéclarer sa propre
+fabrique.
+
 ## Conventions de nommage
 
 - Les noms des tests reprennent les critères d'acceptation des tâches au format Given/When/Then (règle : [.agents/rules/code-conventions.md](.agents/rules/code-conventions.md)).

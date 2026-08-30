@@ -1,13 +1,5 @@
 import { execFile } from "node:child_process";
-import {
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,23 +9,23 @@ import {
   renderManifest,
   writeManifest,
 } from "../../core/manifest.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+} from "../../test-support/index.js";
 import { runCheck } from "../check.js";
-import { runInit, type InitAnswers } from "../init.js";
+import { runInit } from "../init.js";
 import { runSync } from "../sync.js";
 import { runPackAdd, runPackRemove } from "../pack.js";
 
 const execFileAsync = promisify(execFile);
 
-let tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "agentsdir-worktrees-"));
-  tempDirs.push(dir);
-  return dir;
-}
+// linked worktrees live next to their repo, not under the shared temp registry
+let worktrees: string[] = [];
 
 afterEach(async () => {
-  for (const dir of tempDirs) {
+  for (const dir of worktrees) {
     await rm(dir, {
       recursive: true,
       force: true,
@@ -41,24 +33,18 @@ afterEach(async () => {
       retryDelay: 100,
     });
   }
-  tempDirs = [];
+  worktrees = [];
 });
 
-function initAnswers(packs: string[] = ["core"]): InitAnswers {
-  return {
-    productName: "demo-product",
-    description: "A demo product.",
-    commands: { test: "npm test" },
-    harnesses: ["claude", "codex", "cursor"],
-    packs,
-    mode: "copy",
-    stacks: [],
-  };
-}
-
 async function initializedRepo(packs?: string[]): Promise<string> {
-  const dir = await makeTempDir();
-  await runInit(dir, initAnswers(packs), { dryRun: false });
+  const dir = await makeTempDir("worktrees");
+  await runInit(
+    dir,
+    initAnswers({ productName: "demo-product", packs: packs ?? ["core"] }),
+    {
+      dryRun: false,
+    },
+  );
   return dir;
 }
 
@@ -80,7 +66,7 @@ async function gitRepo(packs?: string[]): Promise<string> {
 /** Adds a linked worktree next to the repo and tracks it for cleanup. */
 async function addWorktree(dir: string, name: string): Promise<string> {
   const worktree = `${dir}-${name}`;
-  tempDirs.push(worktree);
+  worktrees.push(worktree);
   await git(dir, "worktree", "add", worktree, "-b", name);
   return worktree;
 }
@@ -116,15 +102,6 @@ function runNode(
       },
     );
   });
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 describe("12 - pack worktrees", () => {

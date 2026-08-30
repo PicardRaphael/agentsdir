@@ -8,6 +8,123 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 First public release.
 
+### Security
+
+Paths and content coming from a repository are treated as untrusted input. A
+cloned repository could otherwise make the CLI act outside the git root it had
+resolved, on the first ordinary command.
+
+- **Paths declared by the repository stay inside it.** The fingerprint keys of
+  `.agents.toml` and the skill names of `skills-lock.json` are used to build
+  file paths, and `path.join` normalises `..` instead of rejecting it — a
+  crafted key was enough to have files read, written or **deleted** outside the
+  repository, silently, in the middle of an ordinary report. Every derived path
+  now resolves through a single guard that refuses anything escaping the root.
+- **Projections are never written through a symlinked directory.** A repository
+  shipping `.claude/rules` as a link elsewhere had its projections written
+  outside the root, and the report looked perfectly normal.
+- **Rule files that are symlinks are skipped, not followed.** The first line of
+  each rule is lifted into the `rules-index` block of AGENTS.md — a file the
+  user commits and pushes — so a link out of the repository leaked outside
+  content into version control, one line per link.
+- **Hook script names are validated before registration.** The name is
+  interpolated into the `node .agents/hooks/<file>` command a harness will run;
+  a name carrying shell syntax is now refused rather than registered.
+- **A lock key is a folder name, never a path.** The keys of
+  `skills-lock.json` were used as path segments, so an entry naming a traversal
+  had a directory outside the repository read and fingerprinted, its digest
+  written back into the lock. Keys are now held to the skill-name grammar and
+  refused before any disk access.
+- **A rule cannot break the managed block of AGENTS.md.** A first line carrying
+  a block marker split the block in two, so every `sync` appended another copy
+  and `check` stayed red for good.
+
+### Added
+
+- **A coding agent can install agentsdir without a terminal.** Every interview
+  question now has a flag — `--name`, `--description`, `--dev`, `--test`,
+  `--lint`, on top of the existing `--harness`, `--packs` and `--mode`. An agent
+  already working in the repository has read the scripts, the CI and the README,
+  so it answers better than any default; it just needed somewhere to put the
+  answers. The README carries a prompt ready to paste.
+
+### Fixed
+
+- **An unreadable file is no longer reported as a missing one.** A `SKILL.md`
+  that could not be read was announced as absent, with the advice to "write it
+  or delete the folder" — wrong on both counts for a file that is there. Same
+  for a projection: `sync` cannot recreate what it cannot read, so the message
+  now names the error instead of sending the user in circles.
+
+- **A file too large to read no longer advises fixing permissions.** Exceeding
+  the maximum string length of the runtime raised a `RangeError`, which was
+  reported with the message written for filesystem errors — advice that had
+  nothing to do with the problem. It now says which kind of file is too large
+  and what to do about it.
+- **A lone carriage return no longer passes as a single-line frontmatter
+  value**, where it would have travelled into the generated YAML.
+
+- **Files land whole or not at all.** Every write now goes to a sibling
+  temporary file and is put in place by a single rename, so an interrupted run
+  leaves either the old content or the new one — never a half-written file. The
+  project already applied this pattern to the scripts it generates; it now
+  applies it to itself. A create is exclusive, which is also what keeps it from
+  writing through a symlink.
+
+- **A write killed mid-file is repairable again.** A truncated copy lost its
+  generated header, read as a foreign file, and `sync` refused the very repair
+  `check` was demanding — a dead end whose only way out was deleting the file by
+  hand. A copy that is a strict prefix of what the CLI would write is now
+  recognised as an interrupted write and regenerated; a projection someone
+  actually edited still reads as foreign and is still refused, untouched.
+
+- **`check` now inspects the hook registries, like `sync` does.** A malformed
+  `.claude/settings.json` (an array, or invalid JSON) passed `check` with exit
+  `0` while `sync` refused to run — CI green on a repository that could not be
+  synced. The registries of every enabled harness are held to the same contract
+  by both commands (`hook-registry-invalid`).
+
+- **`init` can no longer write outside the repository it resolved.** Existence
+  was tested with `stat`, which follows symlinks, so a dangling
+  `AGENTS.md -> /elsewhere/file` read as absent, was planned as a create, and
+  the write landed outside the repo while the report claimed the file had been
+  created. Existence is now tested with `lstat` — a symlink is an entry, broken
+  or not — a create uses the exclusive `wx` flag so it can never write through
+  a link, and a dangling link stops the run with a message naming it.
+- **An unreadable hook registry is never overwritten.** `.claude/settings.json`
+  and its Codex and Cursor counterparts were treated as absent when they could
+  not be read, so the run rewrote them from scratch and dropped whatever the
+  user had registered. Only a genuinely absent registry is created; anything
+  else refuses with exit `2`.
+- **A filesystem failure now respects the exit-code contract.** ENOTDIR, EACCES
+  and friends surfaced as a raw stack trace, exited `1` — the code a CI script
+  reads as drift — and printed nothing on stdout under `--json`. They now exit
+  `2` with an actionable message and a valid JSON object. A `TypeError` still
+  keeps its stack trace: that is a bug in the CLI, not something to hand to the
+  user as advice.
+
+- **`sync` no longer deletes projections when a source directory cannot be
+  read.** An absent directory and an unreadable one were both read as "empty",
+  so a `.agents/rules` that could not be listed made `sync` remove its mirrors
+  and empty the `rules-index` block — exiting `0`, with `check` green
+  afterwards. Silent data loss in a tool whose promise is that nothing drifts
+  unnoticed. Only a genuinely absent directory is now treated as empty;
+  anything else refuses with exit `2` and names the path and the error code.
+
+- A mistyped command now exits `2` (usage error) with a message naming what was
+  not understood, instead of printing the help and exiting `1` — the code a CI
+  script reads as "drift detected". `agentsdir sinc`, `agentsdir add skil` and
+  `agentsdir pack instal` all report the alternatives.
+
+### Internal
+
+- Consolidation after an architecture audit, with no change in behaviour: the
+  projection orchestration, the pack registry, the rules index composition, the
+  harness list and the filesystem probes each existed in several copies and now
+  live in one place. `src/__tests__/layering.test.ts` fails the build if `core/`
+  ever imports from `commands/` or `packs/`, or if two modules import each other
+  at runtime. Test helpers moved to `src/test-support/`.
+
 ### Added
 
 - **`init`** — installs the architecture into an existing git repo, of any

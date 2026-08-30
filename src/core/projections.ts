@@ -1,3 +1,4 @@
+import { entryExists, resolveInsideRepo, writeFileAtomic } from "./fs-utils.js";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -8,7 +9,6 @@ import {
   rm,
   symlink,
   unlink,
-  writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
@@ -84,6 +84,58 @@ export async function project(
   return options.mode === "symlink"
     ? projectSymlinks(root, options)
     : projectCopies(root, options);
+}
+
+export interface RefreshOptions {
+  /** Mode to project into — the one the manifest will record. */
+  mode: ProjectionMode;
+  /** Mode currently recorded; when it differs from `mode`, this is a switch. */
+  previousMode: ProjectionMode;
+  /** Fingerprints recorded by the previous run. */
+  previousHashes: Record<string, string>;
+  /** Would-be content of source files about to be written (repo-relative POSIX). */
+  overlay?: Record<string, Buffer>;
+  dryRun?: boolean;
+}
+
+export interface RefreshResult extends ProjectionResult {
+  /** Projections removed before this run projected: stale mode, or orphans. */
+  removed: string[];
+}
+
+/**
+ * Brings the projections back in line with the source of truth: first removes
+ * what must not survive — the previous mode's projections on a switch, the
+ * copies whose source is gone otherwise — then projects. `sync` and the
+ * generators share this single orchestration; the caller stays responsible for
+ * recording the returned fingerprints in the manifest.
+ */
+export async function refreshProjections(
+  root: string,
+  options: RefreshOptions,
+): Promise<RefreshResult> {
+  const switching = options.mode !== options.previousMode;
+  const { removed } = switching
+    ? await unproject(root, {
+        mode: options.previousMode,
+        dryRun: options.dryRun,
+        previousHashes: options.previousHashes,
+      })
+    : await removeOrphanProjections(root, {
+        mode: options.mode,
+        hashes: options.previousHashes,
+        dryRun: options.dryRun,
+      });
+  const projection = await project(root, {
+    mode: options.mode,
+    dryRun: options.dryRun,
+    // on a switch the recorded fingerprints describe the mode being left
+    previousHashes: switching ? {} : options.previousHashes,
+    ...(options.overlay === undefined ? {} : { overlay: options.overlay }),
+    // a dry run plans against the clean slate the removal above would leave
+    ...(switching && options.dryRun === true ? { assumeAbsent: true } : {}),
+  });
+  return { ...projection, removed };
 }
 
 export interface UnprojectOptions {
@@ -193,7 +245,7 @@ export async function removeOrphanProjections(
   );
   const removed: string[] = [];
   for (const path of Object.keys(options.hashes).sort()) {
-    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+    if (expected.has(path) || !(await entryExists(toAbsolute(root, path)))) {
       continue;
     }
     removed.push(path);
@@ -209,15 +261,6 @@ export async function removeOrphanProjections(
     }
   }
   return { removed };
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function rmdirIfEmpty(root: string, path: string): Promise<void> {
@@ -339,10 +382,39 @@ async function projectCopies(
     if (options.dryRun) {
       continue;
     }
+    await ensureNoLinkedParent(root, file.path);
     await mkdir(dirname(absTarget), { recursive: true });
-    await writeFile(absTarget, file.content);
+    await writeFileAtomic(absTarget, file.content);
   }
   return { changes, hashes };
+}
+
+/**
+ * Refuses to project into a directory that is a symlink. `mkdir -p` walks
+ * happily through one, so a repository shipping `.claude/rules` as a link to
+ * somewhere else had its projections written outside the git root — and the
+ * write itself looked perfectly ordinary in the report.
+ */
+async function ensureNoLinkedParent(
+  root: string,
+  relPath: string,
+): Promise<void> {
+  const parts = relPath.split("/");
+  for (let depth = 1; depth < parts.length; depth += 1) {
+    const branch = parts.slice(0, depth).join("/");
+    let stats;
+    try {
+      stats = await lstat(toAbsolute(root, branch));
+    } catch {
+      continue; // not created yet: mkdir will make a real directory
+    }
+    if (stats.isSymbolicLink()) {
+      throw new CliError(
+        `Refusing to write into ${branch}: it is a symlink, and projecting through it would write outside the repository. Replace it with a real directory, then run the command again.`,
+        EXIT_CODES.driftOrInvariant,
+      );
+    }
+  }
 }
 
 async function verifySymlinks(root: string): Promise<ProjectionDrift[]> {
@@ -399,11 +471,17 @@ async function verifyCopies(
     let current: Buffer;
     try {
       current = await readFile(toAbsolute(root, path));
-    } catch {
+    } catch (error) {
+      // an unreadable projection is not a missing one, and `sync` will not
+      // recreate it: say which of the two the user is looking at
+      const code = (error as NodeJS.ErrnoException).code;
       drifts.push({
         path,
         kind: "missing",
-        detail: "projection missing — run `agentsdir sync`.",
+        detail:
+          code === "ENOENT"
+            ? "projection missing — run `agentsdir sync`."
+            : `projection cannot be read (${code ?? "unknown error"}) — fix its permissions or restore it; \`sync\` cannot repair what it cannot read.`,
       });
       continue;
     }
@@ -442,7 +520,7 @@ async function verifyCopies(
   }
   // recorded projections whose source is gone: sync removes them
   for (const path of Object.keys(hashes).sort()) {
-    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+    if (expected.has(path) || !(await entryExists(toAbsolute(root, path)))) {
       continue;
     }
     drifts.push({
@@ -518,11 +596,19 @@ async function walkFiles(
   absDir: string,
   relPrefix: string,
 ): Promise<{ rel: string; abs: string }[]> {
+  // an absent mirror is normal (nothing projected yet); an unreadable one is a
+  // fault, and must never read as "empty" — that would delete live projections
   let entries;
   try {
     entries = await readdir(absDir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new CliError(
+      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to treat an unreadable directory as an empty one.`,
+      EXIT_CODES.environmentOrUsage,
+    );
   }
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const files: { rel: string; abs: string }[] = [];
@@ -576,6 +662,17 @@ async function classifyCopyTarget(
   if (previousHashes[file.path] === sha256(current)) {
     return "stale-ours";
   }
+  // a strict prefix of what we would write is a write killed mid-file, not a
+  // file someone edited: editing adds or changes bytes, it does not truncate to
+  // an exact prefix. Repairing it keeps `check` and `sync` from deadlocking,
+  // while an actual hand edit still lands on "foreign" and is refused
+  if (
+    previousHashes[file.path] !== undefined &&
+    current.length < file.content.length &&
+    file.content.subarray(0, current.length).equals(current)
+  ) {
+    return "stale-ours";
+  }
   return "foreign";
 }
 
@@ -596,7 +693,8 @@ function normalizeLink(target: string): string {
 }
 
 function toAbsolute(root: string, posixPath: string): string {
-  return join(root, ...posixPath.split("/"));
+  // paths here can come from the manifest of a cloned repository: confine them
+  return resolveInsideRepo(root, posixPath);
 }
 
 function sha256(content: Buffer): string {
