@@ -6,13 +6,17 @@ import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
   readAgentFrontmatter,
+  skillFrontmatterProblems,
 } from "./frontmatter.js";
 import {
   HOOK_REGISTRY_PATHS,
+  planHookRegistrations,
   registryProblem,
   type HookHarness,
 } from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
+import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
+import { renderRulesIndexContent } from "../templates/agents-md.js";
 import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
 import { verify } from "./projections.js";
@@ -62,11 +66,24 @@ async function validateSubAgents(root: string): Promise<Violation[]> {
   } catch {
     return [];
   }
+  const violations: Violation[] = [];
+  for (const entry of entries) {
+    // same blind spot as skill folders: a symlink is neither a file nor a
+    // directory to a Dirent, so it used to be skipped without a word
+    if (entry.isSymbolicLink() && entry.name.endsWith(".md")) {
+      violations.push({
+        path: `.agents/agents/${entry.name}`,
+        rule: "agent-symlinked",
+        message:
+          "sub-agent file is a symlink — the harness follows it and loads what it points at, which agentsdir can neither validate nor project. Move the file into the repository, or remove the link.",
+        severity: "error",
+      });
+    }
+  }
   const files = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
     .sort();
-  const violations: Violation[] = [];
   for (const file of files) {
     const path = `.agents/agents/${file}`;
     let source: string;
@@ -180,6 +197,19 @@ async function validateSkills(root: string): Promise<Violation[]> {
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const violations: Violation[] = [];
   for (const entry of entries) {
+    // a Dirent for a symlink answers false to isDirectory(), so a linked skill
+    // folder used to be skipped in silence — while the harness follows the link
+    // and loads the SKILL.md at the other end, unvalidated
+    if (entry.isSymbolicLink()) {
+      violations.push({
+        path: `.agents/skills/${entry.name}`,
+        rule: "skill-symlinked",
+        message:
+          "skill folder is a symlink — the harness follows it and loads what it points at, which agentsdir can neither validate nor project. Move the skill into the repository, or remove the link.",
+        severity: "error",
+      });
+      continue;
+    }
     if (!entry.isDirectory()) {
       continue;
     }
@@ -245,26 +275,30 @@ async function validateSkill(
   let parsed;
   try {
     parsed = parseSkillMarkdown(source);
-  } catch (error) {
+  } catch {
+    // report every bad field at once, and the root identity invariant first:
+    // a wrong `name` makes `default-prompt` fail too, and fixing the symptom
+    // before the cause is exactly the loop this used to send the user around
+    const identity = validateSkillNameIdentity(
+      open.frontmatter.name,
+      folder,
+      skillPath,
+    );
     return [
-      {
+      ...identity,
+      ...skillFrontmatterProblems(source).map((message) => ({
         path: skillPath,
         rule: "skill-frontmatter",
-        message: error instanceof Error ? error.message : String(error),
-        severity: "error",
-      },
+        message,
+        severity: "error" as const,
+      })),
     ];
   }
   const violations: Violation[] = [];
   const frontmatter = parsed.frontmatter;
-  if (frontmatter.name !== folder) {
-    violations.push({
-      path: skillPath,
-      rule: "skill-name-identity",
-      message: `frontmatter \`name\` is "${frontmatter.name}" but the folder is "${folder}" — they must be identical (no alias).`,
-      severity: "error",
-    });
-  }
+  violations.push(
+    ...validateSkillNameIdentity(frontmatter.name, folder, skillPath),
+  );
   if (!NAME_SPEC.test(frontmatter.name)) {
     violations.push({
       path: skillPath,
@@ -291,17 +325,28 @@ async function validateSkill(
       severity: "error",
     });
   }
-  if (
-    frontmatter.implicit &&
-    frontmatter.allowedTools?.some((tool) => WRITE_TOOL.test(tool)) === true
-  ) {
-    violations.push({
-      path: skillPath,
-      rule: "skill-implicit-read-only",
-      message:
-        "an implicit skill must be read-only, but `allowed-tools` declares write-capable tools (Write/Edit/NotebookEdit/Bash or *) — make the skill explicit or drop those tools.",
-      severity: "error",
-    });
+  if (frontmatter.implicit) {
+    // `allowed-tools` is optional, and its absence means "no restriction" —
+    // every tool, writes included. Testing only the declared list therefore let
+    // the dangerous case through: an implicit skill free to write.
+    const declared = frontmatter.allowedTools;
+    if (declared === undefined || declared.length === 0) {
+      violations.push({
+        path: skillPath,
+        rule: "skill-implicit-read-only",
+        message:
+          "an implicit skill must be read-only, but declares no `allowed-tools` — an absent list means no restriction at all. List the read-only tools it needs, or make the skill explicit.",
+        severity: "error",
+      });
+    } else if (declared.some((tool) => WRITE_TOOL.test(tool))) {
+      violations.push({
+        path: skillPath,
+        rule: "skill-implicit-read-only",
+        message:
+          "an implicit skill must be read-only, but `allowed-tools` declares write-capable tools (Write/Edit/NotebookEdit/Bash or *) — make the skill explicit or drop those tools.",
+        severity: "error",
+      });
+    }
   }
   const significantLines = parsed.body
     .split("\n")
@@ -362,6 +407,24 @@ async function validateSkill(
     });
   }
   return violations;
+}
+
+/** The root invariant: the folder name and the frontmatter name are the same. */
+function validateSkillNameIdentity(
+  name: string,
+  folder: string,
+  skillPath: string,
+): Violation[] {
+  return name === folder
+    ? []
+    : [
+        {
+          path: skillPath,
+          rule: "skill-name-identity",
+          message: `frontmatter \`name\` is "${name}" but the folder is "${folder}" — they must be identical (no alias).`,
+          severity: "error",
+        },
+      ];
 }
 
 /** Open-spec invariants only: folder identity and the shared name grammar. */
@@ -457,14 +520,7 @@ async function validateRulesIndex(root: string): Promise<Violation[]> {
       },
     ];
   }
-  let ruleFiles: string[] = [];
-  try {
-    ruleFiles = (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    // no rules directory: nothing to index
-  }
+  const ruleFiles = await listRuleFiles(root);
   const violations: Violation[] = [];
   for (const file of ruleFiles) {
     if (!block.includes(`.agents/rules/${file}`)) {
@@ -491,6 +547,23 @@ async function validateRulesIndex(root: string): Promise<Violation[]> {
         severity: "error",
       });
     }
+  }
+  if (violations.length > 0) {
+    return violations;
+  }
+  // every path lines up; the text may still not. `sync` regenerates
+  // "path — when to read it" from the first line of each rule, so a rule whose
+  // purpose changed kept its stale description in AGENTS.md indefinitely —
+  // checking for the presence of paths could never see it.
+  const expected = renderRulesIndexContent(await collectRuleIndexEntries(root));
+  if (block.trim() !== expected.trim()) {
+    violations.push({
+      path: "AGENTS.md",
+      rule: "rules-index-out-of-sync",
+      message:
+        "the `rules-index` block lists the right rules but not the right text — a rule's first line changed since the last sync; run `agentsdir sync`.",
+      severity: "error",
+    });
   }
   return violations;
 }
@@ -637,5 +710,42 @@ async function validateHookRegistries(
       });
     }
   }
-  return violations;
+  // a malformed registry cannot be planned against: report the shape first and
+  // let `sync` be the one to rewrite it
+  if (violations.length > 0) {
+    return violations;
+  }
+  return [...violations, ...(await compareHookRegistrations(root, manifest))];
+}
+
+/**
+ * Compares the registrations on disk to the ones the scripts of `.agents/hooks/`
+ * imply — the very plan `sync` applies. Checking only the shape of the file let
+ * both directions of drift through: a script added without a `sync` was
+ * registered nowhere, so no harness ever ran it and CI stayed green; a deleted
+ * script left registrations the three harnesses would still try to execute.
+ */
+async function compareHookRegistrations(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  let plans;
+  try {
+    plans = await planHookRegistrations(root, manifest.harness.enabled);
+  } catch {
+    // an unreadable registry: already the business of the shape pass above and
+    // of `sync`, which refuses rather than overwriting what it cannot read
+    return [];
+  }
+  return plans
+    .filter((plan) => plan.action !== "ok")
+    .map((plan) => ({
+      path: plan.path,
+      rule: "hook-registration-drift",
+      message:
+        plan.action === "created"
+          ? "hook scripts in .agents/hooks/ are registered nowhere — no harness will ever run them; run `agentsdir sync`."
+          : "registrations differ from the scripts in .agents/hooks/ — a script was added, renamed or deleted without a sync; run `agentsdir sync`.",
+      severity: "error" as const,
+    }));
 }

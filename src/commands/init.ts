@@ -46,7 +46,7 @@ import {
 } from "../templates/bootstrap.js";
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
-import { listRuleFiles } from "./rules-index.js";
+import { listRuleFiles } from "../core/rules-index.js";
 
 export type PlannedAction =
   "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";

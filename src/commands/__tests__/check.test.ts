@@ -164,7 +164,7 @@ describe("07 - check command", () => {
     ]);
   });
 
-  it("Given an implicit skill declaring write-capable tools, When check runs, Then the read-only invariant fails — and stays silent without allowed-tools", async () => {
+  it("Given implicit skills, When check runs, Then the read-only invariant fails both on declared write tools and on no declaration at all", async () => {
     const dir = await initializedRepo();
     await addSkill(
       dir,
@@ -188,9 +188,18 @@ describe("07 - check command", () => {
     const readOnly = result.violations.filter(
       (violation) => violation.rule === "skill-implicit-read-only",
     );
-    expect(readOnly.map((violation) => violation.path)).toEqual([
+    // "calm" declares no allowed-tools at all, which means no restriction —
+    // every tool, writes included. That is the dangerous case, and it used to
+    // be the silent one.
+    expect(readOnly.map((violation) => violation.path).sort()).toEqual([
+      ".agents/skills/calm/SKILL.md",
       ".agents/skills/quiet/SKILL.md",
     ]);
+    expect(
+      readOnly.find(
+        (violation) => violation.path === ".agents/skills/calm/SKILL.md",
+      )?.message,
+    ).toContain("no restriction at all");
   });
 
   it("Given a skill body under 12 significant lines, When check runs, Then the depth invariant fails with the measured count", async () => {

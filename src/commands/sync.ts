@@ -22,7 +22,7 @@ import {
   ensureNoLinkedParent,
   refreshProjections,
 } from "../core/projections.js";
-import { planRulesIndex } from "./rules-index.js";
+import { planRulesIndex } from "../core/rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { computeSkillHash } from "../core/skill-hash.js";
 import { NAME_SPEC, validateRepo, type Violation } from "../core/validate.js";
@@ -62,6 +62,9 @@ const REPAIRABLE_RULES = new Set([
   "rules-index-missing",
   "rules-index-out-of-sync",
   "lock-drift",
+  // sync is what recomputes the registrations, so its own drift must not
+  // block it — otherwise check tells you to run sync, and sync refuses
+  "hook-registration-drift",
 ]);
 
 interface PlannedFile {

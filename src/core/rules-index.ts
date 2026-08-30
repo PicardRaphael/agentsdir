@@ -6,10 +6,10 @@ import {
   type RuleIndexEntry,
 } from "../templates/agents-md.js";
 import { EXIT_CODES } from "../exit-codes.js";
-import { CliError } from "../core/errors.js";
-import { readdirOrEmpty } from "../core/fs-utils.js";
-import { upsertBlock } from "../core/managed-blocks.js";
-import { ensureNoLinkedParent } from "../core/projections.js";
+import { CliError } from "./errors.js";
+import { readdirOrEmpty } from "./fs-utils.js";
+import { upsertBlock } from "./managed-blocks.js";
+import { ensureNoLinkedParent } from "./projections.js";
 
 /**
  * The rules index of AGENTS.md, composed in one place. `init`, `sync`,
