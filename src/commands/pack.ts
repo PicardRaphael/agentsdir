@@ -1,4 +1,8 @@
-import { pathExists, resolveInsideRepo } from "../core/fs-utils.js";
+import {
+  entryExists,
+  resolveInsideRepo,
+  writeFileAtomic,
+} from "../core/fs-utils.js";
 import { readdir, readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
@@ -68,7 +72,9 @@ export async function runPackAdd(
     );
   }
   for (const skill of pack.skills) {
-    if (await pathExists(join(root, ".agents", "skills", skill))) {
+    // lstat, not stat: a broken symlink reads as absent to stat, and the
+    // write below would then create the file through it, outside the repo
+    if (await entryExists(join(root, ".agents", "skills", skill))) {
       throw new CliError(
         `.agents/skills/${skill}/ already exists and would collide with pack "${name}". Move it away or rename it, then retry.`,
       );
@@ -79,7 +85,7 @@ export async function runPackAdd(
   const notes: string[] = [];
   const toWrite: PackFile[] = [];
   for (const file of files) {
-    if (await pathExists(join(root, ...file.path.split("/")))) {
+    if (await entryExists(join(root, ...file.path.split("/")))) {
       if (pack.keepExisting.includes(file.path)) {
         notes.push(`${file.path} already exists — kept as is.`);
         continue;
@@ -125,7 +131,7 @@ export async function runPackAdd(
     for (const file of toWrite) {
       const abs = join(root, ...file.path.split("/"));
       await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, file.content, "utf8");
+      await writeFileAtomic(abs, file.content, { exclusive: true });
     }
     if (agentsMd !== undefined) {
       await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");

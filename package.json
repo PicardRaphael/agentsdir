@@ -30,13 +30,15 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "THIRD-PARTY-NOTICES.txt"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",

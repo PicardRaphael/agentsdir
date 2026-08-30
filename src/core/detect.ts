@@ -184,8 +184,21 @@ async function readCoreSymlinks(
   }
 }
 
+/**
+ * Node caps a child's stdout at 1 MiB by default. `ls-files -sz` emits roughly
+ * fifty bytes plus the path per tracked file, so a repository of a few tens of
+ * thousands of files blew past it — and init, sync and doctor all reach here,
+ * with no catch on the way. The cap stays, well above any real repository, so a
+ * runaway output is still bounded.
+ */
+const GIT_LS_FILES_MAX_BUFFER = 256 * 1024 * 1024;
+
 async function findMaterializedSymlinks(dir: string): Promise<string[]> {
-  const { stdout } = await execFileAsync("git", ["-C", dir, "ls-files", "-sz"]);
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", dir, "ls-files", "-sz"],
+    { maxBuffer: GIT_LS_FILES_MAX_BUFFER },
+  );
   const materialized: string[] = [];
   for (const entry of stdout.split("\0")) {
     if (!entry.startsWith("120000 ")) continue;

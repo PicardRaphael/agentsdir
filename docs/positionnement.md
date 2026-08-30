@@ -46,8 +46,11 @@ flowchart LR
 ```
 
 **1. Installer.** Une source de vérité, des projections par harness, un repli en
-copie quand les symlinks manquent. C'est fait, et le repli répond à un problème
-documenté par quatre bugs distincts chez les concurrents.
+copie quand les symlinks manquent. La mécanique est faite, et le repli répond à
+un problème documenté par quatre bugs distincts chez les concurrents. Ce qui
+manque encore est le **contenu** : aujourd'hui l'`init` laisse un squelette vide,
+et c'est la tâche 24 qui doit en faire une proposition argumentée. C'est la porte
+de publication, décrite plus bas.
 
 **2. Vérifier.** `check` détecte la dérive et `sync` la répare — y compris
 l'élagage de ce qui n'a plus de source, que rulesync ne sait pas faire. C'est
@@ -57,7 +60,8 @@ fait, et c'est déjà une différence.
 
 - *Est-ce que ça sert ?* Les hooks portables déjà installés observent les
   invocations de skills et de sous-agents, les outils utilisés, les chemins
-  touchés — localement, en métadonnées seulement (tâche 25).
+  touchés — localement, en métadonnées seulement (collecte : tâche 25 ; analyse :
+  tâche 30).
 - *Combien ça coûte ?* Ce qui est payé à chaque session — `AGENTS.md`, les
   métadonnées de tous les skills, l'index des règles — est distingué de ce qui
   n'est payé qu'à l'invocation (tâche 28).
@@ -65,6 +69,13 @@ fait, et c'est déjà une différence.
 Croisées, elles donnent la seule question qui compte pour une équipe : *ce skill
 vaut-il ce qu'il coûte ?* Un skill jamais invoqué qui pèse lourd au démarrage se
 supprime sans débat ; le même, léger, ne mérite pas qu'on en parle.
+
+Ce croisement n'est pas une invention de notre part, et c'est ce qui le rend
+solide : Claude Code effectue déjà cet arbitrage, en silence. Quand le listing
+des skills dépasse son budget de contexte, il raccourcit puis supprime les
+descriptions **en commençant par les skills les moins invoqués**. Nous rendons
+visible et discutable une décision que le harness prend aujourd'hui dans le dos
+de l'équipe.
 
 **4. Décider.** Les mesures alimentent des propositions, jamais des suppressions
 automatiques : ce qui n'a jamais servi, ce qui coûte sans rendre, ce qui manque
@@ -93,6 +104,12 @@ c'est aussi celui qui parle aux organisations plutôt qu'aux individus.
   soixante-dix-sept : perdu, et sans valeur. Ce qui compte est ce que l'on fait
   des trois, pas leur nombre. `.agents/` est de toute façon reconnu comme
   l'emplacement commun.
+  À ne pas confondre avec l'abandon du terrain de l'installation : nous voulons
+  au contraire être la référence de l'`init`. Cela ne se gagne pas au nombre de
+  cibles — sinon rulesync aurait déjà gagné avec ses quarante outils, et son
+  tracker quasi vide dit le contraire — mais à ce que l'`init` **produit** : une
+  configuration qui a du sens pour ce dépôt-là, qui se prouve utilisée, et qui ne
+  dérive pas.
 - **`vendor` et `migrate`.** Livrés ailleurs, mieux dotés. À reconsidérer un
   jour comme confort, jamais comme argument.
 - **Toute remontée réseau.** La mesure reste locale, sans exception. C'est ce
@@ -101,20 +118,52 @@ c'est aussi celui qui parle aux organisations plutôt qu'aux individus.
   d'une équipe sur la foi d'une heuristique serait le meilleur moyen de perdre
   sa confiance.
 
-## Ordre de construction proposé
+## Ordre de construction
 
-1. **Mesurer avant de proposer** — tâches 25 (usage) puis 28 (coût). Sans elles,
-   toute proposition n'est qu'une opinion.
-2. **Prouver** — tâche 26, qui peut invalider une hypothèse de fond : si un
-   skill créé n'est pas découvert par le harness, tout le reste attend.
-3. **Brancher** — tâche 27 (MCP), le quatrième objet qui manque à la structure.
-4. **Proposer** — tâche 24, nourrie des mesures des étapes 1 et 2 plutôt que de
-   généralités.
+Arrêté le 30 août 2026. Deux corrections par rapport à la première rédaction de
+ce document : la preuve passe devant, et la mesure d'usage se scinde.
 
-La dette technique (tâches 17 à 23) se traite en parallèle, par petites touches,
-sans jamais bloquer cette ligne.
+1. **Prouver** — tâche 26. Ce document écrivait déjà qu'elle « peut invalider une
+   hypothèse de fond : si un skill créé n'est pas découvert par le harness, tout
+   le reste attend », puis la classait deuxième. C'était incohérent : ce qui peut
+   tout invalider passe en premier. C'est en outre la moins chère du lot — un
+   prompt versionné et une session réelle — et elle garde pour cette raison sa
+   première passe sur Claude Code seul.
+2. **Proposer** — tâche 24. Après `init`, un dépôt repart avec une structure
+   vide ; c'est ce que corrige cette tâche, et c'est la condition de la porte de
+   publication ci-dessous.
+3. **Observer** — tâche 25, la collecte seule. Un rapport d'usage est vide le
+   jour de sa livraison : il faut des semaines de sessions observées. Installer
+   la collecte tôt fait mûrir les données pendant que le reste se construit.
+4. **Chiffrer** — tâche 28, le coût en contexte. Purement statique, livrable en
+   une passe, et visible immédiatement.
+5. **Conclure** — tâche 30, l'analyse du journal, quand il y a enfin quelque
+   chose à analyser, croisée avec le coût de l'étape 4.
+6. **Brancher** — tâche 27 (MCP), le quatrième objet qui manque à la structure.
+   Placée en dernier parce que c'est du rattrapage — ruler et rulesync le font
+   déjà — et parce que le groupe de travail « Skills over MCP » peut encore
+   déplacer la cible.
+
+La dette technique (tâches 17 à 23), la commande `update` (31), les invariants
+non tenus (32) et les correctifs de cohérence se traitent en parallèle, par
+petites touches, sans jamais bloquer cette ligne.
+
+## La porte de publication
+
+La v1.0 est prête et volontairement retenue. Elle sort quand **`init` produit
+autre chose qu'un squelette** : une proposition argumentée de règles, de hooks
+et de sous-agents adaptés au dépôt. Publier un installateur qui laisse
+l'utilisateur devant une page blanche, c'est arriver deuxième sur le terrain
+déjà occupé de l'installation.
+
+Le critère de sortie v1.0 de [roadmap.md](roadmap.md) — « un inconnu installe
+l'architecture en moins de cinq minutes en lisant le seul README » — devient
+cette porte. Il était écrit comme acquis sans avoir jamais été vérifié ; il doit
+l'être avant publication, par quelqu'un ou quelque chose qui n'a pas écrit le
+produit.
 
 ## Une phrase
 
-Les autres installent de la configuration d'agents. Nous la gouvernons : elle ne
-dérive pas, on sait ce qu'elle sert, ce qu'elle coûte, et qu'elle fonctionne.
+Les autres installent de la configuration d'agents. Nous l'installons pour de
+bon, et nous la gouvernons : elle sert dès le premier jour, elle ne dérive pas,
+on sait ce qu'elle coûte, et on a prouvé qu'elle fonctionne.

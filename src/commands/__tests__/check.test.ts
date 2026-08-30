@@ -11,6 +11,7 @@ import {
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
 import { computeSkillHash } from "../../core/validate.js";
 import { renderAgentsCheckWorkflow } from "../../templates/bootstrap.js";
+import { CLI_VERSION } from "../../version.js";
 import { initAnswers, makeTempDir, runCli } from "../../test-support/index.js";
 import { runCheck } from "../check.js";
 import { runInit } from "../init.js";
@@ -371,8 +372,14 @@ describe("07 - check command", () => {
     expect(report.exitCode).toBe(1);
   });
 
-  it("Given the workflow emitted by init, When inspected, Then it runs npx agentsdir check", () => {
-    expect(renderAgentsCheckWorkflow()).toContain("npx agentsdir check");
+  it("Given the workflow emitted by init, When inspected, Then it runs check on a pinned version with a read-only token", () => {
+    const workflow = renderAgentsCheckWorkflow();
+    // it runs on every push of someone else's repo: an unpinned npx would
+    // execute whatever the registry serves that day, with the repo checked out
+    expect(workflow).toContain(`npx --yes agentsdir@${CLI_VERSION} check`);
+    expect(workflow).not.toContain("npx agentsdir check");
+    expect(workflow).toContain("permissions:");
+    expect(workflow).toContain("  contents: read");
   });
 });
 

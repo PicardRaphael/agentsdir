@@ -46,6 +46,7 @@ import {
 } from "../templates/bootstrap.js";
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
+import { listRuleFiles } from "./rules-index.js";
 
 export type PlannedAction =
   "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";
@@ -461,16 +462,6 @@ async function isEmptyOrMissingDir(path: string): Promise<boolean> {
     return (await readdir(path)).length === 0;
   } catch {
     return true;
-  }
-}
-
-async function listRuleFiles(root: string): Promise<string[]> {
-  try {
-    return (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    return [];
   }
 }
 

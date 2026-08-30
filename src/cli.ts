@@ -9,7 +9,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
-import { unknownCommand } from "./command-tree.js";
+import { unknownCommand, unknownOption } from "./command-tree.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { CLI_VERSION } from "./version.js";
 
@@ -73,10 +73,11 @@ const main = defineCommand({
   },
 });
 
-const unknown = unknownCommand(process.argv.slice(2));
-if (unknown === undefined) {
+const argv = process.argv.slice(2);
+const usageError = unknownCommand(argv) ?? unknownOption(main, argv);
+if (usageError === undefined) {
   await runMain(main);
 } else {
-  console.error(unknown);
+  console.error(usageError);
   process.exit(EXIT_CODES.environmentOrUsage);
 }

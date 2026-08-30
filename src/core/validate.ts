@@ -2,7 +2,11 @@ import { pathExists } from "./fs-utils.js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
-import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
+import {
+  parseOpenSkillMarkdown,
+  parseSkillMarkdown,
+  readAgentFrontmatter,
+} from "./frontmatter.js";
 import {
   HOOK_REGISTRY_PATHS,
   registryProblem,
@@ -37,9 +41,103 @@ export async function validateRepo(
     violations.push(...(await validateProjections(root, manifest)));
   }
   violations.push(...(await validateSkills(root)));
+  violations.push(...(await validateSubAgents(root)));
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
   violations.push(...(await validateHookRegistries(root, manifest)));
+  return violations;
+}
+
+/**
+ * Invariant 14 — sub-agent frontmatter. A `.agents/agents/*.md` without a
+ * usable `name` and `description` is silently ignored by Claude Code: nothing
+ * fails, the agent is simply never offered. That silence is what makes it worth
+ * an invariant.
+ */
+async function validateSubAgents(root: string): Promise<Violation[]> {
+  const agentsDir = join(root, ".agents", "agents");
+  let entries;
+  try {
+    entries = await readdir(agentsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+  const violations: Violation[] = [];
+  for (const file of files) {
+    const path = `.agents/agents/${file}`;
+    let source: string;
+    try {
+      source = await readFile(join(agentsDir, file), "utf8");
+    } catch {
+      violations.push({
+        path,
+        rule: "agent-unreadable",
+        message: "cannot be read — check the file permissions.",
+        severity: "error",
+      });
+      continue;
+    }
+    const table = readAgentFrontmatter(source);
+    if (table === undefined) {
+      violations.push({
+        path,
+        rule: "agent-frontmatter",
+        message:
+          "has no valid YAML frontmatter block (`---` ... `---`) at the top — Claude Code ignores the file entirely, without an error.",
+        severity: "error",
+      });
+      continue;
+    }
+    violations.push(...validateSubAgentFields(path, file, table));
+  }
+  return violations;
+}
+
+function validateSubAgentFields(
+  path: string,
+  file: string,
+  table: Record<string, unknown>,
+): Violation[] {
+  const violations: Violation[] = [];
+  const name = typeof table["name"] === "string" ? table["name"].trim() : "";
+  const description =
+    typeof table["description"] === "string" ? table["description"].trim() : "";
+  if (name === "") {
+    violations.push({
+      path,
+      rule: "agent-frontmatter",
+      message:
+        "frontmatter `name` is missing or empty — Claude Code ignores the file entirely, without an error.",
+      severity: "error",
+    });
+  } else if (!NAME_SPEC.test(name)) {
+    violations.push({
+      path,
+      rule: "agent-name-spec",
+      message: `agent name "${name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      severity: "error",
+    });
+  } else if (name !== file.slice(0, -".md".length)) {
+    violations.push({
+      path,
+      rule: "agent-name-identity",
+      message: `frontmatter \`name\` is "${name}" but the file is "${file}" — they must be identical (no alias).`,
+      severity: "error",
+    });
+  }
+  if (description === "") {
+    violations.push({
+      path,
+      rule: "agent-frontmatter",
+      message:
+        "frontmatter `description` is missing or empty — it is what the harness matches to decide when to delegate, so the agent is never offered without it.",
+      severity: "error",
+    });
+  }
   return violations;
 }
 
@@ -477,7 +575,7 @@ async function validateLock(root: string): Promise<Violation[]> {
         path: relSkill,
         rule: "lock-local-change",
         message:
-          "agentsdir-installed content modified locally — kept as is; `agentsdir update` will propose a merge.",
+          "agentsdir-installed content modified locally — kept as is; `agentsdir update` will propose a merge when available.",
         severity: "info",
       });
     } else {

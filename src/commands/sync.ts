@@ -18,7 +18,10 @@ import {
   type ProjectionMode,
 } from "../core/manifest.js";
 import { writeFileAtomic } from "../core/fs-utils.js";
-import { refreshProjections } from "../core/projections.js";
+import {
+  ensureNoLinkedParent,
+  refreshProjections,
+} from "../core/projections.js";
 import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { computeSkillHash } from "../core/skill-hash.js";
@@ -462,6 +465,10 @@ async function applyPlannedFile(
   if (file.action === "ok" || file.content === undefined) {
     return;
   }
+  // hook registries are written here, outside refreshProjections and before it:
+  // without this guard a `.claude` symlink would rewrite the user's global
+  // Claude Code settings, registering our hook there
+  await ensureNoLinkedParent(root, file.path);
   const abs = join(root, ...file.path.split("/"));
   await mkdir(dirname(abs), { recursive: true });
   await writeFileAtomic(abs, file.content);

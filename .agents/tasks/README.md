@@ -2,7 +2,9 @@
 
 Une tâche différée par fichier. Chaque fichier est auto-suffisant : il énonce le problème, les fichiers concernés, les critères d'acceptation et la vérification.
 
-Prendre les tâches dans l'ordre du plan ([`../plan/v1.md`](../plan/v1.md)) sauf mention `Dépend de :` contraire. Le plan v1 est clos ; les tâches 17 et suivantes sont indépendantes entre elles et peuvent être prises dans n'importe quel ordre.
+Le plan v1 ([`../plan/v1.md`](../plan/v1.md)) est clos ; il n'est conservé que comme trace des dépendances entre tâches livrées.
+
+**L'ordre de prise est celui de [`docs/positionnement.md`](../../docs/positionnement.md), pas l'ordre des numéros** — un numéro dit quand la tâche a été écrite, pas quand elle doit être prise. Ordre arrêté le 30 août 2026 : **26 → 24 → 25 → 28 → 30 → 27**. Les tâches 17 à 23 (dette technique) et 31 à 36 (audit du 30 août 2026) se traitent en parallèle, sans bloquer cette ligne. Parmi elles, 33 et 34 portent des défauts bloquants reproduits : les prendre en premier. Respecter les mentions `Dépend de :` quand elles existent.
 
 ## Conventions
 
