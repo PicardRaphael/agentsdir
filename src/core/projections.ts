@@ -338,6 +338,9 @@ async function projectSymlinks(
     if (options.dryRun) {
       continue;
     }
+    // same guard as projectCopies: `mkdir -p` walks through a linked parent,
+    // and the `unlink` below would delete a link of the user's, outside the repo
+    await ensureNoLinkedParent(root, spec.target);
     if (state === "other-link") {
       await unlink(absTarget);
     }
@@ -395,7 +398,7 @@ async function projectCopies(
  * somewhere else had its projections written outside the git root — and the
  * write itself looked perfectly ordinary in the report.
  */
-async function ensureNoLinkedParent(
+export async function ensureNoLinkedParent(
   root: string,
   relPath: string,
 ): Promise<void> {
@@ -554,6 +557,10 @@ async function expectedCopies(
     if (spec.kind !== "dir") {
       continue;
     }
+    // the source directory itself may be a link: readdir walks through it and
+    // every entry then lstats as a real file, so outside content would be
+    // copied into versioned projections
+    await ensureNoLinkedParent(root, `${spec.source}/.`);
     const seenSources = new Set<string>();
     for (const source of await walkFiles(
       toAbsolute(root, spec.source),

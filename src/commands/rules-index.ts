@@ -9,6 +9,7 @@ import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "../core/errors.js";
 import { readdirOrEmpty } from "../core/fs-utils.js";
 import { upsertBlock } from "../core/managed-blocks.js";
+import { ensureNoLinkedParent } from "../core/projections.js";
 
 /**
  * The rules index of AGENTS.md, composed in one place. `init`, `sync`,
@@ -34,6 +35,10 @@ export interface RuleDelta {
  * files keeps outside content out of what gets versioned.
  */
 export async function listRuleFiles(root: string): Promise<string[]> {
+  // the per-entry lstat below only catches a rule that is a link; if the rules
+  // directory itself is one, readdir walks through it and every outside file
+  // lstats as a regular file
+  await ensureNoLinkedParent(root, ".agents/rules/.");
   const dir = join(root, ".agents", "rules");
   const entries = await readdirOrEmpty(dir);
   const files: string[] = [];

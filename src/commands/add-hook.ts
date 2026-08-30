@@ -24,6 +24,7 @@ import {
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
+import { ensureNoLinkedParent } from "../core/projections.js";
 
 export const DEFAULT_HOOK_SLUG = "hook";
 
@@ -90,6 +91,7 @@ export async function runAddHook(
       if (plan.action === "ok" || plan.content === undefined) {
         continue;
       }
+      await ensureNoLinkedParent(root, plan.path);
       const abs = join(root, ...plan.path.split("/"));
       await mkdir(join(root, ...plan.path.split("/").slice(0, -1)), {
         recursive: true,

@@ -1,3 +1,5 @@
+import { CLI_VERSION } from "../version.js";
+
 /** `.agents/tasks/README.md` — explains the task file format. */
 export function renderTasksReadme(): string {
   return [
@@ -41,7 +43,14 @@ export function renderMemoryTemplate(): string {
   ].join("\n");
 }
 
-/** `.github/workflows/agents-check.yml` — CI drift check. */
+/**
+ * `.github/workflows/agents-check.yml` — CI drift check.
+ *
+ * The version is pinned and the token is read-only on purpose: this workflow
+ * runs on every push of someone else's repository. An unpinned `npx agentsdir`
+ * would execute whatever the registry serves that day, with the repository
+ * checked out and the default `GITHUB_TOKEN` in scope.
+ */
 export function renderAgentsCheckWorkflow(): string {
   return [
     "name: agents-check",
@@ -49,6 +58,9 @@ export function renderAgentsCheckWorkflow(): string {
     "on:",
     "  push:",
     "  pull_request:",
+    "",
+    "permissions:",
+    "  contents: read",
     "",
     "jobs:",
     "  check:",
@@ -58,7 +70,7 @@ export function renderAgentsCheckWorkflow(): string {
     "      - uses: actions/setup-node@v5",
     "        with:",
     "          node-version: 24",
-    "      - run: npx agentsdir check",
+    `      - run: npx --yes agentsdir@${CLI_VERSION} check`,
     "",
   ].join("\n");
 }
