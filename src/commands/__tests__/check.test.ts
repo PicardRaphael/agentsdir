@@ -428,3 +428,61 @@ describe("07 - check command", () => {
     expect(renderAgentsCheckWorkflow()).toContain("npx agentsdir check");
   });
 });
+
+function externalSkillSource(name: string): string {
+  return `---\nname: ${name}\ndescription: A skill installed by another tool, open spec only.\n---\n\n# ${name}\n\nExternal content, no catalogue field.\n`;
+}
+
+describe("14 - external skill interop (open Agent Skills spec)", () => {
+  it("Given a skill installed by another tool (name and description only), When check runs, Then it passes with an info notice and no error", async () => {
+    const dir = await initializedRepo();
+    await mkdir(join(dir, ".agents", "skills", "external-skill"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, ".agents", "skills", "external-skill", "SKILL.md"),
+      externalSkillSource("external-skill"),
+      "utf8",
+    );
+    const result = await runCheck(dir);
+    expect(result.exitCode).toBe(0);
+    const external = result.violations.filter((violation) =>
+      violation.path.includes("external-skill"),
+    );
+    expect(rules(external)).toEqual(["skill-external"]);
+    expect(external[0]?.severity).toBe("info");
+  });
+
+  it("Given an external skill whose folder and name disagree, When check runs, Then only the open-spec identity invariant fails", async () => {
+    const dir = await initializedRepo();
+    await mkdir(join(dir, ".agents", "skills", "other-folder"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, ".agents", "skills", "other-folder", "SKILL.md"),
+      externalSkillSource("external-skill"),
+      "utf8",
+    );
+    const result = await runCheck(dir);
+    expect(result.exitCode).toBe(1);
+    const errors = result.violations.filter(
+      (violation) => violation.severity === "error",
+    );
+    expect(rules(errors)).toEqual(["skill-name-identity"]);
+  });
+
+  it("Given a catalogue skill missing its artifacts, When check runs, Then the catalogue contract still applies in full", async () => {
+    const dir = await initializedRepo();
+    await mkdir(join(dir, ".agents", "skills", "demo-skill"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, ".agents", "skills", "demo-skill", "SKILL.md"),
+      skillSource("demo-skill"),
+      "utf8",
+    );
+    const result = await runCheck(dir);
+    expect(result.exitCode).toBe(1);
+    expect(rules(result.violations)).toContain("codex-artifact-missing");
+  });
+});

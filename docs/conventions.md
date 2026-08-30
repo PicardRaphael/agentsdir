@@ -88,7 +88,11 @@ policy:
 
 ## 4. Les invariants validés par `check`
 
-`check` s'exécute en lecture seule et sort avec le code 1 à la première violation. Liste exhaustive :
+`check` s'exécute en lecture seule et sort avec le code 1 à la première violation.
+
+**Périmètre** : les invariants du catalogue (2 à 9) ne s'appliquent qu'aux skills **gérés par agentsdir** — ceux dont le frontmatter porte au moins un champ du catalogue (`display-name`, `short-description`, `color`, `icon`, `default-prompt`) ou dont les artefacts générés existent sur disque. Un skill installé par un autre outil (par exemple `npx skills`) ou écrit à la main selon la seule spec ouverte Agent Skills (`name` + `description`) n'est validé que contre cette spec (invariant 1) : `check` le signale en information (`skill-external`), jamais en erreur, et `sync` ne touche ni son contenu ni son dossier.
+
+Liste exhaustive :
 
 1. **Identité du nom** : nom du dossier = frontmatter `name` = jeton `$<name>` présent dans `default-prompt` = nom affiché. Aucun alias. Le nom respecte la spec Agent Skills : 1 à 64 caractères, `a-z 0-9 -`, pas de tiret en début/fin.
 2. **Parité d'invocation entre harness** : `implicit: true` dans le frontmatter ⟺ `allow_implicit_invocation: true` dans `openai.yaml` ⟺ absence de `disable-model-invocation`. Les trois expriment la même décision, sinon un skill bloqué sur une plateforme reste découvrable sur l'autre.

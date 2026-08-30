@@ -494,3 +494,18 @@ describe("08 - sync command", () => {
     expect(stderr).toContain("agentsdir init");
   });
 });
+
+describe("14 - external skill interop (open Agent Skills spec)", () => {
+  it("Given a skill installed by another tool, When sync runs, Then the skill folder keeps its bytes, gets no Codex artifact, and check exits 0", async () => {
+    const dir = await initializedRepo();
+    const skillDir = join(dir, ".agents", "skills", "external-skill");
+    await mkdir(skillDir, { recursive: true });
+    const source = `---\nname: external-skill\ndescription: A skill installed by another tool, open spec only.\n---\n\n# External skill\n\nExternal content, no catalogue field.\n`;
+    await writeFile(join(skillDir, "SKILL.md"), source, "utf8");
+    const result = await runSync(dir, { dryRun: false });
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(join(skillDir, "SKILL.md"), "utf8")).toBe(source);
+    expect(await readdir(skillDir)).toEqual(["SKILL.md"]);
+    expect((await runCheck(dir)).exitCode).toBe(0);
+  });
+});

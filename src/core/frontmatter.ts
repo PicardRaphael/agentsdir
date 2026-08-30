@@ -30,8 +30,62 @@ export interface ParsedSkill {
   body: string;
 }
 
+/**
+ * The agentsdir catalogue extension fields — everything the open Agent Skills
+ * spec does not define. Their presence marks a skill as agentsdir-managed.
+ */
+const CATALOGUE_FIELDS = [
+  "display-name",
+  "short-description",
+  "color",
+  "icon",
+  "default-prompt",
+] as const;
+
+/** The two fields the open Agent Skills spec requires; nothing more. */
+export interface OpenSkillFrontmatter {
+  name: string;
+  description: string;
+}
+
+export interface ParsedOpenSkill {
+  frontmatter: OpenSkillFrontmatter;
+  /** True when any agentsdir catalogue field is present in the frontmatter. */
+  catalogue: boolean;
+  /** Markdown body after the frontmatter block. */
+  body: string;
+}
+
 /** Parses and validates a SKILL.md; every violation is a CliError with exit code 1. */
 export function parseSkillMarkdown(source: string): ParsedSkill {
+  const { table, body } = parseFrontmatterBlock(source);
+  return {
+    frontmatter: validateFrontmatter(table),
+    body,
+  };
+}
+
+/**
+ * Parses a SKILL.md against the open Agent Skills spec only (`name` and
+ * `description`). Skills installed by other tools (e.g. `npx skills`) are held
+ * to this contract, never to the agentsdir catalogue.
+ */
+export function parseOpenSkillMarkdown(source: string): ParsedOpenSkill {
+  const { table, body } = parseFrontmatterBlock(source);
+  return {
+    frontmatter: {
+      name: requireString(table, "name"),
+      description: requireString(table, "description"),
+    },
+    catalogue: CATALOGUE_FIELDS.some((field) => table[field] !== undefined),
+    body,
+  };
+}
+
+function parseFrontmatterBlock(source: string): {
+  table: Record<string, unknown>;
+  body: string;
+} {
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) {
     throw invariant(
@@ -45,17 +99,16 @@ export function parseSkillMarkdown(source: string): ParsedSkill {
     const detail = error instanceof Error ? error.message : String(error);
     throw invariant(`SKILL.md frontmatter is not valid YAML.\n${detail}`);
   }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw invariant("SKILL.md frontmatter must be a YAML mapping of fields.");
+  }
   return {
-    frontmatter: validateFrontmatter(data),
+    table: data as Record<string, unknown>,
     body: source.slice(match[0].length),
   };
 }
 
-function validateFrontmatter(data: unknown): SkillFrontmatter {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw invariant("SKILL.md frontmatter must be a YAML mapping of fields.");
-  }
-  const table = data as Record<string, unknown>;
+function validateFrontmatter(table: Record<string, unknown>): SkillFrontmatter {
   const name = requireString(table, "name");
   const description = requireString(table, "description");
   const displayName = requireSingleLine(table, "display-name");

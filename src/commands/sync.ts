@@ -3,7 +3,10 @@ import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
 import { CliError } from "../core/errors.js";
-import { parseSkillMarkdown } from "../core/frontmatter.js";
+import {
+  parseOpenSkillMarkdown,
+  parseSkillMarkdown,
+} from "../core/frontmatter.js";
 import { planHookRegistrations } from "../core/hook-registries.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
@@ -294,11 +297,17 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
     if (!entry.isDirectory()) {
       continue;
     }
-    // the source parses and its icon exists: validateRepo blocked otherwise
     const source = await readFile(
       join(skillsDir, entry.name, "SKILL.md"),
       "utf8",
     );
+    // no catalogue field means the skill belongs to another tool (npx skills,
+    // hand-written to the open spec): sync leaves the folder untouched — a
+    // catalogue skill with missing artifacts was already blocked by validateRepo
+    if (!parseOpenSkillMarkdown(source).catalogue) {
+      continue;
+    }
+    // the source parses and its icon exists: validateRepo blocked otherwise
     const { frontmatter } = parseSkillMarkdown(source);
     const artifacts: [string, string][] = [
       ["agents/openai.yaml", renderOpenAiYaml(frontmatter)],
