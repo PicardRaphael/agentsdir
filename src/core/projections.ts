@@ -1,4 +1,4 @@
-import { entryExists, writeFileAtomic } from "./fs-utils.js";
+import { entryExists, resolveInsideRepo, writeFileAtomic } from "./fs-utils.js";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -382,10 +382,39 @@ async function projectCopies(
     if (options.dryRun) {
       continue;
     }
+    await ensureNoLinkedParent(root, file.path);
     await mkdir(dirname(absTarget), { recursive: true });
     await writeFileAtomic(absTarget, file.content);
   }
   return { changes, hashes };
+}
+
+/**
+ * Refuses to project into a directory that is a symlink. `mkdir -p` walks
+ * happily through one, so a repository shipping `.claude/rules` as a link to
+ * somewhere else had its projections written outside the git root — and the
+ * write itself looked perfectly ordinary in the report.
+ */
+async function ensureNoLinkedParent(
+  root: string,
+  relPath: string,
+): Promise<void> {
+  const parts = relPath.split("/");
+  for (let depth = 1; depth < parts.length; depth += 1) {
+    const branch = parts.slice(0, depth).join("/");
+    let stats;
+    try {
+      stats = await lstat(toAbsolute(root, branch));
+    } catch {
+      continue; // not created yet: mkdir will make a real directory
+    }
+    if (stats.isSymbolicLink()) {
+      throw new CliError(
+        `Refusing to write into ${branch}: it is a symlink, and projecting through it would write outside the repository. Replace it with a real directory, then run the command again.`,
+        EXIT_CODES.driftOrInvariant,
+      );
+    }
+  }
 }
 
 async function verifySymlinks(root: string): Promise<ProjectionDrift[]> {
@@ -658,7 +687,8 @@ function normalizeLink(target: string): string {
 }
 
 function toAbsolute(root: string, posixPath: string): string {
-  return join(root, ...posixPath.split("/"));
+  // paths here can come from the manifest of a cloned repository: confine them
+  return resolveInsideRepo(root, posixPath);
 }
 
 function sha256(content: Buffer): string {

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   deriveRuleHook,
@@ -25,10 +25,27 @@ export interface RuleDelta {
   remove?: string[];
 }
 
-/** Rule file names under `.agents/rules/`, sorted; empty when there is none. */
+/**
+ * Rule file names under `.agents/rules/`, sorted; empty when there is none.
+ *
+ * Symlinks are skipped, not followed. A rule that is a link to a file outside
+ * the repository would have its first line lifted into the `rules-index` block
+ * of AGENTS.md — a file the user then commits and pushes. Reading only regular
+ * files keeps outside content out of what gets versioned.
+ */
 export async function listRuleFiles(root: string): Promise<string[]> {
-  const entries = await readdirOrEmpty(join(root, ".agents", "rules"));
-  return entries.filter((file) => file.endsWith(".md")).sort();
+  const dir = join(root, ".agents", "rules");
+  const entries = await readdirOrEmpty(dir);
+  const files: string[] = [];
+  for (const entry of entries.sort()) {
+    if (!entry.endsWith(".md")) {
+      continue;
+    }
+    if ((await lstat(join(dir, entry)).catch(() => undefined))?.isFile()) {
+      files.push(entry);
+    }
+  }
+  return files;
 }
 
 /** Index entries for the rules on disk, adjusted by the command's delta. */

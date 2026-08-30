@@ -261,7 +261,7 @@ async function listHookScripts(
     }
   }
   for (const entry of entries ?? []) {
-    if (entry.isFile() && entry.name.endsWith(".mjs")) {
+    if (entry.isFile() && isRegistrableScript(entry.name)) {
       sources.set(
         entry.name,
         await readFile(join(hooksDir, entry.name), "utf8"),
@@ -269,8 +269,9 @@ async function listHookScripts(
     }
   }
   for (const [key, content] of Object.entries(overlay)) {
-    if (key.startsWith(`${HOOKS_DIR}/`) && key.endsWith(".mjs")) {
-      sources.set(key.slice(HOOKS_DIR.length + 1), content);
+    const name = key.slice(HOOKS_DIR.length + 1);
+    if (key.startsWith(`${HOOKS_DIR}/`) && isRegistrableScript(name)) {
+      sources.set(name, content);
     }
   }
   return [...sources.keys()]
@@ -574,4 +575,15 @@ function makeGroup(registration: HookRegistration): unknown {
 /** Cursor entry: flat, and never a matcher — Cursor's matcher vocabulary differs. */
 function makeFlat(registration: HookRegistration): unknown {
   return { command: `node .agents/hooks/${registration.file}` };
+}
+
+/**
+ * Whether a script file may be registered. The name is interpolated into the
+ * `node .agents/hooks/<file>` command the harness will run, so anything the
+ * shell could interpret is refused rather than escaped — a file dropped by a
+ * cloned repository must never become part of a command line. The grammar is
+ * the one `add hook` already enforces on the names it generates.
+ */
+export function isRegistrableScript(name: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*\.mjs$/.test(name);
 }

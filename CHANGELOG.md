@@ -8,6 +8,32 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 First public release.
 
+### Security
+
+Paths and content coming from a repository are treated as untrusted input. A
+cloned repository could otherwise make the CLI act outside the git root it had
+resolved, on the first ordinary command.
+
+- **Paths declared by the repository stay inside it.** The fingerprint keys of
+  `.agents.toml` and the skill names of `skills-lock.json` are used to build
+  file paths, and `path.join` normalises `..` instead of rejecting it — a
+  crafted key was enough to have files read, written or **deleted** outside the
+  repository, silently, in the middle of an ordinary report. Every derived path
+  now resolves through a single guard that refuses anything escaping the root.
+- **Projections are never written through a symlinked directory.** A repository
+  shipping `.claude/rules` as a link elsewhere had its projections written
+  outside the root, and the report looked perfectly normal.
+- **Rule files that are symlinks are skipped, not followed.** The first line of
+  each rule is lifted into the `rules-index` block of AGENTS.md — a file the
+  user commits and pushes — so a link out of the repository leaked outside
+  content into version control, one line per link.
+- **Hook script names are validated before registration.** The name is
+  interpolated into the `node .agents/hooks/<file>` command a harness will run;
+  a name carrying shell syntax is now refused rather than registered.
+- **A rule cannot break the managed block of AGENTS.md.** A first line carrying
+  a block marker split the block in two, so every `sync` appended another copy
+  and `check` stayed red for good.
+
 ### Fixed
 
 - **Files land whole or not at all.** Every write now goes to a sibling

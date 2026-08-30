@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "./errors.js";
 
@@ -101,4 +101,28 @@ export async function writeFileAtomic(
     await rm(transient, { force: true });
     throw error;
   }
+}
+
+/**
+ * Resolves a repo-relative POSIX path against `root`, refusing anything that
+ * escapes it.
+ *
+ * Paths reaching the engine come from files inside the repository — the
+ * manifest's fingerprint keys, the lock's skill names, rule file names — and a
+ * cloned repository is not trusted input. `path.join` normalises `..` instead
+ * of rejecting it, so a crafted key was enough to make the CLI read, write or
+ * delete outside the git root it resolved. Every derived path goes through
+ * here, and the containment the product promises becomes a checked property
+ * rather than an assumption.
+ */
+export function resolveInsideRepo(root: string, posixPath: string): string {
+  const target = resolve(root, ...posixPath.split("/"));
+  const inside = relative(resolve(root), target);
+  if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) {
+    throw new CliError(
+      `Refusing to touch "${posixPath}": it resolves outside the repository. Some file in this repo declares a path that escapes the git root — inspect it before running agentsdir again.`,
+      EXIT_CODES.driftOrInvariant,
+    );
+  }
+  return target;
 }
