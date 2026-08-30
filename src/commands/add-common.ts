@@ -1,5 +1,5 @@
 import * as prompts from "@clack/prompts";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError, CliError } from "../core/errors.js";
 import {
   writeManifest,
   type Manifest,
@@ -149,8 +149,9 @@ export async function runGeneratorCli(
       console.log(report);
     }
     process.exitCode = result.exitCode;
-  } catch (error) {
-    if (error instanceof CliError) {
+  } catch (rawError) {
+    const error = asUserFacingError(rawError);
+    if (error !== undefined) {
       if (json) {
         console.log(
           JSON.stringify({
@@ -177,6 +178,6 @@ export async function runGeneratorCli(
       process.exitCode = error.exitCode;
       return;
     }
-    throw error;
+    throw rawError;
   }
 }

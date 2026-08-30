@@ -8,7 +8,7 @@ import {
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError } from "../core/errors.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
@@ -198,13 +198,14 @@ export const initCommand = defineCommand({
       const result = await runInit(root, answers, { dryRun });
       console.log(renderReport(result, answers, { dryRun }));
       process.exitCode = result.exitCode;
-    } catch (error) {
-      if (error instanceof CliError) {
+    } catch (rawError) {
+      const error = asUserFacingError(rawError);
+      if (error !== undefined) {
         console.error(error.message);
         process.exitCode = error.exitCode;
         return;
       }
-      throw error;
+      throw rawError;
     }
   },
 });

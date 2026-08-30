@@ -196,10 +196,19 @@ export async function planHookRegistrations(
     const expectedHere = registrations.filter((entry) =>
       supports(harness, entry.event),
     );
+    // an absent registry is normal (nothing registered yet); an unreadable one
+    // must stop the run — treating it as absent would rewrite the file from
+    // scratch and drop whatever the user had registered there
     let raw: string | undefined;
     try {
       raw = await readFile(join(root, ...path.split("/")), "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new CliError(
+          `Cannot read ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to overwrite a registry it cannot read.`,
+          EXIT_CODES.environmentOrUsage,
+        );
+      }
       raw = undefined;
     }
     if (raw === undefined && expectedHere.length === 0) {
@@ -237,20 +246,27 @@ async function listHookScripts(
   overlay: Record<string, string>,
 ): Promise<HookScriptSource[]> {
   const sources = new Map<string, string>();
+  const hooksDir = join(root, ".agents", "hooks");
+  // no hooks directory is normal; one that cannot be listed is not — reading it
+  // as empty would deregister every hook from all three registries, silently
+  let entries: Awaited<ReturnType<typeof readdir>> | undefined;
   try {
-    const entries = await readdir(join(root, ".agents", "hooks"), {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".mjs")) {
-        sources.set(
-          entry.name,
-          await readFile(join(root, ".agents", "hooks", entry.name), "utf8"),
-        );
-      }
+    entries = await readdir(hooksDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw new CliError(
+        `Cannot read ${HOOKS_DIR} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to deregister hooks it cannot see.`,
+        EXIT_CODES.environmentOrUsage,
+      );
     }
-  } catch {
-    // no hooks directory yet
+  }
+  for (const entry of entries ?? []) {
+    if (entry.isFile() && entry.name.endsWith(".mjs")) {
+      sources.set(
+        entry.name,
+        await readFile(join(hooksDir, entry.name), "utf8"),
+      );
+    }
   }
   for (const [key, content] of Object.entries(overlay)) {
     if (key.startsWith(`${HOOKS_DIR}/`) && key.endsWith(".mjs")) {

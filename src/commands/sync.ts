@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
-import { CliError } from "../core/errors.js";
+import { asUserFacingError } from "../core/errors.js";
 import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
@@ -278,8 +278,9 @@ export const syncCommand = defineCommand({
         console.log(renderSyncReport(result, { dryRun }));
       }
       process.exitCode = result.exitCode;
-    } catch (error) {
-      if (error instanceof CliError) {
+    } catch (rawError) {
+      const error = asUserFacingError(rawError);
+      if (error !== undefined) {
         if (json) {
           console.log(
             JSON.stringify({
@@ -306,7 +307,7 @@ export const syncCommand = defineCommand({
         process.exitCode = error.exitCode;
         return;
       }
-      throw error;
+      throw rawError;
     }
   },
 });
