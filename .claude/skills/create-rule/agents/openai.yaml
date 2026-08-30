@@ -1,0 +1,10 @@
+interface:
+  display_name: "Create Rule"
+  short_description: "Assisted creation of a rule that earns its place"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#1F4E8C"
+  default_prompt: "Use $create-rule to create a working rule by guided interview."
+
+policy:
+  allow_implicit_invocation: false

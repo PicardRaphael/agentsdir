@@ -1,0 +1,59 @@
+---
+name: create-rule
+description: "Creates a working rule anchored in an observed failure, at the house template, indexed in AGENTS.md. Use when the user wants the agent to always follow a project convention or to stop repeating an observed mistake."
+disable-model-invocation: true
+display-name: "Create Rule"
+short-description: "Assisted creation of a rule that earns its place"
+color: "#1F4E8C"
+icon: clipboard-list
+default-prompt: "Use $create-rule to create a working rule by guided interview."
+implicit: false
+---
+
+# Create Rule
+
+A rule the agents actually follow starts from a failure someone actually
+observed. This meta-skill guides the content; `agentsdir add rule`
+guarantees the template and the index entry. Six steps, in order.
+
+## 1. Inventory before creating
+
+- Read the rules index in AGENTS.md and every file in `.agents/rules/`.
+  If the topic is already covered, improve the existing rule instead of
+  adding a competing one — two rules on one topic diverge within a week.
+
+## 2. Targeted interview
+
+- The bank is in references/interview.md. The anchor question comes
+  first: which OBSERVED failure justifies this rule? No observed failure,
+  no rule — a hypothetical fear produces noise the agent learns to skip.
+
+## 3. Routing
+
+- Mechanically verifiable behavior (formatting, lint, forbidden calls)
+  belongs to a linter, the CI or a hook (use $create-hook) — never send
+  an agent to do a linter's job.
+- An on-demand workflow is a skill (use $create-skill); bulky isolable
+  work is a sub-agent (use $create-agent). Advisory knowledge that must
+  be read in context — that is a rule: continue.
+
+## 4. Draft, then critique
+
+- Draft at the house template: H1, a first line stating WHEN to read the
+  rule, imperative tone (ALWAYS, NEVER), a real GOOD/BAD pair taken from
+  the observed failure, a reference table when useful.
+- Criticize every line with the filter
+  question: "if this line is deleted, will the agent make a mistake?"
+  Check the draft against references/rubrique.md.
+
+## 5. Generate, then write
+
+- Run `agentsdir add rule <name> [--paths "<glob>"]` — scope the rule to
+  files when it only concerns some — then replace the template body with
+  the drafted content, keeping the when-to-read line under the H1 (the
+  rules index of AGENTS.md is derived from it by `sync`).
+
+## 6. Mechanical validation — mandatory
+
+- Run `agentsdir check` (index in step, no dead reference). Any deviation
+  goes back to step 4.

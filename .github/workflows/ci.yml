@@ -23,3 +23,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # autophagy: this repo is managed by its own CLI — the local build must
+      # find zero drift here (npx would fetch the registry, not this code)
+      - run: node dist/cli.js check
+      # ubuntu proves the symlink journeys, windows (no privileges) the copy ones
+      - run: npm run test:e2e

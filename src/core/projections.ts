@@ -5,6 +5,7 @@ import {
   readdir,
   readFile,
   readlink,
+  rm,
   symlink,
   unlink,
   writeFile,
@@ -54,6 +55,12 @@ export interface ProjectOptions {
    * first (`sync` regenerates Codex artifacts before projecting them).
    */
   overlay?: Record<string, Buffer>;
+  /**
+   * Plans against a clean slate instead of the current disk: what a mode
+   * switch will find once `unproject` has removed the previous mode's
+   * projections. Dry run only — a writing run must classify the real disk.
+   */
+  assumeAbsent?: boolean;
 }
 
 export interface ProjectionChange {
@@ -79,6 +86,151 @@ export async function project(
     : projectCopies(root, options);
 }
 
+export interface UnprojectOptions {
+  /** Mode whose projections are being removed — the one leaving the manifest. */
+  mode: ProjectionMode;
+  dryRun?: boolean;
+  /** Copy mode: fingerprints recorded by the previous run, to recognize our copies. */
+  previousHashes?: Record<string, string>;
+}
+
+/**
+ * Removes the projections of `mode` before the other mode is materialized.
+ * Only what agentsdir owns is deleted — a correct link, or a copy matching its
+ * recorded fingerprint or carrying the generated header. Anything else is left
+ * on disk, where projecting the new mode reports it as a foreign target.
+ */
+export async function unproject(
+  root: string,
+  options: UnprojectOptions,
+): Promise<{ removed: string[] }> {
+  const removed =
+    options.mode === "symlink"
+      ? await ownedSymlinks(root)
+      : await ownedCopies(root, options.previousHashes ?? {});
+  if (!options.dryRun) {
+    for (const path of removed) {
+      await rm(toAbsolute(root, path), { force: true });
+    }
+    // the mirrors are ours; leftover entries keep the directory
+    for (const spec of CLAUDE_PROJECTIONS) {
+      if (spec.kind === "dir") {
+        await rmdirIfEmpty(root, spec.target);
+      }
+    }
+  }
+  return { removed };
+}
+
+async function ownedSymlinks(root: string): Promise<string[]> {
+  const owned: string[] = [];
+  for (const spec of CLAUDE_PROJECTIONS) {
+    const state = await classifyLinkTarget(
+      toAbsolute(root, spec.target),
+      relativeLinkTarget(spec),
+    );
+    if (state === "correct") {
+      owned.push(spec.target);
+    }
+  }
+  return owned;
+}
+
+async function ownedCopies(
+  root: string,
+  previousHashes: Record<string, string>,
+): Promise<string[]> {
+  const candidates = new Set<string>(Object.keys(previousHashes));
+  candidates.add("CLAUDE.md");
+  for (const spec of CLAUDE_PROJECTIONS) {
+    if (spec.kind !== "dir") {
+      continue;
+    }
+    for (const file of await walkFiles(
+      toAbsolute(root, spec.target),
+      spec.target,
+    )) {
+      candidates.add(file.rel);
+    }
+  }
+  const owned: string[] = [];
+  for (const path of [...candidates].sort()) {
+    let current: Buffer;
+    try {
+      current = await readFile(toAbsolute(root, path));
+    } catch {
+      continue;
+    }
+    const ours =
+      previousHashes[path] === sha256(current) ||
+      (path.endsWith(".md") &&
+        current.toString("utf8").includes(GENERATED_HEADER));
+    if (ours) {
+      owned.push(path);
+    }
+  }
+  return owned;
+}
+
+/**
+ * Copies left behind by a deleted source (a rule removed from `.agents/rules/`
+ * keeps its `.claude/rules/` mirror otherwise). Symlink mode has none: its four
+ * targets are fixed and always point at a live source.
+ */
+export async function removeOrphanProjections(
+  root: string,
+  options: {
+    mode: ProjectionMode;
+    hashes: Record<string, string>;
+    dryRun?: boolean;
+  },
+): Promise<{ removed: string[] }> {
+  if (options.mode === "symlink") {
+    return { removed: [] };
+  }
+  const expected = new Set(
+    (await expectedCopies(root, {})).map((file) => file.path),
+  );
+  const removed: string[] = [];
+  for (const path of Object.keys(options.hashes).sort()) {
+    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+      continue;
+    }
+    removed.push(path);
+  }
+  if (!options.dryRun) {
+    for (const path of removed) {
+      await rm(toAbsolute(root, path), { force: true });
+    }
+    for (const spec of CLAUDE_PROJECTIONS) {
+      if (spec.kind === "dir") {
+        await rmdirIfEmpty(root, spec.target);
+      }
+    }
+  }
+  return { removed };
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function rmdirIfEmpty(root: string, path: string): Promise<void> {
+  const abs = toAbsolute(root, path);
+  try {
+    if ((await readdir(abs)).length === 0) {
+      await rm(abs, { recursive: true, force: true });
+    }
+  } catch {
+    // absent or not a directory: nothing to clean up
+  }
+}
+
 export interface VerifyOptions {
   mode: ProjectionMode;
   /** Copy mode: fingerprints recorded in the manifest. */
@@ -86,7 +238,12 @@ export interface VerifyOptions {
 }
 
 export type DriftKind =
-  "missing" | "modified" | "replaced-by-copy" | "header-removed";
+  | "missing"
+  | "modified"
+  | "replaced-by-copy"
+  | "header-removed"
+  | "stale"
+  | "orphan";
 
 export interface ProjectionDrift {
   path: string;
@@ -119,7 +276,10 @@ async function projectSymlinks(
   for (const spec of CLAUDE_PROJECTIONS) {
     const expected = relativeLinkTarget(spec);
     const absTarget = toAbsolute(root, spec.target);
-    const state = await classifyLinkTarget(absTarget, expected);
+    const state =
+      options.assumeAbsent === true
+        ? "absent"
+        : await classifyLinkTarget(absTarget, expected);
     if (state === "correct") {
       changes.push({ path: spec.target, action: "unchanged", existed: true });
       continue;
@@ -160,7 +320,10 @@ async function projectCopies(
   for (const file of await expectedCopies(root, options.overlay ?? {})) {
     hashes[file.path] = sha256(file.content);
     const absTarget = toAbsolute(root, file.path);
-    const state = await classifyCopyTarget(absTarget, file, previousHashes);
+    const state =
+      options.assumeAbsent === true
+        ? "absent"
+        : await classifyCopyTarget(absTarget, file, previousHashes);
     if (state === "unchanged") {
       changes.push({ path: file.path, action: "unchanged", existed: true });
       continue;
@@ -224,10 +387,15 @@ async function verifyCopies(
   hashes: Record<string, string>,
 ): Promise<ProjectionDrift[]> {
   const drifts: ProjectionDrift[] = [];
-  const entries = Object.entries(hashes).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0,
+  // the source of truth is the reference, not the fingerprint of the last sync:
+  // comparing to the recorded hash alone would call a copy correct while its
+  // source has moved on — the most common drift of all (edit, forget to sync)
+  const expected = new Map(
+    (await expectedCopies(root, {})).map((file) => [file.path, file]),
   );
-  for (const [path, recorded] of entries) {
+  for (const [path, file] of [...expected].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
     let current: Buffer;
     try {
       current = await readFile(toAbsolute(root, path));
@@ -239,8 +407,11 @@ async function verifyCopies(
       });
       continue;
     }
+    if (current.equals(file.content)) {
+      continue;
+    }
     if (
-      path.endsWith(".md") &&
+      file.isMarkdown &&
       !current.toString("utf8").includes(GENERATED_HEADER)
     ) {
       drifts.push({
@@ -251,14 +422,35 @@ async function verifyCopies(
       });
       continue;
     }
-    if (sha256(current) !== recorded) {
-      drifts.push({
-        path,
-        kind: "modified",
-        detail:
-          "content differs from the fingerprint recorded in .agents.toml — move your edits into .agents/ and run `agentsdir sync`.",
-      });
+    // matching the recorded fingerprint means the copy is intact but stale:
+    // its source changed since the last sync
+    drifts.push(
+      hashes[path] === sha256(current)
+        ? {
+            path,
+            kind: "stale",
+            detail:
+              "the source in .agents/ changed since the last sync — run `agentsdir sync`.",
+          }
+        : {
+            path,
+            kind: "modified",
+            detail:
+              "content differs from the source of truth — move your edits into .agents/ and run `agentsdir sync`.",
+          },
+    );
+  }
+  // recorded projections whose source is gone: sync removes them
+  for (const path of Object.keys(hashes).sort()) {
+    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+      continue;
     }
+    drifts.push({
+      path,
+      kind: "orphan",
+      detail:
+        "projection left behind by a deleted source — run `agentsdir sync` to remove it.",
+    });
   }
   return drifts;
 }

@@ -1,74 +1,74 @@
-# Feuille de route
+# Roadmap
 
-Chaque jalon est livrable et testable seul. Les tâches détaillées vivent dans [`.agents/tasks/`](../.agents/tasks/) ; l'ordre d'exécution et les dépendances dans [`.agents/plan/v1.md`](../.agents/plan/v1.md).
+Every milestone is deliverable and testable on its own. The detailed tasks live in [`.agents/tasks/`](../.agents/tasks/); the execution order and the dependencies in [`.agents/plan/v1.md`](../.agents/plan/v1.md).
 
 ```mermaid
 flowchart LR
-    v01["v0.1<br/>squelette + init<br/>+ projections + doctor"] --> v02["v0.2<br/>check + sync<br/>+ CI émise"]
-    v02 --> v03["v0.3<br/>add skill / rule / agent<br/>+ métadonnées Codex"]
+    v01["v0.1<br/>skeleton + init<br/>+ projections + doctor"] --> v02["v0.2<br/>check + sync<br/>+ CI emitted"]
+    v02 --> v03["v0.3<br/>add skill / rule / agent<br/>+ Codex metadata"]
     v03 --> v04["v0.4<br/>add hook<br/>multi-harness"]
     v04 --> v05["v0.5<br/>packs verification,<br/>changelog, worktrees"]
-    v05 --> v06["v0.6<br/>création assistée :<br/>pack creator + setup-context"]
-    v06 --> v1["v1.0<br/>docs EN, e2e,<br/>publication npm"]
-    v1 --> v1x["v1.x<br/>vendor, update,<br/>pack logs"]
-    v1x --> v2["v2<br/>migrate<br/>.claude/ vers .agents/"]
+    v05 --> v06["v0.6<br/>assisted creation:<br/>creator pack + setup-context"]
+    v06 --> v1["v1.0<br/>EN docs, e2e,<br/>npm publication"]
+    v1 --> v1x["v1.x<br/>vendor, update,<br/>logs pack"]
+    v1x --> v2["v2<br/>migrate<br/>.claude/ to .agents/"]
 ```
 
-## v0.1 — Installable chez soi
+## v0.1 — Installable in-house
 
-Squelette du paquet (TypeScript, Node >= 22, bundle `npx`), détection d'environnement (symlinks, stack, harness), manifeste `.agents.toml`, `init` fonctionnel (structure `.agents/`, `AGENTS.md`, projections Claude Code en mode symlink ou copie), `doctor`.
+Package skeleton (TypeScript, Node >= 22, `npx` bundle), environment detection (symlinks, stack, harnesses), `.agents.toml` manifest, working `init` (`.agents/` structure, `AGENTS.md`, Claude Code projections in symlink or copy mode), `doctor`.
 
-**Critère de sortie** : `npx agentsdir init` exécuté sur ce repo même (autophagie) et sur un repo Python vierge produit une structure correcte, en mode copie sur une machine Windows sans mode développeur et en mode symlink sur une machine qui le permet.
+**Exit criterion**: `npx agentsdir init` run on this very repo (dogfooding) and on a blank Python repo produces a correct structure, in copy mode on a Windows machine without developer mode and in symlink mode on a machine that allows it.
 
-## v0.2 — Zéro dérive
+## v0.2 — Zero drift
 
-`check` (invariants + dérive des projections + santé des symlinks, codes de sortie normalisés), `sync`, workflow GitHub Actions émis par `init`.
+`check` (invariants + drift of the projections + health of the symlinks, normalized exit codes), `sync`, GitHub Actions workflow emitted by `init`.
 
-**Critère de sortie** : modifier une projection à la main, remplacer un symlink par une copie, ou casser un invariant fait échouer `check` avec un message actionnable ; `sync` répare tout.
+**Exit criterion**: hand-editing a projection, replacing a symlink with a copy, or breaking an invariant makes `check` fail with an actionable message; `sync` repairs everything.
 
-## v0.3 — Générateurs
+## v0.3 — Generators
 
-`add skill` (frontmatter étendu = catalogue, génération immédiate d'`agents/openai.yaml` + icône SVG depuis le jeu embarqué), `add rule` (gabarit + index des règles en bloc géré), `add agent`.
+`add skill` (extended frontmatter = catalog, immediate generation of `agents/openai.yaml` + SVG icon from the built-in set), `add rule` (template + rule index in a managed block), `add agent`.
 
-**Critère de sortie** : un skill créé par `add skill` est découvert par Claude Code (`/nom`) et affiché par Codex avec son icône et sa couleur, sans aucune édition manuelle.
+**Exit criterion**: a skill created by `add skill` is discovered by Claude Code (`/name`) and displayed by Codex with its icon and its color, without any manual editing.
 
-## v0.4 — Hooks multi-harness
+## v0.4 — Multi-harness hooks
 
-`add hook <event>` : un script portable Node, trois enregistrements (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`).
+`add hook <event>`: one portable Node script, three registrations (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`).
 
-**Critère de sortie** : un hook `PreToolUse` créé une fois se déclenche dans les trois harness.
+**Exit criterion**: a `PreToolUse` hook created once fires in all three harnesses.
 
 ## v0.5 — Packs
 
-Packs `verification` (skill `$verify` générique avec matrice de preuve et rapport HTML autonome), `changelog`, `worktrees` (scripts Node portables + `.cursor/worktrees.json`).
+`verification` pack (generic `$verify` skill with a proof matrix and a standalone HTML report), `changelog`, `worktrees` (portable Node scripts + `.cursor/worktrees.json`).
 
-**Critère de sortie** : chaque pack est installable et désinstallable isolément ; le pack worktrees fonctionne sous Windows natif (aucune dépendance à bash, perl, lsof ou trash).
+**Exit criterion**: each pack can be installed and uninstalled in isolation; the worktrees pack works on native Windows (no dependency on bash, perl, lsof or trash).
 
-## v0.6 — Création assistée
+## v0.6 — Assisted creation
 
-Le cœur du produit ([docs/creation-assistee.md](creation-assistee.md)) : pack `creator` (méta-skills `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` appliquant le protocole inventaire → interview → critique → `check`) et `$setup-context` (AGENTS.md parfait par analyse du repo + interview du non-découvrable). Contenus CLI suivis par empreinte (`sourceType: "agentsdir"`) pour la protection `update`.
+The heart of the product ([docs/creation-assistee.md](creation-assistee.md)): `creator` pack (meta-skills `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` applying the inventory → interview → critique → `check` protocol) and `$setup-context` (a perfect AGENTS.md through repo analysis + an interview on what cannot be discovered). CLI content tracked by fingerprint (`sourceType: "agentsdir"`) for `update` protection.
 
-**Critère de sortie** : sur un repo de démonstration, `$create-skill` en réponses scriptées produit un skill qui passe `check` du premier coup ; `$setup-context` améliore un AGENTS.md existant sans toucher aux sections de l'utilisateur.
+**Exit criterion**: on a demonstration repo, `$create-skill` with scripted answers produces a skill that passes `check` on the first try; `$setup-context` improves an existing AGENTS.md without touching the user's sections.
 
 ## v1.0 — Publication
 
-Documentation publique et messages de la CLI en anglais, tests de bout en bout sur repos de démonstration (TypeScript et Python) et sur les deux modes (symlink/copie), publication npm, annonce.
+Public documentation and CLI messages in English, end-to-end tests on demonstration repos (TypeScript and Python) and on both modes (symlink/copy), npm publication, announcement.
 
-**Critère de sortie** : un inconnu installe l'architecture dans son repo en moins de cinq minutes en lisant uniquement le README.
+**Exit criterion**: a stranger installs the architecture in their repo in less than five minutes by reading the README only.
 
-## v1.x — Écosystème
+## v1.x — Ecosystem
 
-`vendor <owner/repo>` (skills externes verrouillés dans `skills-lock.json`), `update` (migrations de schéma du manifeste), pack `logs`, `conductor.json`.
+`vendor <owner/repo>` (external skills locked in `skills-lock.json`), `update` (manifest schema migrations), `logs` pack, `conductor.json`.
 
 ## v2 — Migration
 
-`migrate` : inventaire d'un `.claude/`, `.cursor/rules` ou `CLAUDE.md` existant, déduplication, bascule vers `.agents/` + projections, rapport. C'est le canal d'acquisition principal : la base installée de configurations Claude Code est le plus grand vivier d'utilisateurs.
+`migrate`: inventory of an existing `.claude/`, `.cursor/rules` or `CLAUDE.md`, deduplication, switch to `.agents/` + projections, report. This is the main acquisition channel: the installed base of Claude Code configurations is the largest pool of users.
 
-## Risques suivis
+## Tracked risks
 
-| Risque | Mitigation |
+| Risk | Mitigation |
 | --- | --- |
-| Les formats de hooks des harness changent (précédent : Cursor) | Matrice de compatibilité revalidée à chaque release ; 3 harness seulement |
-| Claude Code adopte AGENTS.md nativement | La valeur se déplace vers init, générateurs et migrate — déjà au cœur du produit |
-| Symlinks Windows | Le mode copie est un citoyen de première classe, testé en CI au même titre que le mode symlink |
-| Concurrence (ruler, rulesync, npx skills) | Interopérer : spec agentskills.io respectée, compatibilité avec les skills `npx skills` |
+| The hook formats of the harnesses change (precedent: Cursor) | Compatibility matrix revalidated at every release; only 3 harnesses |
+| Claude Code adopts AGENTS.md natively | The value moves to init, the generators and migrate — already at the heart of the product |
+| Windows symlinks | Copy mode is a first-class citizen, tested in CI on the same footing as symlink mode |
+| Competition (ruler, rulesync, npx skills) | Interoperate: agentskills.io spec followed, compatibility with `npx skills` skills |

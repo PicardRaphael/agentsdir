@@ -12,6 +12,7 @@ import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
+  parseMode,
   renderManifest,
   type Manifest,
   type ProjectionMode,
@@ -553,13 +554,6 @@ function parseList(
 
 function withCore(packs: string[]): string[] {
   return packs.includes("core") ? packs : ["core", ...packs];
-}
-
-function parseMode(raw: string): ProjectionMode {
-  if (raw === "symlink" || raw === "copy") {
-    return raw;
-  }
-  throw new CliError('Unknown value for --mode (allowed: "symlink", "copy").');
 }
 
 async function askCommand(

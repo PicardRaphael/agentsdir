@@ -96,6 +96,8 @@ describe("09 - add agent", () => {
     expect(result.exitCode).toBe(0);
     expect(result.changes).toEqual([
       { path: ".agents/agents/code-reviewer.md", action: "created" },
+      // the generator projects to the harnesses too
+      { path: ".claude/agents/code-reviewer.md", action: "created" },
     ]);
     const source = await readFile(
       join(dir, ".agents", "agents", "code-reviewer.md"),

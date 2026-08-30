@@ -3,18 +3,26 @@ import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
 import { CliError } from "../core/errors.js";
-import { parseSkillMarkdown } from "../core/frontmatter.js";
+import {
+  parseOpenSkillMarkdown,
+  parseSkillMarkdown,
+} from "../core/frontmatter.js";
 import { planHookRegistrations } from "../core/hook-registries.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
+  parseMode,
   readManifest,
   renderManifest,
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { project } from "../core/projections.js";
+import {
+  project,
+  removeOrphanProjections,
+  unproject,
+} from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import {
   computeSkillHash,
@@ -29,7 +37,7 @@ import {
 } from "../templates/agents-md.js";
 import { CLI_VERSION } from "../version.js";
 
-export type SyncAction = "created" | "updated" | "ok";
+export type SyncAction = "created" | "updated" | "removed" | "ok";
 
 export interface SyncChange {
   /** Repo-relative path, always with forward slashes. */
@@ -55,6 +63,8 @@ const REPAIRABLE_RULES = new Set([
   "projection-modified",
   "projection-replaced-by-copy",
   "projection-header-removed",
+  "projection-stale",
+  "projection-orphan",
   "codex-artifact-missing",
   "codex-artifact-drift",
   "rules-index-missing",
@@ -76,10 +86,13 @@ interface PlannedFile {
  */
 export async function runSync(
   root: string,
-  options: { dryRun: boolean },
+  options: { dryRun: boolean; mode?: ProjectionMode },
 ): Promise<SyncResult> {
   const manifest = await readManifest(root);
-  const mode = manifest.projections.mode;
+  const previousMode = manifest.projections.mode;
+  const mode = options.mode ?? previousMode;
+  // an explicit switch is the only way the mode ever changes (never recomputed)
+  const switching = mode !== previousMode;
   const violations = await validateRepo(root, manifest);
   const blocking = violations.filter(
     (violation) =>
@@ -101,12 +114,34 @@ export async function runSync(
   }
   let projectionHashes: Record<string, string> = {};
   const claudeEnabled = manifest.harness.enabled.includes("claude");
+  // a switch removes the previous mode's projections first: a stale symlink
+  // would otherwise be written *through* to its source, and a stale copy would
+  // read as a foreign target
+  const removed = !claudeEnabled
+    ? []
+    : switching
+      ? (
+          await unproject(root, {
+            mode: previousMode,
+            dryRun: true,
+            previousHashes: manifest.projections.hashes,
+          })
+        ).removed
+      : // same mode: only the copies whose source was deleted
+        (
+          await removeOrphanProjections(root, {
+            mode,
+            hashes: manifest.projections.hashes,
+            dryRun: true,
+          })
+        ).removed;
   if (claudeEnabled) {
     const plan = await project(root, {
       mode,
       dryRun: true,
-      previousHashes: manifest.projections.hashes,
+      previousHashes: switching ? {} : manifest.projections.hashes,
       overlay,
+      ...(switching ? { assumeAbsent: true } : {}),
     });
     projectionHashes = plan.hashes;
     for (const change of plan.changes) {
@@ -120,6 +155,9 @@ export async function runSync(
               : "created",
       });
     }
+  }
+  for (const path of removed) {
+    planned.push({ path, action: "removed" });
   }
   planned.push(await planRulesIndex(root));
   // hook registrations: regenerated from the scripts in .agents/hooks/ —
@@ -140,7 +178,12 @@ export async function runSync(
   if (lock !== undefined) {
     planned.push(lock);
   }
-  const manifestPlan = await planManifest(root, manifest, projectionHashes);
+  const manifestPlan = await planManifest(
+    root,
+    manifest,
+    mode,
+    projectionHashes,
+  );
   planned.push(manifestPlan);
   if (!options.dryRun) {
     for (const file of planned) {
@@ -149,19 +192,38 @@ export async function runSync(
       }
     }
     if (claudeEnabled) {
+      if (switching) {
+        await unproject(root, {
+          mode: previousMode,
+          previousHashes: manifest.projections.hashes,
+        });
+      } else {
+        await removeOrphanProjections(root, {
+          mode,
+          hashes: manifest.projections.hashes,
+        });
+      }
       await project(root, {
         mode,
         dryRun: false,
-        previousHashes: manifest.projections.hashes,
+        previousHashes: switching ? {} : manifest.projections.hashes,
         overlay,
       });
     }
     // the manifest is written last: its fingerprints describe the final state
     await applyPlannedFile(root, manifestPlan);
   }
+  // removals first: that is the order they happen in, and a switch would
+  // otherwise interleave "created CLAUDE.md" with "removed CLAUDE.md"
   const changes = planned
     .map(({ path, action }) => ({ path, action }))
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    .sort((a, b) => {
+      const rank = (change: SyncChange): number =>
+        change.action === "removed" ? 0 : 1;
+      return (
+        rank(a) - rank(b) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+      );
+    });
   return { changes, violations: [], exitCode: EXIT_CODES.ok, mode };
 }
 
@@ -193,8 +255,8 @@ export function renderSyncReport(
   lines.push("");
   lines.push(
     options.dryRun
-      ? `Plan: ${count("created")} to create, ${count("updated")} to update, ${count("ok")} already up to date.`
-      : `Done: ${count("created")} created, ${count("updated")} updated, ${count("ok")} already up to date.`,
+      ? `Plan: ${count("created")} to create, ${count("updated")} to update, ${count("removed")} to remove, ${count("ok")} already up to date.`
+      : `Done: ${count("created")} created, ${count("updated")} updated, ${count("removed")} removed, ${count("ok")} already up to date.`,
   );
   return lines.join("\n");
 }
@@ -205,6 +267,8 @@ function actionLabel(action: SyncAction): string {
       return "created";
     case "updated":
       return "updated";
+    case "removed":
+      return "removed";
     case "ok":
       return "ok     ";
   }
@@ -217,6 +281,11 @@ export const syncCommand = defineCommand({
       "Regenerate every projection from the source of truth (.agents/, AGENTS.md)",
   },
   args: {
+    mode: {
+      type: "string",
+      description:
+        "Switch the projection mode (symlink|copy): the manifest is updated and every projection regenerated",
+    },
     "dry-run": {
       type: "boolean",
       description: "Print the full write plan without touching the disk",
@@ -231,7 +300,12 @@ export const syncCommand = defineCommand({
     const dryRun = args["dry-run"] === true;
     try {
       const root = await resolveRepoRoot(process.cwd());
-      const result = await runSync(root, { dryRun });
+      const mode =
+        typeof args.mode === "string" ? parseMode(args.mode) : undefined;
+      const result = await runSync(root, {
+        dryRun,
+        ...(mode === undefined ? {} : { mode }),
+      });
       if (json) {
         console.log(
           JSON.stringify({
@@ -294,11 +368,17 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
     if (!entry.isDirectory()) {
       continue;
     }
-    // the source parses and its icon exists: validateRepo blocked otherwise
     const source = await readFile(
       join(skillsDir, entry.name, "SKILL.md"),
       "utf8",
     );
+    // no catalogue field means the skill belongs to another tool (npx skills,
+    // hand-written to the open spec): sync leaves the folder untouched — a
+    // catalogue skill with missing artifacts was already blocked by validateRepo
+    if (!parseOpenSkillMarkdown(source).catalogue) {
+      continue;
+    }
+    // the source parses and its icon exists: validateRepo blocked otherwise
     const { frontmatter } = parseSkillMarkdown(source);
     const artifacts: [string, string][] = [
       ["agents/openai.yaml", renderOpenAiYaml(frontmatter)],
@@ -403,10 +483,11 @@ async function planLock(
   };
 }
 
-/** Manifest fingerprints: mode untouched, hashes replaced by this run's. */
+/** Manifest fingerprints: hashes replaced by this run's, mode only on a switch. */
 async function planManifest(
   root: string,
   manifest: Manifest,
+  mode: ProjectionMode,
   hashes: Record<string, string>,
 ): Promise<PlannedFile> {
   const next: Manifest = {
@@ -418,7 +499,7 @@ async function planManifest(
     ...(manifest.worktrees !== undefined
       ? { worktrees: manifest.worktrees }
       : {}),
-    projections: { mode: manifest.projections.mode, hashes },
+    projections: { mode, hashes },
   };
   const rendered = renderManifest(next);
   const current = await readFile(join(root, MANIFEST_FILE), "utf8");

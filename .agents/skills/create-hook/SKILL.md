@@ -1,0 +1,70 @@
+---
+name: create-hook
+description: "Creates a portable lifecycle hook registered on every enabled harness, with the right event and an explicit failure policy. Use when the user wants something to happen automatically on agent events — block, guard, log or notify."
+disable-model-invocation: true
+display-name: "Create Hook"
+short-description: "Assisted creation of a multi-harness lifecycle hook"
+color: "#B45309"
+icon: zap
+default-prompt: "Use $create-hook to create a portable hook by guided interview."
+implicit: false
+---
+
+# Create Hook
+
+One portable Node script, registered on Claude Code, Codex and Cursor by
+`agentsdir add hook`. This meta-skill guides the decisions the generator
+cannot make: the event, the failure policy, and whether a hook is even
+the right tool. Follow the six steps in order.
+
+## 1. Inventory before creating
+
+- Read the existing scripts in `.agents/hooks/` and the registrations in
+  .claude/settings.json, .codex/hooks.json and .cursor/hooks.json — never
+  duplicate an existing hook; extend or replace it consciously.
+
+## 2. Targeted interview — routing questions first
+
+- The bank is in references/interview.md. Open with the routing question:
+  PREVENT or REACT?
+  - Prevent (cancel the action): a blocking event — PreToolUse,
+    UserPromptSubmit or Stop — and the script blocks with exit 2 (the
+    hook protocol, distinct from the CLI exit codes).
+  - React (observe, log, notify): PostToolUse and kin — they can cancel
+    nothing; never promise prevention on a react event.
+- Ask fail-open or fail-closed: when the script itself crashes, should
+  the action proceed (open) or be blocked (closed)? Write the answer as
+  a comment in the script — it is a policy, not an accident.
+
+## 3. Routing — a hook is NOT a security boundary
+
+- If the need is a hard security ban (secrets, destructive commands that
+  must NEVER run), do NOT create the hook. Stop and point the user to the
+  harness permission settings (deny rules), which enforce bans even when
+  a hook is skipped, times out or crashes. A hook may assist a policy; it
+  must never be the only thing standing between the agent and the damage.
+- Advisory guidance belongs in a rule (use $create-rule); an on-demand
+  workflow is a skill (use $create-skill).
+
+## 4. Draft, then critique
+
+- Draft the script logic, then criticize every line with the filter
+  question: "if this line is deleted, will the agent make a mistake?" —
+  a hook line that changes nothing is latency for free.
+- Check the draft against references/rubrique.md: Stop hooks carry the
+  stop_hook_active guard; the timeout matches the real work; a manual
+  test command is provided.
+
+## 5. Generate, then write
+
+- Run `agentsdir add hook <Event> --name <slug> [--matcher <tool>]` to
+  create the portable script and its three registrations, then implement
+  the TODO section of the generated script with the drafted logic.
+- Test it by hand from the repo root:
+  `echo '{}' | node .agents/hooks/<file>` — verify both the pass and the
+  block paths before concluding.
+
+## 6. Mechanical validation — mandatory
+
+- Run `agentsdir check`, then `agentsdir sync --dry-run` to prove the
+  registrations are in step. Any deviation goes back to step 4.

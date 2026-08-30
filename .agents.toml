@@ -1,0 +1,51 @@
+# .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.
+
+schema = 1
+cli-version = "1.0.0"
+
+[project]
+name = "tache-14-release"
+stack = [ "node" ]
+
+[harness]
+enabled = [ "claude", "codex", "cursor" ]
+
+[packs]
+installed = [ "core", "creator" ]
+
+[projections]
+mode = "copy"
+
+[projections.hashes]
+".claude/agents/.gitkeep" = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+".claude/rules/code-conventions.md" = "sha256:3fb7391608a2f8815358e1b99694c31b648efb62575dd6c47b3598349a8ef828"
+".claude/rules/documentation.md" = "sha256:c9f336b30b1894163050334e59440eeac03df965645c524dd36bfecd6c07d85e"
+".claude/rules/memory.md" = "sha256:1c9d09fdc56c4411faabf09f374a70e28623bf170017d858ce0acc1b3dfb2b23"
+".claude/rules/taches.md" = "sha256:49597e9879008d873819f1aaee034c1838c73b07b24f3aab75ca634bbdf57921"
+".claude/skills/.gitkeep" = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+".claude/skills/create-agent/SKILL.md" = "sha256:348d46e69a90203abebc0fef896c50c21f0fe32db1f715f000f96240cfecc50f"
+".claude/skills/create-agent/agents/openai.yaml" = "sha256:d1492807b5758fe1660173bd0f06b26000bb4991dec5360d892a9c7c3a243a81"
+".claude/skills/create-agent/assets/icon.svg" = "sha256:6f7f048663d36e3909aade4c6d16c091b83a3fe31e81c7b55da1e035335d8b94"
+".claude/skills/create-agent/references/interview.md" = "sha256:605de686d29ef08c0cc05a8b8b7af66e80f0dff0fe8adf4fe331596046921357"
+".claude/skills/create-agent/references/rubrique.md" = "sha256:678a4216cae032423e5dafa0b12ceaa6c3ef9ff8a81d72a1bfe102fb328b2894"
+".claude/skills/create-hook/SKILL.md" = "sha256:d0bdaedb44fe95e73fd87480c6a12a1f3722196ee6e6b05703d4ff5c1e0cd8fa"
+".claude/skills/create-hook/agents/openai.yaml" = "sha256:b4aafd76da35168ed63a2696ad56d7258defad7dd27848208e55d9642f233faa"
+".claude/skills/create-hook/assets/icon.svg" = "sha256:49e7e5b20cfec408cc92750430c690fa1a1fa363a20160420fbb00e8b6deedc0"
+".claude/skills/create-hook/references/interview.md" = "sha256:e78398060c635c4b6f31268845b5361ec0177c1d8f0aa8a4aaa9fca53cdbe1cd"
+".claude/skills/create-hook/references/rubrique.md" = "sha256:1eb3f8fd166084dae091624230bc5f35b4fa9c59713be485ddae4e61983c29d6"
+".claude/skills/create-rule/SKILL.md" = "sha256:6a14ffb4c7d338c5b4d4d99295ddd5f8a269f4ccb47e177007872dcc48a395d0"
+".claude/skills/create-rule/agents/openai.yaml" = "sha256:d4d639f8ba780e74381c87f254e3cc22d733ad495f5bb338711c4c5dcb4750d2"
+".claude/skills/create-rule/assets/icon.svg" = "sha256:f39096f94b0b45b7d09e6fabff3775687b7ae14bca84a875f5932aef82f03d07"
+".claude/skills/create-rule/references/interview.md" = "sha256:a287404888a1679bd20b6b54b3a774917a1eff6d6da9e0278a0566560b3b113d"
+".claude/skills/create-rule/references/rubrique.md" = "sha256:d26464bc7626b0815a0f3b228fd664bcc32dfe9214636ff36fe94fa73790a8c2"
+".claude/skills/create-skill/SKILL.md" = "sha256:2295f4bc5bd4e5f458f736fd03ddcb40e1dc8ef6dbeb9db32b466282f148ffb7"
+".claude/skills/create-skill/agents/openai.yaml" = "sha256:b69a789a9c81d0c578ba32d24304976b00433ed01be79718126735f1a6c40d12"
+".claude/skills/create-skill/assets/icon.svg" = "sha256:a19c4fc3793eb1284a21d58e318ebf630c4d016e8b0043a4f0bfca965f8fe541"
+".claude/skills/create-skill/references/interview.md" = "sha256:3cb9be62347545bfaf4a8c6d0988248718b161872fcb73407941149ede4cd3e4"
+".claude/skills/create-skill/references/rubrique.md" = "sha256:1f88322c888dbe61c73ebd8474e805852d16004b8e3e492d8afbe1b295eb548b"
+".claude/skills/setup-context/SKILL.md" = "sha256:dee6395983d96fa17428d8c8c4f3b808cd8da8061646ffdaebabba1fbb2b327e"
+".claude/skills/setup-context/agents/openai.yaml" = "sha256:55e4eeefedffad8ff9e6dbbdfc248688910eaafb583bdd9e3c99bce15853c395"
+".claude/skills/setup-context/assets/icon.svg" = "sha256:7b46bcc7ed8e11a480e8c9af784d3a89c595b3340cae8e2a1addd3fc954f0275"
+".claude/skills/setup-context/references/interview.md" = "sha256:cb08a3519036193d773dc053afebdfa2ce9ca62de7a63d2a95646b08fc9e1152"
+".claude/skills/setup-context/references/rubrique.md" = "sha256:f0b498ced07193d1f2c72cbd499f65389c2d33bb8fe1fb790c0114fc2ec5356b"
+"CLAUDE.md" = "sha256:13a20ea1d75682dc70c58443f6505025789ed2503a8844647e0f9d79b6176f08"

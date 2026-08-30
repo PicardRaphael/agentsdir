@@ -1,0 +1,24 @@
+# Sub-agent quality rubric
+
+Criteria marked ▣ are enforced mechanically; the others belong to the
+critique pass (step 4).
+
+## ▣ Mechanical
+
+- ▣ Frontmatter `name` (lowercase-with-dashes, equal to the file name)
+  and non-empty `description` — a file without them is ignored SILENTLY
+  by Claude Code, the sneakiest failure of the format.
+
+## Critique pass
+
+- One single responsibility, with an explicit definition of done.
+- Required output format in the body: the parent receives only the final
+  report, nothing else survives the sub-agent.
+- Minimal tools: a reviewer has no Write or Edit; grant the smallest set
+  that completes the mission.
+- Motivated model: mechanical volume → fast model; deep reasoning →
+  strong model; otherwise inherit — never a default left by accident.
+- The prompt never assumes access to the parent conversation: the agent
+  starts fresh and must be told everything it needs.
+- Short description, third person, stating when to delegate; "use
+  proactively" only when spontaneous delegation is wanted.

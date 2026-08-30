@@ -1,71 +1,71 @@
-# Architecture technique
+# Technical architecture
 
-Ce document décrit l'architecture interne de la CLI `agentsdir`. Il suppose la lecture de la [vision du projet](SPEC.md). Les documents voisins précisent la [spécification des commandes](commandes.md), les [contrats et invariants](conventions.md), la [matrice des harness](harness.md) et la [feuille de route](roadmap.md). L'analyse du modèle source est consignée dans [recherche/analyse-nowstack.md](recherche/analyse-nowstack.md).
+This document describes the internal architecture of the `agentsdir` CLI. It assumes you have read the [project vision](SPEC.md). The neighboring documents cover the [command specification](commandes.md), the [contracts and invariants](conventions.md), the [harness matrix](harness.md) and the [roadmap](roadmap.md). The analysis of the source model is recorded in [recherche/analyse-nowstack.md](recherche/analyse-nowstack.md).
 
-## 1. Vue d'ensemble : une source de vérité, des projections
+## 1. Overview: one source of truth, many projections
 
-Le principe fondateur, hérité du modèle NowStack et validé par la convergence des standards (AGENTS.md, Agent Skills) : **tout le contenu destiné aux agents vit une seule fois dans `.agents/`**, et chaque harness reçoit une *projection* — un symlink quand le harness sait suivre un lien, un artefact généré quand il attend son propre format. Aucune projection n'est éditée à la main ; toutes sont régénérables par `sync` et vérifiables par `check`.
+The founding principle, inherited from the NowStack model and confirmed by the convergence of the standards (AGENTS.md, Agent Skills): **all agent-facing content lives exactly once in `.agents/`**, and each harness receives a *projection* — a symlink when the harness can follow a link, a generated artifact when it expects its own format. No projection is ever edited by hand; all of them are regenerable by `sync` and verifiable by `check`.
 
 ```mermaid
 flowchart TB
-    subgraph SOT[".agents/ — source de vérité (versionnée)"]
-        R["rules/<br>règles de travail"]
-        S["skills/<br>SKILL.md + frontmatter étendu"]
-        A["agents/<br>sous-agents"]
-        T["tasks/<br>tâches différées"]
-        P["plan/<br>plans persistés"]
-        M["memory/<br>état local (exclu de git)"]
+    subgraph SOT[".agents/ — source of truth (versioned)"]
+        R["rules/<br>working rules"]
+        S["skills/<br>SKILL.md + extended frontmatter"]
+        A["agents/<br>sub-agents"]
+        T["tasks/<br>deferred tasks"]
+        P["plan/<br>persisted plans"]
+        M["memory/<br>local state (excluded from git)"]
     end
-    AG["AGENTS.md<br>point d'entrée réel"]
+    AG["AGENTS.md<br>real entry point"]
 
-    SOT -->|"index des règles<br>(bloc géré)"| AG
+    SOT -->|"rule index<br>(managed block)"| AG
 
     subgraph CLAUDE["Claude Code"]
         C1["CLAUDE.md"]
         C2[".claude/rules · skills · agents"]
     end
     subgraph CODEX["Codex (OpenAI)"]
-        X1["AGENTS.md lu nativement"]
-        X2["agents/openai.yaml<br>par skill (généré)"]
-        X3["assets/icon.svg<br>par skill (généré)"]
+        X1["AGENTS.md read natively"]
+        X2["agents/openai.yaml<br>per skill (generated)"]
+        X3["assets/icon.svg<br>per skill (generated)"]
     end
     subgraph CURSOR["Cursor"]
-        U1["AGENTS.md lu nativement"]
-        U2[".agents/skills lu nativement"]
+        U1["AGENTS.md read natively"]
+        U2[".agents/skills read natively"]
     end
 
-    AG -->|"symlink ou copie"| C1
-    SOT -->|"symlinks ou copies"| C2
+    AG -->|"symlink or copy"| C1
+    SOT -->|"symlinks or copies"| C2
     AG --> X1
-    S -->|"génération"| X2
-    S -->|"génération"| X3
+    S -->|"generation"| X2
+    S -->|"generation"| X3
     AG --> U1
     S --> U2
 ```
 
-Deux conséquences structurantes :
+Two structural consequences:
 
-- **La dérive devient un état détectable**, pas une fatalité : toute divergence entre la source et une projection est un échec de `check` (code de sortie 1), branché en CI dès `init`.
-- **Ajouter un harness = ajouter un projecteur**, jamais dupliquer du contenu.
+- **Drift becomes a detectable state**, not an inevitability: any divergence between the source and a projection is a `check` failure (exit code 1), wired into CI from `init` onwards.
+- **Adding a harness = adding a projector**, never duplicating content.
 
-## 2. Modules internes de la CLI
+## 2. Internal CLI modules
 
 ```mermaid
 flowchart LR
-    CLI["cli<br>parseur de commandes<br>+ prompts interactifs"]
+    CLI["cli<br>command parser<br>+ interactive prompts"]
 
     subgraph CORE["core"]
         MAN["manifest<br>.agents.toml"]
-        PROJ["projections<br>moteur symlink | copie"]
+        PROJ["projections<br>symlink | copy engine"]
         VAL["validate<br>invariants"]
         FM["frontmatter<br>parse SKILL.md"]
-        IC["icons<br>SVG embarqués"]
-        MB["managed-blocks<br>blocs gérés"]
+        IC["icons<br>embedded SVG"]
+        MB["managed-blocks<br>managed blocks"]
         LK["lock<br>skills-lock.json"]
-        DET["detect<br>stack + environnement"]
+        DET["detect<br>stack + environment"]
     end
 
-    FS[("système de fichiers<br>du repo cible")]
+    FS[("file system<br>of the target repo")]
 
     CLI --> MAN
     CLI --> DET
@@ -82,34 +82,34 @@ flowchart LR
     DET --> FS
 ```
 
-| Module | Responsabilité | Notes de conception |
+| Module | Responsibility | Design notes |
 | --- | --- | --- |
-| `cli` | Analyse des commandes et des drapeaux, prompts interactifs, sortie terminal. | Chaque commande est un module fin qui orchestre `core` ; aucune logique métier dans la couche CLI. |
-| `core/manifest` | Lecture, validation et écriture du manifeste `.agents.toml`. | Seul module autorisé à écrire le manifeste ; porte la version du schéma et les migrations de manifeste. |
-| `core/projections` | Le moteur symlink \| copie : crée, régénère et compare chaque projection déclarée. | Une projection = une entrée déclarative (source, cible, type). Le mode vient du manifeste, jamais d'une détection à la volée en cours de route. |
-| `core/validate` | Les invariants (voir [conventions.md](conventions.md)) : identité du nom, parité d'invocation, bornes de longueur, existence des fichiers référencés, intégrité du verrou. | Lecture seule. Utilisé par `check` (échec = code 1) et rejoué par les commandes mutantes avant écriture. |
-| `core/frontmatter` | Parse et valide le frontmatter YAML des `SKILL.md`. **Le frontmatter étendu EST le catalogue** : les champs Codex (`display-name`, `color`, `icon`, `prompt`) y vivent, ignorés par Claude Code. | Corrige le défaut du modèle source (catalogue TypeScript codé en dur dans un script) : ajouter un skill = créer un dossier, pas éditer du code. |
-| `core/icons` | Rend l'icône SVG d'un skill à partir d'un jeu d'icônes embarqué : tracés lucide vendorés en JSON statique dans le paquet. | Aucune dépendance react/lucide à l'exécution ; rendu déterministe octet à octet (comparable par empreinte). |
-| `core/managed-blocks` | Insère et met à jour les blocs gérés `<!-- agentsdir:begin X -->` / `<!-- agentsdir:end X -->` dans des fichiers possédés par l'utilisateur (AGENTS.md, .gitignore, workflow CI). | Tout ce qui est hors des marqueurs appartient à l'utilisateur et n'est jamais touché — mécanisme éprouvé par `convex ai-files`. |
-| `core/lock` | `skills-lock.json` : provenance et empreinte sha256 des skills vendorés (chemins relatifs triés, contenu inclus, `.git` et `node_modules` exclus). | Détecte la dérive locale d'un skill importé ; ne télécharge rien lui-même. |
-| `core/detect` | Détection du repo cible (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`…) pour pré-remplir les commandes dev/test/lint, et de l'environnement (support des symlinks, `core.symlinks`, plateforme). | La détection paramètre les gabarits ; elle n'impose jamais un runtime au repo cible. |
+| `cli` | Parsing of commands and flags, interactive prompts, terminal output. | Each command is a thin module that orchestrates `core`; no business logic in the CLI layer. |
+| `core/manifest` | Reading, validation and writing of the `.agents.toml` manifest. | The only module allowed to write the manifest; it carries the schema version and the manifest migrations. |
+| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
+| `core/validate` | The invariants (see [conventions.md](conventions.md)): name identity, invocation parity, length bounds, existence of referenced files, lock integrity. | Read-only. Used by `check` (failure = exit code 1) and replayed by mutating commands before writing. |
+| `core/frontmatter` | Parses and validates the YAML frontmatter of `SKILL.md` files. **The extended frontmatter IS the catalog**: the Codex fields (`display-name`, `color`, `icon`, `prompt`) live there, ignored by Claude Code. | Fixes the flaw of the source model (TypeScript catalog hard-coded in a script): adding a skill = creating a folder, not editing code. |
+| `core/icons` | Renders a skill's SVG icon from an embedded icon set: lucide paths vendored as static JSON in the package. | No react/lucide dependency at runtime; byte-for-byte deterministic rendering (comparable by fingerprint). |
+| `core/managed-blocks` | Inserts and updates the managed blocks `<!-- agentsdir:begin X -->` / `<!-- agentsdir:end X -->` in files owned by the user (AGENTS.md, .gitignore, CI workflow). | Everything outside the markers belongs to the user and is never touched — a mechanism proven by `convex ai-files`. |
+| `core/lock` | `skills-lock.json`: provenance and sha256 fingerprint of vendored skills (sorted relative paths, content included, `.git` and `node_modules` excluded). | Detects local drift in an imported skill; it does not download anything itself. |
+| `core/detect` | Detection of the target repo (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`…) to pre-fill the dev/test/lint commands, and of the environment (symlink support, `core.symlinks`, platform). | Detection parameterizes the templates; it never imposes a runtime on the target repo. |
 
-## 3. Le manifeste `.agents.toml`
+## 3. The `.agents.toml` manifest
 
-Le manifeste est le contrat local de l'installation : il enregistre ce qui a été installé, dans quel mode, et les empreintes nécessaires à la détection de dérive. Il est versionné dans le repo cible.
+The manifest is the local contract of the installation: it records what was installed, in which mode, and the fingerprints needed for drift detection. It is versioned in the target repo.
 
 ```toml
 # .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.
 
-# Version du schéma du manifeste (migrations gérées par `agentsdir update`).
+# Manifest schema version (migrations handled by `agentsdir update`).
 schema = 1
 
-# Version de la CLI qui a produit la dernière écriture.
-cli-version = "0.1.0"
+# Version of the CLI that produced the last write.
+cli-version = "1.0.0"
 
 [project]
-name = "mon-produit"          # dérivé du dossier ou saisi à l'init ; paramètre les gabarits
-stack = ["node"]              # détectée puis confirmée : node | python | go | rust | autre
+name = "my-product"           # derived from the folder or entered at init; parameterizes the templates
+stack = ["node"]              # detected then confirmed: node | python | go | rust | other
 
 [harness]
 enabled = ["claude", "codex", "cursor"]
@@ -117,24 +117,24 @@ enabled = ["claude", "codex", "cursor"]
 [packs]
 installed = ["core", "creator", "verification", "changelog", "worktrees"]
 
-# Section optionnelle, semée vide par le pack worktrees : les commandes de
-# stack (installation des dépendances, clonage d'environnement) que les
-# scripts worktree-setup/-cleanup exécutent dans l'ordre. Le pack reste
-# agnostique du langage : rien n'est codé en dur dans les scripts.
+# Optional section, seeded empty by the worktrees pack: the stack commands
+# (dependency installation, environment cloning) that the worktree-setup and
+# worktree-cleanup scripts run in order. The pack stays language-agnostic:
+# nothing is hard-coded in the scripts.
 [worktrees]
 setup = ["npm ci"]
 cleanup = []
 
 [projections]
-# Mode global, décidé à l'init après test réel de l'environnement.
-# "symlink" : liens relatifs, mode git 120000.
-# "copy"    : copies générées, synchronisées par `sync`, comparées par `check`.
+# Global mode, decided at init after a real test of the environment.
+# "symlink": relative links, git mode 120000.
+# "copy"   : generated copies, synchronized by `sync`, compared by `check`.
 mode = "copy"
 
-# En mode "copy" uniquement : empreinte sha256 du contenu généré de chaque
-# projection, telle qu'écrite par le dernier `sync`. `check` compare le fichier
-# sur disque à cette empreinte : un écart signifie une édition manuelle de la
-# projection (la correction va dans .agents/, puis `sync`).
+# In "copy" mode only: sha256 fingerprint of the generated content of each
+# projection, as written by the last `sync`. `check` compares the file on disk
+# to this fingerprint: a mismatch means the projection was edited by hand
+# (the fix goes into .agents/, then `sync`).
 [projections.hashes]
 "CLAUDE.md" = "sha256:…"
 ".claude/rules" = "sha256:…"
@@ -142,58 +142,58 @@ mode = "copy"
 ".claude/agents" = "sha256:…"
 ```
 
-Règles de possession :
+Ownership rules:
 
-- Le manifeste appartient à la CLI (en-tête explicite) ; `check` échoue s'il est absent ou d'un schéma inconnu.
-- `.agents/` appartient à l'utilisateur — la CLI n'y écrit que sur `init`, `add` et `vendor`, à une exception près : les artefacts générés de chaque skill (`agents/openai.yaml`, `assets/icon.svg`), dérivés du frontmatter et régénérés par `sync`. Le contenu rédigé (`SKILL.md`, règles, sections libres d'`AGENTS.md`) n'est jamais touché par `sync` : une source invalide fait échouer `sync` avec le diagnostic de `check`, elle n'est pas « corrigée ».
-- Les projections appartiennent à la CLI ; les fichiers à blocs gérés sont partagés (l'utilisateur possède tout ce qui est hors marqueurs).
+- The manifest belongs to the CLI (explicit header); `check` fails if it is missing or has an unknown schema.
+- `.agents/` belongs to the user — the CLI only writes there on `init`, `add` and `vendor`, with one exception: the generated artifacts of each skill (`agents/openai.yaml`, `assets/icon.svg`), derived from the frontmatter and regenerated by `sync`. Authored content (`SKILL.md`, rules, free-form sections of `AGENTS.md`) is never touched by `sync`: an invalid source makes `sync` fail with the `check` diagnostic, it is not "fixed".
+- Projections belong to the CLI; files with managed blocks are shared (the user owns everything outside the markers).
 
-## 4. Stratégie symlink / repli
+## 4. Symlink / fallback strategy
 
-Le mode est décidé une fois, à l'`init`, par un test réel — pas par une heuristique de plateforme — puis figé dans le manifeste. `doctor` rejoue le test et propose la bascule si l'environnement a changé.
+The mode is decided once, at `init`, by a real test — not by a platform heuristic — then frozen in the manifest. `doctor` replays the test and offers to switch if the environment has changed.
 
 ```mermaid
 flowchart TD
-    START["agentsdir init"] --> TEST["Test réel : créer un symlink<br>temporaire dans le repo cible"]
-    TEST -->|échec| COPY["mode = copy"]
-    TEST -->|succès| GITCONF{"git config core.symlinks<br>= true ?"}
-    GITCONF -->|non| COPY
-    GITCONF -->|oui| SYM["mode = symlink"]
-    SYM --> WRITE["Écrire le mode dans<br>.agents.toml"]
+    START["agentsdir init"] --> TEST["Real test: create a temporary<br>symlink in the target repo"]
+    TEST -->|failure| COPY["mode = copy"]
+    TEST -->|success| GITCONF{"git config core.symlinks<br>= true?"}
+    GITCONF -->|no| COPY
+    GITCONF -->|yes| SYM["mode = symlink"]
+    SYM --> WRITE["Write the mode into<br>.agents.toml"]
     COPY --> WRITE
 ```
 
-Comportement par mode :
+Behavior by mode:
 
-- **Mode symlink.** `CLAUDE.md → AGENTS.md` et `.claude/{rules,skills,agents} → ../.agents/*` en liens **relatifs**, entrés dans l'index git en mode `120000`. `check` vérifie les deux faces : `git ls-files -s` doit afficher `120000`, et l'état disque doit être un lien réel — un symlink silencieusement remplacé par une copie (la dérive que le modèle source ne détecte pas) fait échouer la CI.
-- **Mode copie (repli).** Chaque projection est un fichier généré portant l'en-tête « GENERATED by agentsdir — edit the source in .agents/ and run `agentsdir sync` ». Son empreinte est enregistrée dans `[projections.hashes]` du manifeste à chaque `sync`. `check` détecte alors : (a) une copie modifiée à la main (empreinte disque ≠ manifeste) ; (b) une copie en retard sur sa source (empreinte attendue recalculée depuis `.agents/` ≠ manifeste). Un hook `pre-commit` optionnel lance `sync` automatiquement.
-- **`CLAUDE.md` en mode copie : un pont, pas une copie** (décision actée à la tâche 05). Le fichier généré contient l'import `@AGENTS.md` suivi de l'en-tête généré : une seule source est lue par Claude Code quel que soit le mécanisme (symlink ou import). Validation empirique : le `CLAUDE.md` pont de ce repo fonctionne ainsi depuis le premier commit. L'alternative « copie complète du contenu avec en-tête » a été écartée : contenu dupliqué, dérive garantie entre deux `sync`. Dans les copies de répertoires (`.claude/{rules,skills,agents}`), l'en-tête n'est posé que sur les fichiers Markdown ; les autres fichiers sont copiés à l'octet près.
+- **Symlink mode.** `CLAUDE.md → AGENTS.md` and `.claude/{rules,skills,agents} → ../.agents/*` as **relative** links, recorded in the git index with mode `120000`. `check` verifies both sides: `git ls-files -s` must show `120000`, and the on-disk state must be a real link — a symlink silently replaced by a copy (the drift the source model does not detect) fails CI.
+- **Copy mode (fallback).** Each projection is a generated file carrying the header "GENERATED by agentsdir — edit the source in .agents/ and run `agentsdir sync`". Its fingerprint is recorded in the manifest's `[projections.hashes]` on every `sync`. `check` then detects: (a) a copy edited by hand (disk fingerprint ≠ manifest); (b) a copy lagging behind its source (expected fingerprint recomputed from `.agents/` ≠ manifest). An optional `pre-commit` hook runs `sync` automatically.
+- **`CLAUDE.md` in copy mode: a bridge, not a copy** (decision recorded in task 05). The generated file contains the `@AGENTS.md` import followed by the generated header: a single source is read by Claude Code whatever the mechanism (symlink or import). Empirical validation: this repo's bridge `CLAUDE.md` has worked this way since the first commit. The alternative "full copy of the content with a header" was ruled out: duplicated content, guaranteed drift between two `sync` runs. In directory copies (`.claude/{rules,skills,agents}`), the header is only placed on Markdown files; other files are copied byte for byte.
 
-Fait vérifié sur la machine de développement du projet : dans un repo fraîchement créé, `ln -s` sous Git Bash produit une copie (ou échoue), pas un lien symbolique — **le mode copie (repli) n'est pas un cas théorique, il sert dès le premier jour**, y compris pour développer agentsdir lui-même.
+Fact verified on the project's development machine: in a freshly created repo, `ln -s` under Git Bash produces a copy (or fails), not a symbolic link — **copy mode (fallback) is not a theoretical case, it is in use from day one**, including for developing agentsdir itself.
 
-## 5. Décisions techniques
+## 5. Technical decisions
 
-| Décision | Choix | Justification |
+| Decision | Choice | Rationale |
 | --- | --- | --- |
-| Langage | TypeScript strict, Node >= 22 | Écosystème des harness ; typage des contrats (frontmatter, manifeste). Plancher relevé de 20 à 22 en août 2026 (Node 20 EOL). |
-| Distribution | `npx agentsdir` — bundle unique | Zéro installation ; Node n'est requis que sur la machine du développeur, jamais par le repo cible. Binaires compilés envisageables plus tard. |
-| Dépendances de la CLI | Minimales : `citty` (parseur, choix acté à la tâche 01), `@clack/prompts` (interactif), `smol-toml` (manifeste), `yaml` (lecture du frontmatter des `SKILL.md` — YAML est le format du standard Agent Skills, le réimplémenter serait un nid à bugs ; **parse seul** : tout rendu YAML est fait main pour le déterminisme octet à octet — ajout acté à la tâche 06) — chacune ajoutée au moment où le code l'utilise | Un bundle léger se lance vite via npx et limite la surface de rupture. |
-| Dépendances du repo cible | **Aucune** | Les artefacts générés sont du Markdown, YAML, JSON et SVG purs. Un repo Python reste 100 % Python. |
-| Codes de sortie | `0` = ok · `1` = dérive ou invariant violé · `2` = erreur d'environnement ou d'utilisation | Contrat CI stable ; documenté par commande dans [commandes.md](commandes.md). |
-| `--dry-run` | Obligatoire sur toute commande mutante | Affiche le plan d'écriture complet sans toucher au disque. |
-| Idempotence | Obligatoire | Rejouer `init`, `sync` ou `add` sur un état déjà conforme ne produit aucune écriture (et le dit). |
-| Rendu déterministe | Obligatoire | Toute génération (YAML, SVG, blocs gérés) est reproductible octet à octet — condition des comparaisons par empreinte. |
+| Language | TypeScript strict, Node >= 22 | Harness ecosystem; typing of the contracts (frontmatter, manifest). Floor raised from 20 to 22 in August 2026 (Node 20 EOL). |
+| Distribution | `npx agentsdir` — single bundle | Zero installation; Node is only required on the developer's machine, never by the target repo. Compiled binaries are conceivable later. |
+| CLI dependencies | Minimal: `citty` (parser, choice recorded in task 01), `@clack/prompts` (interactive), `smol-toml` (manifest), `yaml` (reading the frontmatter of `SKILL.md` files — YAML is the format of the Agent Skills standard, reimplementing it would be a bug nest; **parsing only**: all YAML rendering is hand-written for byte-for-byte determinism — addition recorded in task 06) — each one added at the moment the code uses it | A light bundle starts quickly via npx and limits the breakage surface. |
+| Target repo dependencies | **None** | The generated artifacts are pure Markdown, YAML, JSON and SVG. A Python repo stays 100% Python. |
+| Exit codes | `0` = ok · `1` = drift or violated invariant · `2` = environment or usage error | Stable CI contract; documented per command in [commandes.md](commandes.md). |
+| `--dry-run` | Mandatory on every mutating command | Prints the full write plan without touching the disk. |
+| Idempotence | Mandatory | Replaying `init`, `sync` or `add` on an already conformant state produces no write (and says so). |
+| Deterministic rendering | Mandatory | Every generation (YAML, SVG, managed blocks) is reproducible byte for byte — a prerequisite for fingerprint comparisons. |
 
-## 6. Corrections d'office par rapport au modèle source
+## 6. Built-in corrections relative to the source model
 
-L'analyse du repo NowStack ([recherche/analyse-nowstack.md](recherche/analyse-nowstack.md)) a établi le modèle **et** ses défauts. La CLI intègre les correctifs d'office :
+The analysis of the NowStack repo ([recherche/analyse-nowstack.md](recherche/analyse-nowstack.md)) established the model **and** its flaws. The CLI ships the fixes by default:
 
-| Défaut constaté chez NowStack | Correctif agentsdir |
+| Flaw observed in NowStack | agentsdir fix |
 | --- | --- |
-| La vérification des skills annoncée « CI » n'est branchée dans aucun workflow. | `init` émet `.github/workflows/agents-check.yml` exécutant `npx agentsdir check`. |
-| Aucun `.gitattributes` : fins de ligne et empreintes sha256 dépendantes de la machine. | `init` écrit `eol=lf` sur les scripts et tout fichier hashé. |
-| `.agents/memory/` versionné avec une donnée personnelle substituable (adresse e-mail). | `memory/` exclu de git ; modèle versionné à part. |
-| Catalogue des skills codé en dur dans un script TypeScript du repo. | Le frontmatter étendu de chaque `SKILL.md` est le catalogue ; la CLI le lit, rien à éditer ailleurs. |
-| Scripts uniquement Unix (bash, perl, `lsof`, `trash`). | Tous les scripts émis sont en Node portable. |
-| Liste blanche `.claude/settings.json` incohérente avec les scripts du repo (demandes d'autorisation en cascade). | La liste blanche générée couvre exactement les commandes que la CLI émet. |
-| Remplacement silencieux d'un symlink par une copie : indétectable. | `check` vérifie mode git `120000` + état disque (mode symlink) ou empreintes (mode copie). |
+| The skill verification announced as "CI" is not wired into any workflow. | `init` emits `.github/workflows/agents-check.yml` running `npx agentsdir check`. |
+| No `.gitattributes`: line endings and sha256 fingerprints depend on the machine. | `init` writes `eol=lf` for the scripts and every hashed file. |
+| `.agents/memory/` versioned with a substitutable personal datum (email address). | `memory/` excluded from git; template versioned separately. |
+| Skill catalog hard-coded in a TypeScript script in the repo. | The extended frontmatter of each `SKILL.md` is the catalog; the CLI reads it, nothing to edit elsewhere. |
+| Unix-only scripts (bash, perl, `lsof`, `trash`). | All emitted scripts are portable Node. |
+| `.claude/settings.json` allowlist inconsistent with the repo's scripts (cascading permission prompts). | The generated allowlist covers exactly the commands the CLI emits. |
+| Silent replacement of a symlink by a copy: undetectable. | `check` verifies git mode `120000` + on-disk state (symlink mode) or fingerprints (copy mode). |

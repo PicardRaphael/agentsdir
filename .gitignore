@@ -1,13 +1,15 @@
-# Dépendances et sorties de build (quand le code arrivera)
+# Dépendances et sorties de build
 node_modules/
 dist/
 coverage/
 
-# État local des agents : jamais versionné (données personnelles possibles).
-# Un modèle est versionné à part quand nécessaire.
-/.agents/memory/
-/.agents/output/
-
 # Divers
 *.log
 .DS_Store
+
+# État local des agents : jamais versionné (données personnelles possibles) —
+# bloc géré par agentsdir.
+# agentsdir:begin ignore
+/.agents/memory/
+/.agents/output/
+# agentsdir:end ignore

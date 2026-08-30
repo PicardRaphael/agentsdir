@@ -23,6 +23,7 @@ import {
   ensureValidName,
   isInteractive,
   renderGeneratorReport,
+  resyncProjections,
   runGeneratorCli,
   type GeneratorResult,
 } from "./add-common.js";
@@ -84,10 +85,21 @@ export async function runAddSkill(
     }
   }
   return {
-    changes: files.map(([rel]) => ({
-      path: `.agents/skills/${answers.name}/${rel}`,
-      action: "created" as const,
-    })),
+    changes: [
+      ...files.map(([rel]) => ({
+        path: `.agents/skills/${answers.name}/${rel}`,
+        action: "created" as const,
+      })),
+      ...(await resyncProjections(root, manifest, {
+        ...options,
+        overlay: Object.fromEntries(
+          files.map(([rel, content]) => [
+            `.agents/skills/${answers.name}/${rel}`,
+            content,
+          ]),
+        ),
+      })),
+    ],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
   };

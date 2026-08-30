@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
-import { parseSkillMarkdown } from "./frontmatter.js";
+import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
 import { extractBlock } from "./managed-blocks.js";
 import type { Manifest } from "./manifest.js";
 import { verify } from "./projections.js";
@@ -158,6 +158,29 @@ async function validateSkill(
       },
     ];
   }
+  let open;
+  try {
+    open = parseOpenSkillMarkdown(source);
+  } catch (error) {
+    return [
+      {
+        path: skillPath,
+        rule: "skill-frontmatter",
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      },
+    ];
+  }
+  // a skill without any catalogue field and without generated artifacts was
+  // installed by another tool (npx skills, hand-written to the open spec):
+  // hold it to the open Agent Skills spec only, never to the catalogue
+  const managed =
+    open.catalogue ||
+    (await pathExists(join(skillsDir, folder, "agents", "openai.yaml"))) ||
+    (await pathExists(join(skillsDir, folder, "assets", "icon.svg")));
+  if (!managed) {
+    return validateOpenSkill(open.frontmatter.name, folder, skillPath);
+  }
   let parsed;
   try {
     parsed = parseSkillMarkdown(source);
@@ -277,6 +300,39 @@ async function validateSkill(
       severity: "error",
     });
   }
+  return violations;
+}
+
+/** Open-spec invariants only: folder identity and the shared name grammar. */
+function validateOpenSkill(
+  name: string,
+  folder: string,
+  skillPath: string,
+): Violation[] {
+  const violations: Violation[] = [];
+  if (name !== folder) {
+    violations.push({
+      path: skillPath,
+      rule: "skill-name-identity",
+      message: `frontmatter \`name\` is "${name}" but the folder is "${folder}" — they must be identical (no alias).`,
+      severity: "error",
+    });
+  }
+  if (!NAME_SPEC.test(name)) {
+    violations.push({
+      path: skillPath,
+      rule: "skill-name-spec",
+      message: `skill name "${name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      severity: "error",
+    });
+  }
+  violations.push({
+    path: skillPath,
+    rule: "skill-external",
+    message:
+      "outside the agentsdir catalogue (no catalogue field, no generated artifact) — validated against the open Agent Skills spec only; `sync` leaves it untouched.",
+    severity: "info",
+  });
   return violations;
 }
 
