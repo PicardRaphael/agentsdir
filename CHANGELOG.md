@@ -41,6 +41,14 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **A file too large to read no longer advises fixing permissions.** Exceeding
+  the maximum string length of the runtime raised a `RangeError`, which was
+  reported with the message written for filesystem errors — advice that had
+  nothing to do with the problem. It now says which kind of file is too large
+  and what to do about it.
+- **A lone carriage return no longer passes as a single-line frontmatter
+  value**, where it would have travelled into the generated YAML.
+
 - **Files land whole or not at all.** Every write now goes to a sibling
   temporary file and is put in place by a single rename, so an interrupted run
   leaves either the old content or the new one — never a half-written file. The

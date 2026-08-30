@@ -182,7 +182,8 @@ function requireSingleLine(
   field: string,
 ): string {
   const value = requireString(table, field);
-  if (value.includes("\n")) {
+  // CR as well as LF: a lone \r would otherwise travel into the generated YAML
+  if (/[\r\n]/.test(value)) {
     throw invariant(`Frontmatter field \`${field}\` must be a single line.`);
   }
   return value;

@@ -31,6 +31,18 @@ export function asUserFacingError(error: unknown): CliError | undefined {
   if (error instanceof CliError) {
     return error;
   }
+  // a file too large for a JS string is an environment problem the user can
+  // act on, but it carries no errno — and the path/permissions advice below
+  // would be plainly wrong for it
+  if (
+    error instanceof RangeError &&
+    /string longer than/i.test(error.message)
+  ) {
+    return new CliError(
+      `${error.message} — a file under .agents/ is too large for agentsdir to read. Remove or split it.`,
+      EXIT_CODES.environmentOrUsage,
+    );
+  }
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   if (typeof code !== "string" || !(error instanceof Error)) {
     return undefined;
