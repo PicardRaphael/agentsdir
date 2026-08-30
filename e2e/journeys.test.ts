@@ -1,5 +1,13 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,11 +95,7 @@ async function runJourney(dir: string, mode: "symlink" | "copy") {
 }
 
 async function expectSkillArtifacts(dir: string, name: string): Promise<void> {
-  for (const rel of [
-    `SKILL.md`,
-    `agents/openai.yaml`,
-    `assets/icon.svg`,
-  ]) {
+  for (const rel of [`SKILL.md`, `agents/openai.yaml`, `assets/icon.svg`]) {
     const path = join(dir, ".agents", "skills", name, ...rel.split("/"));
     expect((await lstat(path)).isFile(), `${name}/${rel}`).toBe(true);
   }
@@ -106,7 +110,9 @@ describe.each<Stack>(["typescript", "python"])(
       await expectSkillArtifacts(dir, "demo-flow");
       const manifest = await readFile(join(dir, ".agents.toml"), "utf8");
       expect(manifest).toContain('mode = "copy"');
-      expect(manifest).toContain(stack === "typescript" ? '"node"' : '"python"');
+      expect(manifest).toContain(
+        stack === "typescript" ? '"node"' : '"python"',
+      );
       // copy mode: the bridge is a regular file carrying the generated header
       const bridge = await lstat(join(dir, "CLAUDE.md"));
       expect(bridge.isSymbolicLink()).toBe(false);
@@ -121,9 +127,9 @@ describe.each<Stack>(["typescript", "python"])(
         await expectSkillArtifacts(dir, "demo-flow");
         const manifest = await readFile(join(dir, ".agents.toml"), "utf8");
         expect(manifest).toContain('mode = "symlink"');
-        expect(
-          (await lstat(join(dir, "CLAUDE.md"))).isSymbolicLink(),
-        ).toBe(true);
+        expect((await lstat(join(dir, "CLAUDE.md"))).isSymbolicLink()).toBe(
+          true,
+        );
       },
     );
   },
@@ -132,7 +138,14 @@ describe.each<Stack>(["typescript", "python"])(
 describe("14 - npx skills interoperability", () => {
   it("Given a skill installed by another tool, When sync and check run, Then the skill keeps its bytes, gets no artifact, and check passes", async () => {
     const dir = await makeDemoRepo("typescript");
-    const init = await runCli(dir, ["init", "--yes", "--mode", "copy", "--packs", "core"]);
+    const init = await runCli(dir, [
+      "init",
+      "--yes",
+      "--mode",
+      "copy",
+      "--packs",
+      "core",
+    ]);
     expect(init.code, init.stderr).toBe(0);
     const skillDir = join(dir, ".agents", "skills", "vendor-notes");
     await mkdir(skillDir, { recursive: true });
