@@ -54,12 +54,27 @@ faute de quoi l'utilisateur lui prêtera une autorité qu'elle n'a pas.
 2. *Analyse* — un méta-skill qui lit le journal, produit un compte rendu et
    propose des changements. C'est du jugement, donc un skill, pas du code.
 
-**Vie privée, non négociable.** Les payloads de hooks contiennent les prompts de
-l'utilisateur et des extraits de fichiers. Le journal ne retient que des
-métadonnées : horodatage, type d'événement, nom d'outil, chemin relatif, nom du
-skill ou du sous-agent invoqué. Jamais de contenu de prompt, jamais de contenu
-de fichier. Le journal vit sous `.agents/output/` — déjà exclu de git par le
-bloc géré de `.gitignore` — et jamais sous `.agents/memory/` qui a un autre rôle.
+**Vie privée, non négociable.** Cet outil s'installe dans le dépôt de quelqu'un
+d'autre — dépôt privé, dépôt client, dépôt sous NDA. Trois niveaux de risque, et
+le troisième est le plus facile à sous-estimer :
+
+1. *Le contenu.* Les payloads de hooks portent les prompts de l'utilisateur et
+   des extraits de fichiers. Rien de tout cela n'est journalisé, jamais.
+2. *Les chemins.* Un chemin est lui-même une donnée :
+   `src/clients/acme/contrat-2026.ts` nomme un client. Le journal ne retient que
+   des chemins **relatifs à la racine** — jamais absolus, qui révéleraient en
+   plus l'arborescence et le nom de session de la machine. Prévoir un moyen
+   d'exclure des sous-arbres (mêmes globs que `add rule --paths`), pour qu'un
+   dépôt sensible puisse mesurer son usage sans consigner où.
+3. *La fuite par commit.* Le vrai danger n'est pas le journal, c'est le journal
+   **versionné par mégarde**. Le bloc géré de `.gitignore` couvre déjà
+   `.agents/output/`, mais une convention n'est pas une garantie : `check` doit
+   **échouer** si le journal est suivi par git. Un garde actif, au même titre que
+   les autres invariants.
+
+Le journal vit donc sous `.agents/output/`, jamais sous `.agents/memory/` qui a
+un autre rôle, et ne retient que : horodatage, type d'événement, nom d'outil,
+chemin relatif (filtrable), nom du skill ou du sous-agent invoqué.
 
 **Coût.** Un hook sur `PreToolUse` s'exécute à chaque appel d'outil : le script
 doit se limiter à un `appendFile` d'une ligne, sans lecture ni calcul. Mesurer
@@ -81,8 +96,11 @@ installée par le pack.
   sous-agents, les outils utilisés et les chemins touchés.
 - Le journal ne contient aucun contenu de prompt ni de fichier — vérifié par un
   test qui fait passer un prompt reconnaissable et vérifie son absence.
-- Le journal n'est jamais versionné : il vit sous `.agents/output/`, et
-  `git status` reste propre après une session observée.
+- Le journal n'est jamais versionné : il vit sous `.agents/output/`, `git status`
+  reste propre après une session observée, et `check` **échoue** si le journal
+  est suivi par git — la protection est vérifiée, pas seulement conventionnelle.
+- Les chemins journalisés sont relatifs à la racine du dépôt, et un dépôt peut
+  exclure des sous-arbres de la journalisation.
 - Un méta-skill produit un compte rendu qui distingue trois catégories : ce qui
   est utilisé, ce qui ne l'est jamais, et **ce que la mesure ne peut pas dire**.
 - Pour les règles, le rapport parle de pertinence (périmètre recoupé) et non
