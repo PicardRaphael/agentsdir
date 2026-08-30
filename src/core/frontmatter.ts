@@ -82,11 +82,37 @@ export function parseOpenSkillMarkdown(source: string): ParsedOpenSkill {
   };
 }
 
+/**
+ * Reads the frontmatter table of a sub-agent file (`.agents/agents/*.md`).
+ * Returns undefined when the block is absent or is not valid YAML: invariant 14
+ * turns that into a listed violation, because `check` must report every
+ * offending file rather than throw on the first one.
+ */
+export function readAgentFrontmatter(
+  source: string,
+): Record<string, unknown> | undefined {
+  const match = source.match(FRONTMATTER_BLOCK);
+  if (!match) {
+    return undefined;
+  }
+  let data: unknown;
+  try {
+    data = parse(match[1] ?? "");
+  } catch {
+    return undefined;
+  }
+  return typeof data === "object" && data !== null && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : undefined;
+}
+
+const FRONTMATTER_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+
 function parseFrontmatterBlock(source: string): {
   table: Record<string, unknown>;
   body: string;
 } {
-  const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  const match = source.match(FRONTMATTER_BLOCK);
   if (!match) {
     throw invariant(
       "SKILL.md has no frontmatter block (`---` ... `---`) at the top of the file.",
