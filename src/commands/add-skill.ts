@@ -1,4 +1,5 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { pathExists } from "../core/fs-utils.js";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -240,12 +241,3 @@ export const addSkillCommand = defineCommand({
     });
   },
 });
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}

@@ -1,5 +1,6 @@
+import { pathExists } from "./fs-utils.js";
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
 import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
@@ -546,13 +547,4 @@ async function walkSorted(
     }
   }
   return files;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

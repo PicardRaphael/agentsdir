@@ -1,15 +1,8 @@
-import {
-  readdir,
-  readFile,
-  mkdir,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { pathExists } from "../core/fs-utils.js";
+import { readdir, readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
-import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   readManifest,
@@ -28,17 +21,13 @@ import {
   type PackFile,
 } from "../packs/index.js";
 import {
-  deriveRuleHook,
-  renderRulesIndexContent,
-  type RuleIndexEntry,
-} from "../templates/agents-md.js";
-import {
   renderGeneratorReport,
   resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
+import { planRulesIndex } from "./rules-index.js";
 
 export interface PackResult extends GeneratorResult {
   /** Human notes (kept files…) — stderr, never stdout. */
@@ -406,47 +395,7 @@ async function planRulesIndexWith(
     remove: string[];
   },
 ): Promise<string | undefined> {
-  let agentsMd: string;
-  try {
-    agentsMd = await readFile(join(root, "AGENTS.md"), "utf8");
-  } catch {
-    throw new CliError(
-      "AGENTS.md is missing — run `agentsdir init` first.",
-      EXIT_CODES.driftOrInvariant,
-    );
-  }
-  const ruleSources = new Map<string, string>();
-  try {
-    for (const file of (await readdir(join(root, ".agents", "rules"))).sort()) {
-      if (file.endsWith(".md")) {
-        ruleSources.set(
-          file,
-          await readFile(join(root, ".agents", "rules", file), "utf8"),
-        );
-      }
-    }
-  } catch {
-    // no rules directory yet
-  }
-  for (const entry of delta.add) {
-    ruleSources.set(entry.file, entry.content);
-  }
-  for (const file of delta.remove) {
-    ruleSources.delete(file);
-  }
-  const entries: RuleIndexEntry[] = [...ruleSources.keys()]
-    .sort()
-    .map((file) => ({
-      file,
-      hook: deriveRuleHook(ruleSources.get(file) ?? ""),
-    }));
-  const next = upsertBlock(
-    agentsMd,
-    "rules-index",
-    renderRulesIndexContent(entries),
-    "html",
-  );
-  return next === agentsMd ? undefined : next;
+  return (await planRulesIndex(root, delta))?.next;
 }
 
 /**
@@ -565,14 +514,5 @@ async function removeIfNoFilesLeft(dir: string): Promise<void> {
     }
   } catch {
     // absent or not a directory: nothing to clean
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
   }
 }

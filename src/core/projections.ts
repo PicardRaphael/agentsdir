@@ -1,3 +1,4 @@
+import { entryExists } from "./fs-utils.js";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -245,7 +246,7 @@ export async function removeOrphanProjections(
   );
   const removed: string[] = [];
   for (const path of Object.keys(options.hashes).sort()) {
-    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+    if (expected.has(path) || !(await entryExists(toAbsolute(root, path)))) {
       continue;
     }
     removed.push(path);
@@ -261,15 +262,6 @@ export async function removeOrphanProjections(
     }
   }
   return { removed };
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function rmdirIfEmpty(root: string, path: string): Promise<void> {
@@ -494,7 +486,7 @@ async function verifyCopies(
   }
   // recorded projections whose source is gone: sync removes them
   for (const path of Object.keys(hashes).sort()) {
-    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+    if (expected.has(path) || !(await entryExists(toAbsolute(root, path)))) {
       continue;
     }
     drifts.push({

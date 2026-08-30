@@ -1,4 +1,5 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { pathExists } from "../core/fs-utils.js";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
@@ -180,12 +181,3 @@ export const addHookCommand = defineCommand({
     });
   },
 });
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}

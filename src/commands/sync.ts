@@ -8,7 +8,6 @@ import {
   parseSkillMarkdown,
 } from "../core/frontmatter.js";
 import { planHookRegistrations } from "../core/hook-registries.js";
-import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
@@ -19,6 +18,7 @@ import {
   type ProjectionMode,
 } from "../core/manifest.js";
 import { refreshProjections } from "../core/projections.js";
+import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import {
   computeSkillHash,
@@ -26,11 +26,6 @@ import {
   type Violation,
 } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
-import {
-  deriveRuleHook,
-  renderRulesIndexContent,
-  type RuleIndexEntry,
-} from "../templates/agents-md.js";
 import { CLI_VERSION } from "../version.js";
 
 export type SyncAction = "created" | "updated" | "removed" | "ok";
@@ -136,7 +131,7 @@ export async function runSync(
   for (const path of removed) {
     planned.push({ path, action: "removed" });
   }
-  planned.push(await planRulesIndex(root));
+  planned.push(await planRulesIndexFile(root));
   // hook registrations: regenerated from the scripts in .agents/hooks/ —
   // a deleted script loses its registrations here (clean deregistration)
   for (const registry of await planHookRegistrations(
@@ -364,38 +359,15 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
 }
 
 /** Rules index managed block of AGENTS.md, regenerated from `.agents/rules/`. */
-async function planRulesIndex(root: string): Promise<PlannedFile> {
-  let current: string;
-  try {
-    current = await readFile(join(root, "AGENTS.md"), "utf8");
-  } catch {
-    throw new CliError(
-      "AGENTS.md is missing — run `agentsdir init`.",
-      EXIT_CODES.driftOrInvariant,
-    );
-  }
-  const entries: RuleIndexEntry[] = [];
-  for (const file of await listRuleFiles(root)) {
-    entries.push({
-      file,
-      hook: deriveRuleHook(
-        await readFile(join(root, ".agents", "rules", file), "utf8"),
-      ),
-    });
-  }
-  const next = upsertBlock(
-    current,
-    "rules-index",
-    renderRulesIndexContent(entries),
-    "html",
-  );
-  if (next === current) {
+async function planRulesIndexFile(root: string): Promise<PlannedFile> {
+  const plan = await planRulesIndex(root);
+  if (plan === undefined) {
     return { path: "AGENTS.md", action: "ok" };
   }
   return {
     path: "AGENTS.md",
     action: "updated",
-    content: Buffer.from(next, "utf8"),
+    content: Buffer.from(plan.next, "utf8"),
   };
 }
 
@@ -503,14 +475,4 @@ async function compareToDisk(
     return "created";
   }
   return current.equals(expected) ? "ok" : "updated";
-}
-
-async function listRuleFiles(root: string): Promise<string[]> {
-  try {
-    return (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    return [];
-  }
 }
