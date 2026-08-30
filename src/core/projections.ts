@@ -341,7 +341,7 @@ async function projectSymlinks(
     // same guard as projectCopies: `mkdir -p` walks through a linked parent,
     // and the `unlink` below would delete a link of the user's, outside the repo
     await ensureNoLinkedParent(root, spec.target);
-    if (state === "other-link") {
+    if (state === "other-link" || state === "materialized") {
       await unlink(absTarget);
     }
     await mkdir(dirname(absTarget), { recursive: true });
@@ -436,11 +436,17 @@ async function verifySymlinks(root: string): Promise<ProjectionDrift[]> {
       continue;
     }
     if (!stats.isSymbolicLink()) {
+      const ours = await isMaterializedLink(
+        absTarget,
+        stats.isFile(),
+        relativeLinkTarget(spec),
+      );
       drifts.push({
         path: spec.target,
         kind: "replaced-by-copy",
-        detail:
-          "expected a symlink but found a regular file or directory — run `agentsdir sync`.",
+        detail: ours
+          ? "symlink materialized as a text file by a checkout without symlink support — run `agentsdir sync` to restore the link, or `agentsdir sync --mode copy` to switch this repo to copy mode."
+          : "expected a symlink but found a regular file or directory that agentsdir did not generate — move its content into .agents/ and delete it, then run `agentsdir sync`.",
       });
       continue;
     }
@@ -634,7 +640,7 @@ async function walkFiles(
 async function classifyLinkTarget(
   absTarget: string,
   expected: string,
-): Promise<"correct" | "other-link" | "absent" | "foreign"> {
+): Promise<"correct" | "other-link" | "absent" | "foreign" | "materialized"> {
   let stats;
   try {
     stats = await lstat(absTarget);
@@ -642,11 +648,37 @@ async function classifyLinkTarget(
     return "absent";
   }
   if (!stats.isSymbolicLink()) {
-    return "foreign";
+    return (await isMaterializedLink(absTarget, stats.isFile(), expected))
+      ? "materialized"
+      : "foreign";
   }
   return normalizeLink(await readlink(absTarget)) === expected
     ? "correct"
     : "other-link";
+}
+
+/**
+ * A checkout without symlink support writes the link target as the file
+ * content — the very case this product exists to cover. Such a file is ours,
+ * not a stranger: treating it as foreign left  telling the user to run
+ * , and  refusing, with no way out but a manual delete that no
+ * message mentioned.
+ */
+async function isMaterializedLink(
+  absTarget: string,
+  isFile: boolean,
+  expected: string,
+): Promise<boolean> {
+  if (!isFile) {
+    return false;
+  }
+  try {
+    const content = await readFile(absTarget, "utf8");
+    // git writes the target verbatim, without a trailing newline; be lenient
+    return normalizeLink(content.trim()) === expected;
+  } catch {
+    return false;
+  }
 }
 
 async function classifyCopyTarget(

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runAddHook } from "../../commands/add-hook.js";
 import { runInit } from "../../commands/init.js";
+import { runPackAdd } from "../../commands/pack.js";
 import { runSync } from "../../commands/sync.js";
 import {
   initAnswers,
@@ -121,6 +122,26 @@ describe("core - symlinked directories cannot be used to escape the repo", () =>
       ).catch(() => undefined);
 
       expect(await pathExists(join(outsideDir, "settings.json"))).toBe(false);
+    },
+  );
+
+  it.runIf(symlinkSupported)(
+    "Given a pack file shipped as a broken symlink out of the repo, When pack add runs, Then it refuses instead of writing through it",
+    async () => {
+      // pack add was the last generator still testing collisions with stat,
+      // which follows links: a broken one reads as absent, and the write then
+      // creates the file at the far end
+      const outsideDir = await makeTempDir("symlink-pack-target");
+      const escaped = join(outsideDir, "ESCAPED.md");
+      const dir = await makeTempDir("symlink-repo-pack");
+      await runInit(dir, initAnswers(), { dryRun: false });
+      await symlink(escaped, join(dir, ".agents", "rules", "verification.md"));
+
+      await runPackAdd(dir, "verification", { dryRun: false }).catch(
+        () => undefined,
+      );
+
+      expect(await pathExists(escaped)).toBe(false);
     },
   );
 });
