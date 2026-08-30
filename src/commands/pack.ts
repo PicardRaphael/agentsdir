@@ -486,11 +486,20 @@ function sortChanges(changes: GeneratorChange[]): GeneratorChange[] {
 }
 
 async function walkFiles(absDir: string): Promise<string[]> {
+  // this feeds the guard that spots locally modified pack files before a
+  // removal: reading an unreadable directory as empty would make `pack remove`
+  // delete without asking for --force
   let entries;
   try {
     entries = await readdir(absDir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new CliError(
+      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to remove files it cannot inspect.`,
+      EXIT_CODES.environmentOrUsage,
+    );
   }
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const files: string[] = [];
