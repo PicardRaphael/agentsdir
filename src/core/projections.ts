@@ -250,6 +250,17 @@ export async function removeOrphanProjections(
     }
     removed.push(path);
   }
+  // and the ones no fingerprint ever recorded. `check` reports them, so `sync`
+  // has to be able to remove them — otherwise check says "run sync" and sync
+  // leaves the file in place, which is a deadlock, not a repair.
+  const alreadyListed = new Set(removed);
+  for (const path of await projectedFiles(root)) {
+    if (expected.has(path) || alreadyListed.has(path)) {
+      continue;
+    }
+    removed.push(path);
+  }
+  removed.sort();
   if (!options.dryRun) {
     for (const path of removed) {
       await rm(toAbsolute(root, path), { force: true });
@@ -263,14 +274,32 @@ export async function removeOrphanProjections(
   return { removed };
 }
 
+/**
+ * Removes the directory, and any subdirectory of it, that holds no file at all.
+ * A non-recursive readdir was not enough: a projected skill has `agents/` and
+ * `assets/` subfolders, so the parent survived as a real directory holding only
+ * empty ones — enough to make the next mode switch classify it as foreign and
+ * throw, after the copies were already deleted.
+ */
 async function rmdirIfEmpty(root: string, path: string): Promise<void> {
   const abs = toAbsolute(root, path);
+  let entries;
+  try {
+    entries = await readdir(abs, { withFileTypes: true });
+  } catch {
+    return; // absent or not a directory: nothing to clean up
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await rmdirIfEmpty(root, `${path}/${entry.name}`);
+    }
+  }
   try {
     if ((await readdir(abs)).length === 0) {
       await rm(abs, { recursive: true, force: true });
     }
   } catch {
-    // absent or not a directory: nothing to clean up
+    // raced with something else removing it: nothing left to do
   }
 }
 
@@ -528,10 +557,12 @@ async function verifyCopies(
     );
   }
   // recorded projections whose source is gone: sync removes them
+  const reported = new Set<string>();
   for (const path of Object.keys(hashes).sort()) {
     if (expected.has(path) || !(await entryExists(toAbsolute(root, path)))) {
       continue;
     }
+    reported.add(path);
     drifts.push({
       path,
       kind: "orphan",
@@ -539,7 +570,39 @@ async function verifyCopies(
         "projection left behind by a deleted source — run `agentsdir sync` to remove it.",
     });
   }
+  // and what the fingerprints never knew about. Scanning only the recorded
+  // hashes left a whole class invisible: a folder dropped into .claude/skills/
+  // that never had a source is read by neither pass — while the harness loads
+  // it. Enumerating the projected directories is the only way to see it.
+  for (const path of await projectedFiles(root)) {
+    if (expected.has(path) || reported.has(path)) {
+      continue;
+    }
+    drifts.push({
+      path,
+      kind: "orphan",
+      detail:
+        "no source in .agents/ produces this file, yet the harness loads it — move it into the source of truth, or run `agentsdir sync` to remove it.",
+    });
+  }
   return drifts;
+}
+
+/** Every file currently sitting under the projected directories. */
+async function projectedFiles(root: string): Promise<string[]> {
+  const paths: string[] = [];
+  for (const spec of CLAUDE_PROJECTIONS) {
+    if (spec.kind !== "dir") {
+      continue;
+    }
+    for (const file of await walkFiles(
+      toAbsolute(root, spec.target),
+      spec.target,
+    )) {
+      paths.push(file.rel);
+    }
+  }
+  return paths.sort();
 }
 
 interface ExpectedCopy {

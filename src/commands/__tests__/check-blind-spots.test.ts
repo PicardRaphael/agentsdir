@@ -1,6 +1,7 @@
 import {
   copyFile,
   mkdir,
+  readdir,
   readFile,
   rm,
   symlink,
@@ -258,6 +259,62 @@ describe("33 - the rules index is compared to its render, not searched for paths
     expect(await readFile(join(dir, "AGENTS.md"), "utf8")).toContain(
       "touching anything at all",
     );
+    expect((await runCheck(dir)).exitCode).toBe(0);
+  });
+});
+
+describe("33 - a projection with no source is seen, and removed", () => {
+  it("Given a skill folder dropped into .claude/skills with no source, When check runs, Then it is reported as an orphan", async () => {
+    // scanning only the recorded fingerprints left this whole class invisible:
+    // no source, no hash, no pass reads it — while the harness loads it
+    const dir = await makeTempDir("blind-spots-intruder");
+    await runInit(dir, initAnswers(), { dryRun: false });
+    await mkdir(join(dir, ".claude", "skills", "intruder"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, ".claude", "skills", "intruder", "SKILL.md"),
+      ["---", "name: intruder", "description: dropped in", "---", ""].join(
+        "\n",
+      ),
+      "utf8",
+    );
+
+    const result = await runCheck(dir);
+
+    const violation = result.violations.find(
+      (candidate) =>
+        candidate.path === ".claude/skills/intruder/SKILL.md" &&
+        candidate.rule === "projection-orphan",
+    );
+    expect(violation?.message).toContain("no source in .agents/");
+    expect(result.exitCode).toBe(1);
+  });
+
+  it("Given that orphan, When sync runs, Then it is removed with its empty folders, and the real skills stay", async () => {
+    // check must never point at a sync that does not repair
+    const dir = await makeTempDir("blind-spots-intruder-repair");
+    await runInit(dir, initAnswers(), { dryRun: false });
+    await mkdir(join(dir, ".claude", "skills", "intruder", "assets"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(dir, ".claude", "skills", "intruder", "SKILL.md"),
+      ["---", "name: intruder", "description: dropped in", "---", ""].join(
+        "\n",
+      ),
+      "utf8",
+    );
+
+    const before = await readdir(join(dir, ".claude", "skills"));
+
+    await runSync(dir, { dryRun: false });
+
+    const left = await readdir(join(dir, ".claude", "skills"));
+    expect(left).not.toContain("intruder");
+    // everything that was legitimately there is still there: the pruning
+    // removes what has no source, not the projected directory itself
+    expect(left).toEqual(before.filter((entry) => entry !== "intruder"));
     expect((await runCheck(dir)).exitCode).toBe(0);
   });
 });
