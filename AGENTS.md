@@ -8,7 +8,7 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 prête à publier.** Le backlog v1 de `.agents/tasks/` est vidé : les seize tâches sont livrées (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. La suite (`vendor`, `update`, pack `logs`, puis `migrate`) est décrite dans [docs/roadmap.md](docs/roadmap.md) ; une nouvelle tâche s'ouvre dans `.agents/tasks/` au moment de l'attaquer.
+**Phase actuelle : v1.0.0 prête à publier, dette de structure suivie.** Le backlog v1 est livré (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. Un audit d'architecture a rouvert `.agents/tasks/` avec quatre tâches de consolidation (17 à 20) : elles n'ajoutent aucune capacité, elles suppriment des duplications constatées. La suite fonctionnelle (`vendor`, `update`, pack `logs`, puis `migrate`) est dans [docs/roadmap.md](docs/roadmap.md).
 
 ## Index des règles
 
@@ -49,6 +49,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog ; vide depuis la livraison de la v1.
+- `.agents/tasks/` — backlog ; tâches 17 à 20 issues de l'audit d'architecture.
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
