@@ -1,9 +1,26 @@
 {
   "name": "agentsdir",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "CLI that installs an agent configuration architecture based on open standards (AGENTS.md, Agent Skills) into an existing repo.",
+  "keywords": [
+    "agents",
+    "agents-md",
+    "agent-skills",
+    "claude-code",
+    "codex",
+    "cursor",
+    "ai-agents",
+    "cli",
+    "scaffolding",
+    "developer-tools"
+  ],
   "type": "module",
   "license": "MIT",
+  "author": "Raphaël Picard",
+  "homepage": "https://github.com/PicardRaphael/agentsdir#readme",
+  "bugs": {
+    "url": "https://github.com/PicardRaphael/agentsdir/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PicardRaphael/agentsdir.git"

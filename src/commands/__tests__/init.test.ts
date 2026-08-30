@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { readManifest } from "../../core/manifest.js";
+import { CLI_VERSION } from "../../version.js";
 import { runInit, type InitAnswers } from "../init.js";
 
 const execFileAsync = promisify(execFile);
@@ -109,7 +110,7 @@ describe("04 - init command", () => {
     expect(claudeMd).toContain("@AGENTS.md");
     const manifest = await readManifest(dir);
     expect(manifest.schema).toBe(1);
-    expect(manifest.cliVersion).toBe("0.0.0");
+    expect(manifest.cliVersion).toBe(CLI_VERSION);
     expect(manifest.project).toEqual({ name: "demo", stack: ["node"] });
     expect(manifest.harness.enabled).toEqual(["claude", "codex", "cursor"]);
     expect(manifest.packs.installed).toEqual(["core"]);
