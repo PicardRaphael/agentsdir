@@ -40,7 +40,9 @@
     "lint": "eslint . && prettier --check .",
     "format": "eslint --fix . && prettier --write .",
     "pretest": "npm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pretest:e2e": "npm run build",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",

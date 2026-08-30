@@ -7,7 +7,7 @@ Les tiers de tests retenus, les conventions de nommage, comment lancer chaque ni
 | Tier | Portée | Outil | Emplacement |
 | --- | --- | --- | --- |
 | Unitaire / smoke | Fonctions pures et traversée complète de la CLI compilée (`node dist/cli.js`) | Vitest | `src/**/__tests__/*.test.ts` |
-| Bout en bout (e2e) | Scénarios complets (`init`, `check`, `sync`) sur des repos de démonstration TypeScript et Python, dans les deux modes (symlink et copie) | Vitest | `e2e/` — n'existe pas encore, arrive avec la tâche de release v1.0 |
+| Bout en bout (e2e) | Scénarios complets (`init --yes` → `add skill` → `check`, interop `npx skills`, création assistée scriptée) sur des repos de démonstration TypeScript et Python, dans les deux modes (symlink et copie) | Vitest (`vitest.e2e.config.ts`) | `e2e/` |
 
 Le smoke test « walking skeleton » garantit que la chaîne build + test existe avant toute feature : `node dist/cli.js --help` traverse parseur → sortie.
 
@@ -26,8 +26,9 @@ Le smoke test « walking skeleton » garantit que la chaîne build + test existe
 | `npm run typecheck` | `tsc --noEmit` en mode strict. |
 | `npm run lint` | ESLint puis `prettier --check` — bloquants, en local comme en CI. |
 | `npm run build` | Bundle unique `dist/cli.js` via tsup. |
+| `npm run test:e2e` | Construit le bundle puis lance les scénarios de `e2e/` contre la CLI compilée. |
 
-La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) enchaîne typecheck → lint → test → build sur ubuntu-latest **et** windows-latest. La CI Windows n'est pas optionnelle : le mode copie (repli) doit y passer sans symlinks.
+La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) enchaîne typecheck → lint → test → build → test:e2e sur ubuntu-latest **et** windows-latest. La CI Windows n'est pas optionnelle : le mode copie (repli) doit y passer sans symlinks. Les scénarios e2e en mode symlink se désactivent d'eux-mêmes (sonde `detectSymlinkSupport`) là où les symlinks sont indisponibles : ubuntu prouve le mode symlink, windows prouve le mode copie.
 
 ## Ce qu'on ne teste pas (décisions explicites)
 

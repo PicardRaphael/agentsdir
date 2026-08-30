@@ -23,3 +23,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # ubuntu proves the symlink journeys, windows (no privileges) the copy ones
+      - run: npm run test:e2e
