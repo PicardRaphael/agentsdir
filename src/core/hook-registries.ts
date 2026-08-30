@@ -1,5 +1,6 @@
 import { HARNESSES, type Harness } from "./harnesses.js";
-import { readdir, readFile, type Dirent } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "./errors.js";
