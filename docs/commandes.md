@@ -353,10 +353,18 @@ déjà présent ou environnement inutilisable (erreur d'utilisation).
 npx agentsdir sync [--mode symlink|copy] [--dry-run] [--json]
 ```
 
-`--mode symlink|copy` bascule explicitement le mode de projection : le
-manifeste est mis à jour, puis toutes les projections sont régénérées dans le
-nouveau mode. C'est la commande que `doctor` recommande quand l'environnement
-a changé.
+`--mode symlink|copy` bascule explicitement le mode de projection : les
+projections de l'ancien mode sont d'abord retirées (lignes `removed` du
+rapport), puis toutes les projections sont régénérées dans le nouveau mode et
+le manifeste est mis à jour. C'est la commande que `doctor` recommande quand
+l'environnement a changé.
+
+Le retrait ne supprime que ce qu'`agentsdir` possède : un lien correct, ou une
+copie dont l'empreinte est enregistrée au manifeste ou qui porte l'en-tête
+généré. Tout autre fichier reste sur le disque et la projection du nouveau mode
+le signale comme cible étrangère. Ce retrait préalable n'est pas cosmétique :
+sans lui, écrire une copie par-dessus un symlink resté en place écrirait *à
+travers* le lien, dans la source de vérité.
 
 ### Comportement
 
@@ -397,7 +405,7 @@ flowchart LR
     P2 --> L
     P3 --> L
     L --> M[Manifeste .agents.toml]
-    M --> R[Rapport : created / updated / ok]
+    M --> R[Rapport : removed / created / updated / ok]
 ```
 
 ### Idempotence

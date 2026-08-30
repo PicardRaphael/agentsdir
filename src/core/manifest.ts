@@ -11,6 +11,14 @@ const MANIFEST_HEADER =
 
 export type ProjectionMode = "symlink" | "copy";
 
+/** Parses a user-supplied `--mode` value; shared by `init` and `sync`. */
+export function parseMode(raw: string): ProjectionMode {
+  if (raw === "symlink" || raw === "copy") {
+    return raw;
+  }
+  throw new CliError('Unknown value for --mode (allowed: "symlink", "copy").');
+}
+
 export interface Manifest {
   schema: number;
   cliVersion: string;

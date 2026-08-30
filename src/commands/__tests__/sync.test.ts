@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -23,6 +24,7 @@ import {
 import { detectSymlinkSupport } from "../../core/detect.js";
 import { CliError } from "../../core/errors.js";
 import { parseSkillMarkdown } from "../../core/frontmatter.js";
+import { MANIFEST_FILE } from "../../core/manifest.js";
 import { computeSkillHash } from "../../core/validate.js";
 import { runCheck } from "../check.js";
 import { runInit, type InitAnswers } from "../init.js";
@@ -492,6 +494,101 @@ describe("08 - sync command", () => {
     const { code, stderr } = await runCli(dir, ["sync"]);
     expect(code).toBe(2);
     expect(stderr).toContain("agentsdir init");
+  });
+});
+
+describe("14 - sync --mode switches the projection mode", () => {
+  it("Given a repo in copy mode, When sync --mode copy runs, Then nothing is removed and the mode is unchanged", async () => {
+    const dir = await initializedRepo();
+    const result = await runSync(dir, { dryRun: false, mode: "copy" });
+    expect(result.exitCode).toBe(0);
+    expect(result.mode).toBe("copy");
+    expect(
+      result.changes.filter((change) => change.action === "removed"),
+    ).toEqual([]);
+    expect(await readFile(join(dir, MANIFEST_FILE), "utf8")).toContain(
+      'mode = "copy"',
+    );
+  });
+
+  it("Given a repo in copy mode, When sync --mode symlink runs with dry run, Then the plan removes the copies and creates the links, and the disk is untouched", async () => {
+    const dir = await initializedRepo();
+    const before = await snapshotTree(dir);
+    const result = await runSync(dir, { dryRun: true, mode: "symlink" });
+    expect(result.exitCode).toBe(0);
+    const actions = actionsByPath(result.changes);
+    expect(
+      result.changes.some(
+        (change) => change.path === "CLAUDE.md" && change.action === "removed",
+      ),
+    ).toBe(true);
+    expect(actions.get(".claude/rules")).toBe("created");
+    expect(await snapshotTree(dir)).toEqual(before);
+  });
+
+  it.runIf(symlinkSupported)(
+    "Given a repo in copy mode, When sync --mode symlink runs, Then the copies are replaced by real symlinks, the manifest records the new mode, and check exits 0",
+    async () => {
+      const dir = await makeTempDir();
+      await execFileAsync("git", ["-C", dir, "init"]);
+      await execFileAsync("git", [
+        "-C",
+        dir,
+        "config",
+        "core.symlinks",
+        "true",
+      ]);
+      await runInit(dir, answers({ mode: "copy" }), { dryRun: false });
+      expect((await lstat(join(dir, "CLAUDE.md"))).isSymbolicLink()).toBe(
+        false,
+      );
+      const result = await runSync(dir, { dryRun: false, mode: "symlink" });
+      expect(result.exitCode).toBe(0);
+      expect(result.mode).toBe("symlink");
+      expect((await lstat(join(dir, "CLAUDE.md"))).isSymbolicLink()).toBe(true);
+      const manifest = await readFile(join(dir, MANIFEST_FILE), "utf8");
+      expect(manifest).toContain('mode = "symlink"');
+      // symlink mode records no fingerprints: the links are their own proof
+      expect(manifest).not.toContain("sha256:");
+      expect((await runCheck(dir)).exitCode).toBe(0);
+    },
+  );
+
+  it.runIf(symlinkSupported)(
+    "Given a repo in symlink mode, When sync --mode copy runs, Then the links become copies and AGENTS.md is never written through the link",
+    async () => {
+      const dir = await makeTempDir();
+      await execFileAsync("git", ["-C", dir, "init"]);
+      await execFileAsync("git", [
+        "-C",
+        dir,
+        "config",
+        "core.symlinks",
+        "true",
+      ]);
+      await runInit(dir, answers({ mode: "symlink" }), { dryRun: false });
+      const sourceBefore = await readFile(join(dir, "AGENTS.md"), "utf8");
+      const result = await runSync(dir, { dryRun: false, mode: "copy" });
+      expect(result.exitCode).toBe(0);
+      expect(result.mode).toBe("copy");
+      const bridge = await lstat(join(dir, "CLAUDE.md"));
+      expect(bridge.isSymbolicLink()).toBe(false);
+      expect(await readFile(join(dir, "CLAUDE.md"), "utf8")).toContain(
+        "@AGENTS.md",
+      );
+      // the source of truth survived: writing through a stale link would have
+      // overwritten AGENTS.md with the bridge content
+      expect(await readFile(join(dir, "AGENTS.md"), "utf8")).toBe(sourceBefore);
+      expect((await runCheck(dir)).exitCode).toBe(0);
+    },
+  );
+
+  it("Given an unknown --mode value, When the CLI runs sync, Then it refuses with exit code 2 and names the allowed values", async () => {
+    const dir = await initializedRepo();
+    await execFileAsync("git", ["-C", dir, "init"]);
+    const { code, stderr } = await runCli(dir, ["sync", "--mode", "hardlink"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain('"symlink", "copy"');
   });
 });
 

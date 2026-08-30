@@ -5,6 +5,7 @@ import {
   readdir,
   readFile,
   readlink,
+  rm,
   symlink,
   unlink,
   writeFile,
@@ -54,6 +55,12 @@ export interface ProjectOptions {
    * first (`sync` regenerates Codex artifacts before projecting them).
    */
   overlay?: Record<string, Buffer>;
+  /**
+   * Plans against a clean slate instead of the current disk: what a mode
+   * switch will find once `unproject` has removed the previous mode's
+   * projections. Dry run only — a writing run must classify the real disk.
+   */
+  assumeAbsent?: boolean;
 }
 
 export interface ProjectionChange {
@@ -77,6 +84,103 @@ export async function project(
   return options.mode === "symlink"
     ? projectSymlinks(root, options)
     : projectCopies(root, options);
+}
+
+export interface UnprojectOptions {
+  /** Mode whose projections are being removed — the one leaving the manifest. */
+  mode: ProjectionMode;
+  dryRun?: boolean;
+  /** Copy mode: fingerprints recorded by the previous run, to recognize our copies. */
+  previousHashes?: Record<string, string>;
+}
+
+/**
+ * Removes the projections of `mode` before the other mode is materialized.
+ * Only what agentsdir owns is deleted — a correct link, or a copy matching its
+ * recorded fingerprint or carrying the generated header. Anything else is left
+ * on disk, where projecting the new mode reports it as a foreign target.
+ */
+export async function unproject(
+  root: string,
+  options: UnprojectOptions,
+): Promise<{ removed: string[] }> {
+  const removed =
+    options.mode === "symlink"
+      ? await ownedSymlinks(root)
+      : await ownedCopies(root, options.previousHashes ?? {});
+  if (!options.dryRun) {
+    for (const path of removed) {
+      await rm(toAbsolute(root, path), { force: true });
+    }
+    // the mirrors are ours; leftover entries keep the directory
+    for (const spec of CLAUDE_PROJECTIONS) {
+      if (spec.kind === "dir") {
+        await rmdirIfEmpty(root, spec.target);
+      }
+    }
+  }
+  return { removed };
+}
+
+async function ownedSymlinks(root: string): Promise<string[]> {
+  const owned: string[] = [];
+  for (const spec of CLAUDE_PROJECTIONS) {
+    const state = await classifyLinkTarget(
+      toAbsolute(root, spec.target),
+      relativeLinkTarget(spec),
+    );
+    if (state === "correct") {
+      owned.push(spec.target);
+    }
+  }
+  return owned;
+}
+
+async function ownedCopies(
+  root: string,
+  previousHashes: Record<string, string>,
+): Promise<string[]> {
+  const candidates = new Set<string>(Object.keys(previousHashes));
+  candidates.add("CLAUDE.md");
+  for (const spec of CLAUDE_PROJECTIONS) {
+    if (spec.kind !== "dir") {
+      continue;
+    }
+    for (const file of await walkFiles(
+      toAbsolute(root, spec.target),
+      spec.target,
+    )) {
+      candidates.add(file.rel);
+    }
+  }
+  const owned: string[] = [];
+  for (const path of [...candidates].sort()) {
+    let current: Buffer;
+    try {
+      current = await readFile(toAbsolute(root, path));
+    } catch {
+      continue;
+    }
+    const ours =
+      previousHashes[path] === sha256(current) ||
+      (path.endsWith(".md") &&
+        current.toString("utf8").includes(GENERATED_HEADER));
+    if (ours) {
+      owned.push(path);
+    }
+  }
+  return owned;
+}
+
+async function rmdirIfEmpty(root: string, path: string): Promise<void> {
+  const abs = toAbsolute(root, path);
+  try {
+    if ((await readdir(abs)).length === 0) {
+      await rm(abs, { recursive: true, force: true });
+    }
+  } catch {
+    // absent or not a directory: nothing to clean up
+  }
 }
 
 export interface VerifyOptions {
@@ -119,7 +223,10 @@ async function projectSymlinks(
   for (const spec of CLAUDE_PROJECTIONS) {
     const expected = relativeLinkTarget(spec);
     const absTarget = toAbsolute(root, spec.target);
-    const state = await classifyLinkTarget(absTarget, expected);
+    const state =
+      options.assumeAbsent === true
+        ? "absent"
+        : await classifyLinkTarget(absTarget, expected);
     if (state === "correct") {
       changes.push({ path: spec.target, action: "unchanged", existed: true });
       continue;
@@ -160,7 +267,10 @@ async function projectCopies(
   for (const file of await expectedCopies(root, options.overlay ?? {})) {
     hashes[file.path] = sha256(file.content);
     const absTarget = toAbsolute(root, file.path);
-    const state = await classifyCopyTarget(absTarget, file, previousHashes);
+    const state =
+      options.assumeAbsent === true
+        ? "absent"
+        : await classifyCopyTarget(absTarget, file, previousHashes);
     if (state === "unchanged") {
       changes.push({ path: file.path, action: "unchanged", existed: true });
       continue;
