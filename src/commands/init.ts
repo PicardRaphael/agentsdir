@@ -1,11 +1,16 @@
-import { entryExists, isDirectory, pathExists } from "../core/fs-utils.js";
+import {
+  entryExists,
+  isDirectory,
+  pathExists,
+  writeFileAtomic,
+} from "../core/fs-utils.js";
 import { HARNESSES } from "../core/harnesses.js";
 import {
   collectAnswers,
   type InitAnswers,
   type InitFlags,
 } from "./init-interview.js";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { asUserFacingError, CliError } from "../core/errors.js";
@@ -348,11 +353,10 @@ async function applyPlan(root: string, changes: PlannedWrite[]): Promise<void> {
       change.content !== undefined
     ) {
       await mkdir(dirname(target), { recursive: true });
-      // "wx" fails when the target exists, symlink included: a create never
-      // writes through a link, so the CLI cannot escape the repo it resolved
-      await writeFile(target, change.content, {
-        encoding: "utf8",
-        ...(change.action === "create" ? { flag: "wx" } : {}),
+      // exclusive on a create: the target must not exist, symlink included, so
+      // the CLI cannot write through a link and escape the repo it resolved
+      await writeFileAtomic(target, change.content, {
+        exclusive: change.action === "create",
       });
     }
   }

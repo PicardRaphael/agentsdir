@@ -1,4 +1,4 @@
-import { entryExists } from "./fs-utils.js";
+import { entryExists, writeFileAtomic } from "./fs-utils.js";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -9,7 +9,6 @@ import {
   rm,
   symlink,
   unlink,
-  writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
@@ -384,7 +383,7 @@ async function projectCopies(
       continue;
     }
     await mkdir(dirname(absTarget), { recursive: true });
-    await writeFile(absTarget, file.content);
+    await writeFileAtomic(absTarget, file.content);
   }
   return { changes, hashes };
 }

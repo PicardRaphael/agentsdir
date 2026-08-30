@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
@@ -17,6 +17,7 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
+import { writeFileAtomic } from "../core/fs-utils.js";
 import { refreshProjections } from "../core/projections.js";
 import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
@@ -458,7 +459,7 @@ async function applyPlannedFile(
   }
   const abs = join(root, ...file.path.split("/"));
   await mkdir(dirname(abs), { recursive: true });
-  await writeFile(abs, file.content);
+  await writeFileAtomic(abs, file.content);
 }
 
 async function compareToDisk(

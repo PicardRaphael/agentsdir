@@ -10,6 +10,13 @@ First public release.
 
 ### Fixed
 
+- **Files land whole or not at all.** Every write now goes to a sibling
+  temporary file and is put in place by a single rename, so an interrupted run
+  leaves either the old content or the new one — never a half-written file. The
+  project already applied this pattern to the scripts it generates; it now
+  applies it to itself. A create is exclusive, which is also what keeps it from
+  writing through a symlink.
+
 - **A write killed mid-file is repairable again.** A truncated copy lost its
   generated header, read as a foreign file, and `sync` refused the very repair
   `check` was demanding — a dead end whose only way out was deleting the file by
