@@ -562,11 +562,19 @@ async function walkFiles(
   absDir: string,
   relPrefix: string,
 ): Promise<{ rel: string; abs: string }[]> {
+  // an absent mirror is normal (nothing projected yet); an unreadable one is a
+  // fault, and must never read as "empty" — that would delete live projections
   let entries;
   try {
     entries = await readdir(absDir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new CliError(
+      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to treat an unreadable directory as an empty one.`,
+      EXIT_CODES.environmentOrUsage,
+    );
   }
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const files: { rel: string; abs: string }[] = [];

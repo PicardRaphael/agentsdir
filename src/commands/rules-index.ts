@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   deriveRuleHook,
@@ -7,6 +7,7 @@ import {
 } from "../templates/agents-md.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "../core/errors.js";
+import { readdirOrEmpty } from "../core/fs-utils.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 
 /**
@@ -26,13 +27,8 @@ export interface RuleDelta {
 
 /** Rule file names under `.agents/rules/`, sorted; empty when there is none. */
 export async function listRuleFiles(root: string): Promise<string[]> {
-  try {
-    return (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    return [];
-  }
+  const entries = await readdirOrEmpty(join(root, ".agents", "rules"));
+  return entries.filter((file) => file.endsWith(".md")).sort();
 }
 
 /** Index entries for the rules on disk, adjusted by the command's delta. */

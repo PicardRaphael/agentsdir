@@ -8,6 +8,14 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`sync` no longer deletes projections when a source directory cannot be
+  read.** An absent directory and an unreadable one were both read as "empty",
+  so a `.agents/rules` that could not be listed made `sync` remove its mirrors
+  and empty the `rules-index` block — exiting `0`, with `check` green
+  afterwards. Silent data loss in a tool whose promise is that nothing drifts
+  unnoticed. Only a genuinely absent directory is now treated as empty;
+  anything else refuses with exit `2` and names the path and the error code.
+
 - A mistyped command now exits `2` (usage error) with a message naming what was
   not understood, instead of printing the help and exiting `1` — the code a CI
   script reads as "drift detected". `agentsdir sinc`, `agentsdir add skil` and
