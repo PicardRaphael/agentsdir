@@ -1,109 +1,109 @@
-# Création assistée
+# Assisted creation
 
-Ce document spécifie le système de création assistée d'artefacts — le cœur du produit : créer **parfaitement**, par interview, chaque artefact de l'architecture (skills, hooks, règles, sous-agents, et AGENTS.md lui-même). Il complète [commandes.md](commandes.md) (les générateurs déterministes) et [conventions.md](conventions.md) (les invariants). Décisions actées : approche hybride, analyse du repo par méta-skill, création assistée en v1 ; la protection d'`update` est posée dès la v0.6 (empreintes enregistrées), la commande `update` elle-même reste en v1.x.
+This document specifies the assisted artifact creation system — the heart of the product: creating **perfectly**, through an interview, every artifact of the architecture (skills, hooks, rules, sub-agents, and AGENTS.md itself). It complements [commandes.md](commandes.md) (the deterministic generators) and [conventions.md](conventions.md) (the invariants). Decisions taken: hybrid approach, repo analysis by meta-skill, assisted creation in v1; the `update` protection is laid down as early as v0.6 (recorded fingerprints), while the `update` command itself stays in v1.x.
 
-## Le principe : deux étages, une boucle
+## The principle: two stages, one loop
 
 ```mermaid
 flowchart LR
-    subgraph CLI["Étage 1 — CLI (déterministe)"]
-        G["add skill / hook / rule / agent :<br/>squelette valide + enregistrements"]
-        C["check : invariants,<br/>dérive, parité harness"]
+    subgraph CLI["Stage 1 — CLI (deterministic)"]
+        G["add skill / hook / rule / agent:<br/>valid skeleton + registrations"]
+        C["check: invariants,<br/>drift, harness parity"]
     end
-    subgraph META["Étage 2 — méta-skills (agent IA)"]
-        I["Inventaire du repo<br/>+ import de l'existant"]
-        Q["Interview ciblée<br/>sur le non-découvrable"]
-        D["Brouillon"]
-        R["Critique : instance fraîche<br/>+ question-filtre"]
+    subgraph META["Stage 2 — meta-skills (AI agent)"]
+        I["Repo inventory<br/>+ import of what exists"]
+        Q["Interview targeted<br/>at the non-discoverable"]
+        D["Draft"]
+        R["Critique: fresh instance<br/>+ filter question"]
     end
     I --> Q --> D --> R --> G --> C
-    C -- écart --> D
-    C -- conforme --> OK["Artefact livré"]
+    C -- deviation --> D
+    C -- compliant --> OK["Artifact delivered"]
 ```
 
-- **L'étage 1 (la CLI)** garantit la structure : noms valides, frontmatter complet, projections générées, enregistrements multi-harness. Il fonctionne seul, sans agent IA.
-- **L'étage 2 (les méta-skills, pack `creator`)** guide l'agent du harness pour produire le *contenu*. Il s'appuie sur l'étage 1 pour écrire, jamais l'inverse.
-- **La boucle** est le différenciateur : l'IA rédige, la CLI valide (`check`), et rien n'est livré sans passer la validation mécanique. Aucun outil du marché ne ferme cette boucle.
+- **Stage 1 (the CLI)** guarantees the structure: valid names, complete frontmatter, generated projections, multi-harness registrations. It works on its own, without an AI agent.
+- **Stage 2 (the meta-skills, `creator` pack)** guides the harness agent to produce the *content*. It relies on stage 1 to write, never the other way round.
+- **The loop** is the differentiator: the AI writes, the CLI validates (`check`), and nothing is delivered without passing the mechanical validation. No tool on the market closes this loop.
 
-## Le protocole de création (commun à tous les artefacts)
+## The creation protocol (common to all artifacts)
 
-Issu des meilleures pratiques observées (`/init` nouveau flux, `skill-creator` d'Anthropic, boucle « Claude A auteur / Claude B testeur ») :
+Derived from the best practices observed (the new `/init` flow, Anthropic's `skill-creator`, the "Claude A author / Claude B tester" loop):
 
-1. **Inventaire avant création.** Explorer le repo et absorber l'existant (CLAUDE.md, AGENTS.md, `.cursor/rules`, `copilot-instructions.md`, hooks, CI) — on n'écrit jamais par-dessus l'existant, on l'importe ou on le complète.
-2. **Interview ciblée sur le non-découvrable.** Ne poser que les questions dont la réponse ne se lit pas dans le code (voir les banques de questions ci-dessous). Consigne canonique : creuser les points durs non anticipés, pas les évidences.
-3. **Aiguillage.** Avant de créer, qualifier le besoin : consultatif → règle ou section d'AGENTS.md ; à la demande → skill ; garanti à chaque fois → hook ; volumineux et isolable → sous-agent. Un besoin mal aiguillé produit un artefact inopérant.
-4. **Brouillon, puis critique.** Passe de critique avec la question-filtre officielle : *« si on supprime cette ligne, l'agent fera-t-il une erreur ? »* — toute ligne dont la suppression ne provoquerait aucune erreur est retirée. Pour les skills : test de déclenchement (phrases qui doivent/ne doivent pas déclencher).
-5. **Validation mécanique.** `agentsdir check` sur l'artefact créé ; écart = retour au brouillon.
-6. **Proposition révisable.** L'utilisateur voit le résultat avant écriture définitive (mode `--dry-run` de l'étage 1).
+1. **Inventory before creation.** Explore the repo and absorb what exists (CLAUDE.md, AGENTS.md, `.cursor/rules`, `copilot-instructions.md`, hooks, CI) — never write over what exists; import it or complete it.
+2. **Interview targeted at the non-discoverable.** Ask only the questions whose answer cannot be read in the code (see the interview banks below). Canonical instruction: dig into the unanticipated hard points, not the obvious ones.
+3. **Routing.** Before creating, qualify the need: advisory → rule or AGENTS.md section; on demand → skill; guaranteed every time → hook; bulky and isolable → sub-agent. A misrouted need produces an artifact that does not work.
+4. **Draft, then critique.** A critique pass with the official filter question: *"if this line is removed, will the agent make a mistake?"* — any line whose removal would cause no error is dropped. For skills: a trigger test (phrases that must / must not trigger).
+5. **Mechanical validation.** `agentsdir check` on the created artifact; a deviation = back to the draft.
+6. **Reviewable proposal.** The user sees the result before the final write (stage 1's `--dry-run` mode).
 
-## Rubriques de qualité par artefact
+## Quality rubrics per artifact
 
-Chaque méta-skill embarque sa rubrique dans `references/` ; les critères marqués ▣ sont vérifiés mécaniquement par `check`, les autres par la passe de critique.
+Each meta-skill bundles its rubric in `references/`; the criteria marked ▣ are checked mechanically by `check`, the others by the critique pass.
 
 ### AGENTS.md / CLAUDE.md
 
-- Pas de duplication README ⟷ AGENTS.md ; pointeurs, jamais de copies.
-- Commandes **exactes** (build, test ciblé, lint) + interdits explicites (watch, deploy) — le non-devinable d'abord.
-- Ne documenter que ce qui **diverge** des réglages par défaut de l'écosystème ; le modèle connaît déjà les standards.
-- Ce qui est appliqué mécaniquement (linter, CI, hooks) n'a rien à faire dans le fichier (« never send an LLM to do a linter's job »).
-- Court : chaque ligne doit passer la question-filtre. Une information fausse est pire que pas de fichier.
+- No README ⟷ AGENTS.md duplication; pointers, never copies.
+- **Exact** commands (build, targeted test, lint) + explicit prohibitions (watch, deploy) — the non-guessable first.
+- Document only what **diverges** from the ecosystem's default settings; the model already knows the standards.
+- What is enforced mechanically (linter, CI, hooks) has no place in the file ("never send an LLM to do a linter's job").
+- Short: every line must pass the filter question. Wrong information is worse than no file at all.
 
 ### Skills (SKILL.md)
 
-- ▣ `name` : 1–64 caractères, `a-z 0-9 -`, égal au nom du dossier.
-- `description` : troisième personne, quoi + quand + mots-clés déclencheurs de l'utilisateur (jamais « Helps with… »).
-- ▣ Corps < 500 lignes ; le volumineux part dans `references/` (divulgation progressive, un seul niveau de renvoi).
-- Degrés de liberté explicites : séquence fragile → script exécutable (`scripts/`), pas de la prose ; plusieurs approches valides → instructions.
-- Un défaut + une échappatoire, jamais un menu d'options ; terminologie constante ; pas d'infos périssables.
-- Test de déclenchement : ≥ 3 phrases qui doivent déclencher, ≥ 2 proches qui ne doivent pas.
+- ▣ `name`: 1–64 characters, `a-z 0-9 -`, equal to the folder name.
+- `description`: third person, what + when + the user's trigger keywords (never "Helps with…").
+- ▣ Body < 500 lines; the bulky material goes into `references/` (progressive disclosure, a single level of indirection).
+- Explicit degrees of freedom: fragile sequence → executable script (`scripts/`), not prose; several valid approaches → instructions.
+- One default + one escape hatch, never a menu of options; constant terminology; no perishable information.
+- Trigger test: ≥ 3 phrases that must trigger, ≥ 2 near-miss phrases that must not.
 
 ### Hooks
 
-- Événement cohérent avec l'intention : **empêcher** → événement bloquant (PreToolUse, UserPromptSubmit, Stop) + exit 2 (protocole des hooks, distinct des codes de sortie de la CLI) ; **réagir** → PostToolUse et assimilés (ne peuvent rien annuler).
-- ▣ Script portable Node, chemins absolus ou racine projet, exécutable, stdout JSON commençant par `{`.
-- Fail-open ou fail-closed : choix explicite demandé à l'interview et documenté dans le script.
-- Un hook n'est **pas** une frontière de sécurité — une interdiction dure va dans les permissions du harness, pas dans un hook.
-- Garde-fou des Stop hooks (`stop_hook_active`) ; timeout adapté au travail réel ; test manuel fourni (`echo '<json>' | node hook.mjs`).
+- Event consistent with the intent: **prevent** → blocking event (PreToolUse, UserPromptSubmit, Stop) + exit 2 (hook protocol, distinct from the CLI exit codes); **react** → PostToolUse and similar (they cannot cancel anything).
+- ▣ Portable Node script, absolute paths or project root, executable, JSON stdout starting with `{`.
+- Fail-open or fail-closed: an explicit choice asked during the interview and documented in the script.
+- A hook is **not** a security boundary — a hard prohibition goes into the harness permissions, not into a hook.
+- Stop hook guard rail (`stop_hook_active`); timeout suited to the real work; manual test provided (`echo '<json>' | node hook.mjs`).
 
-### Sous-agents (.agents/agents/*.md)
+### Sub-agents (.agents/agents/*.md)
 
-- ▣ Frontmatter `name` (minuscules-tirets) + `description` obligatoires — un fichier sans description est ignoré **silencieusement** par Claude Code.
-- Une responsabilité unique ; format de sortie exigé dans le corps (le parent ne reçoit que le rapport final).
-- Outils minimaux (un relecteur n'a pas Write/Edit) ; modèle motivé (mécanique → haiku, raisonnement → opus, sinon inherit).
-- Le prompt ne suppose jamais l'accès à la conversation parente : l'agent démarre vierge.
-- Descriptions cumulées courtes (budget partagé) ; « Use proactively » seulement si la délégation spontanée est voulue.
+- ▣ Frontmatter `name` (lowercase-dashes) + `description` required — a file without a description is **silently** ignored by Claude Code.
+- A single responsibility; output format required in the body (the parent receives only the final report).
+- Minimal tools (a reviewer has no Write/Edit); justified model (mechanical → haiku, reasoning → opus, otherwise inherit).
+- The prompt never assumes access to the parent conversation: the agent starts blank.
+- Short cumulative descriptions (shared budget); "Use proactively" only if spontaneous delegation is wanted.
 
-### Règles (.agents/rules/*.md)
+### Rules (.agents/rules/*.md)
 
-- Chaque règle est ancrée dans un **échec observé** ou une divergence réelle du projet, pas une crainte hypothétique.
-- Gabarit maison : H1, ton impératif, GOOD/BAD, tableaux ; `paths:` si scopée ; ▣ ligne d'index dans AGENTS.md.
-- ▣ Jamais de référence normative vers un fichier inexistant.
+- Every rule is anchored in an **observed failure** or a real divergence of the project, not a hypothetical fear.
+- House template: H1, imperative tone, GOOD/BAD, tables; `paths:` if scoped; ▣ index line in AGENTS.md.
+- ▣ Never a normative reference to a file that does not exist.
 
-## Les banques de questions d'interview
+## The interview question banks
 
-Chaque méta-skill embarque sa banque dans `references/interview.md`. Les cinq questions les plus discriminantes par artefact (chacune dérivée d'un anti-pattern sourcé) :
+Each meta-skill bundles its bank in `references/interview.md`. The five most discriminating questions per artifact (each derived from a sourced anti-pattern):
 
-| Artefact | Les questions qui changent le contenu généré |
+| Artifact | The questions that change the generated content |
 | --- | --- |
-| AGENTS.md | Commandes exactes + jamais-lancer ? · Qu'a raté l'agent récemment ? · Quelles conventions divergent des réglages par défaut ? · Qu'est-ce qui est déjà appliqué mécaniquement ? · Monorepo / configs existantes ? |
-| Skill | 3 phrases qui déclenchent + 2 qui ne déclenchent pas ? · Sortie objective ou subjective ? · Quelle séquence fragile à figer en script ? · Qu'avez-vous répété à l'agent les 3 dernières fois ? · Quel savoir volumineux mais rare (→ references/) ? |
-| Hook | Empêcher ou réagir ? · Échec du script : passer ou bloquer ? · Sécurité dure (→ permissions, pas hook) ? · Quels outils/commandes exactement ? · Durée au pire, bloquant ou async ? |
-| Sous-agent | Quelle tâche unique, finie quand ? · Modifier ou seulement lire ? · Délégation spontanée ou sur demande ? · Quel contexte, sachant qu'il démarre vierge ? · Raisonnement profond ou mécanique volumineux ? |
-| Règle | Quel échec observé la justifie ? · Scopée à quels fichiers ? · Vérifiable mécaniquement (→ hook/CI plutôt) ? · Quand un agent doit-il la lire ? · Quel exemple GOOD/BAD réel ? |
+| AGENTS.md | Exact commands + never-run? · What did the agent get wrong recently? · Which conventions diverge from the default settings? · What is already enforced mechanically? · Monorepo / existing configs? |
+| Skill | 3 phrases that trigger + 2 that do not? · Objective or subjective output? · Which fragile sequence should be frozen into a script? · What have you repeated to the agent the last 3 times? · Which knowledge is bulky but rarely needed (→ references/)? |
+| Hook | Prevent or react? · Script failure: pass or block? · Hard security (→ permissions, not a hook)? · Which tools/commands exactly? · Worst-case duration, blocking or async? |
+| Sub-agent | Which single task, finished when? · Modify or only read? · Spontaneous delegation or on demand? · Which context, given that it starts blank? · Deep reasoning or bulky mechanical work? |
+| Rule | Which observed failure justifies it? · Scoped to which files? · Mechanically verifiable (→ hook/CI instead)? · When must an agent read it? · Which real GOOD/BAD example? |
 
-## Le pack `creator`
+## The `creator` pack
 
-Installé par `init` (coché par défaut), il contient :
+Installed by `init` (checked by default), it contains:
 
-- `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` — une méta-skill par artefact, appliquant le protocole ci-dessus et appelant les générateurs de l'étage 1.
-- `$setup-context` — la création assistée d'AGENTS.md : inventaire du repo par l'agent (commandes réelles, conventions, fichiers clés, configs concurrentes à importer), pré-rédaction des sections stack/produit, interview de validation, critique ligne à ligne, écriture via les blocs gérés. C'est `/init`, en multi-harness et avec validation mécanique.
+- `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` — one meta-skill per artifact, applying the protocol above and calling the stage 1 generators.
+- `$setup-context` — the assisted creation of AGENTS.md: repo inventory by the agent (real commands, conventions, key files, competing configs to import), pre-drafting of the stack/product sections, validation interview, line-by-line critique, writing through the managed blocks. This is `/init`, multi-harness and with mechanical validation.
 
-Contraintes : ces méta-skills respectent elles-mêmes toutes les conventions ([conventions.md](conventions.md)) — `disable-model-invocation: true` (elles écrivent), corps < 500 lignes, rubriques et banques de questions dans `references/`.
+Constraints: these meta-skills themselves follow all the conventions ([conventions.md](conventions.md)) — `disable-model-invocation: true` (they write), body < 500 lines, rubrics and question banks in `references/`.
 
-## Mise à jour (`update`) et protection du contenu installé
+## Update (`update`) and protection of the installed content
 
-Le contenu installé par la CLI (méta-skills, gabarits, règles génériques des packs) évolue avec elle. Suivi par le mécanisme du verrou existant : chaque contenu CLI reçoit une entrée dans `skills-lock.json` avec `sourceType: "agentsdir"` et l'empreinte de la version installée.
+The content installed by the CLI (meta-skills, templates, generic rules of the packs) evolves with it. Tracked by the existing lock mechanism: each piece of CLI content gets an entry in `skills-lock.json` with `sourceType: "agentsdir"` and the fingerprint of the installed version.
 
-- `update` remplace un contenu **intact** (empreinte = version installée) par la nouvelle version. `sync` ne recalcule **jamais** l'empreinte d'une entrée `"agentsdir"` : elle reste épinglée à la version installée, sinon la modification locale serait « bénie » et la protection perdue.
-- Un contenu **modifié localement** est préservé : `update` le signale, affiche le diff des changements upstream, et propose la fusion — jamais d'écrasement silencieux (la leçon des skills vendorés du modèle source, écrasés deux fois par leur outil upstream).
-- `check` distingue « modifié localement » (accepté, signalé en information) de « dérive d'une projection » (erreur).
+- `update` replaces **intact** content (fingerprint = installed version) with the new version. `sync` **never** recomputes the fingerprint of an `"agentsdir"` entry: it stays pinned to the installed version, otherwise the local modification would be "blessed" and the protection lost.
+- **Locally modified** content is preserved: `update` reports it, shows the diff of the upstream changes, and offers the merge — never a silent overwrite (the lesson of the source model's vendored skills, overwritten twice by their upstream tool).
+- `check` distinguishes "locally modified" (accepted, reported as information) from "projection drift" (an error).

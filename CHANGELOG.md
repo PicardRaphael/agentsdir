@@ -25,7 +25,11 @@ First public release.
 - **`check`** — read-only verification of every invariant, of projection drift
   and of lock fingerprints, with normalized exit codes (`0` ok, `1` drift or
   violated invariant, `2` environment or usage error) and a `--json` output for
-  CI.
+  CI. In copy mode every projection is compared to the source of truth
+  recomputed from `.agents/`, not to the fingerprint of the last sync, so a
+  source edited without a `sync` is reported (`projection-stale`) instead of
+  passing silently; a projection whose source was deleted is reported as an
+  orphan and removed by `sync`.
 - **`sync`** — regenerates every projection from the source of truth. The whole
   plan is computed before anything touches the disk, so a blocked run writes
   nothing and `--dry-run` reports exactly what a real run would do.
@@ -42,6 +46,9 @@ First public release.
   installable and removable in isolation with `pack add` / `pack remove`.
 - **`doctor`** — read-only diagnosis of the machine and the clone; it exits `0`
   even when it finds problems, and names the command that fixes each one.
+- **Generators refresh the projections** — `add skill|rule|agent|hook` and
+  `pack add|remove` project what they wrote to the enabled harnesses, so a new
+  skill is usable immediately in copy mode as it already was in symlink mode.
 - **Interoperability with other tools** — a skill installed by another tool
   (`npx skills`, or hand-written to the open Agent Skills spec) is validated
   against that open spec only. `check` reports it as information, never as an

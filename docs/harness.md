@@ -1,71 +1,71 @@
-# Matrice des harness
+# Harness matrix
 
-Ce document recense, pour chaque harness cible de la v1, ce qu'il lit, comment il découvre les skills, et ce que `agentsdir` doit lui projeter. État des lieux : août 2026 (sources détaillées dans [recherche/paysage-open-source.md](recherche/paysage-open-source.md)).
+This document lists, for each harness targeted by v1, what it reads, how it discovers skills, and what `agentsdir` must project for it. Status as of August 2026 (detailed sources in [recherche/paysage-open-source.md](recherche/paysage-open-source.md)).
 
-## 1. Qui lit quoi
+## 1. Who reads what
 
-| Harness | Instructions | Découverte des skills | Fichiers propres | Hooks |
+| Harness | Instructions | Skill discovery | Own files | Hooks |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | `CLAUDE.md` uniquement (ne lit pas `AGENTS.md`) | `.claude/skills/` | `.claude/settings.json` (permissions, hooks), `.claude/agents/` (sous-agents) | oui — `.claude/settings.json` |
-| **Codex (OpenAI)** | `AGENTS.md` (natif) | `.agents/skills/` scanné nativement, du cwd à la racine | `agents/openai.yaml` + icône par skill ; `.codex/config.toml` (si dépôt « trusted ») | oui — `.codex/hooks.json` |
-| **Cursor** | `AGENTS.md` (natif) | `.cursor/skills/` ou `.agents/skills/`, ramassés n'importe où dans le dépôt | `.cursor/worktrees.json` (documenté officiellement) | oui — `.cursor/hooks.json` |
-| **Autres lecteurs d'AGENTS.md** (opencode, Gemini CLI, Copilot, Zed, Windsurf, Aider…) | `AGENTS.md` (natif) | opencode lit `.opencode/skills`, `.claude/skills` puis `.agents/skills` ; variable selon l'outil | aucun requis | variable |
+| **Claude Code** | `CLAUDE.md` only (does not read `AGENTS.md`) | `.claude/skills/` | `.claude/settings.json` (permissions, hooks), `.claude/agents/` (sub-agents) | yes — `.claude/settings.json` |
+| **Codex (OpenAI)** | `AGENTS.md` (native) | `.agents/skills/` scanned natively, from the cwd up to the root | `agents/openai.yaml` + icon per skill; `.codex/config.toml` (if the repository is "trusted") | yes — `.codex/hooks.json` |
+| **Cursor** | `AGENTS.md` (native) | `.cursor/skills/` or `.agents/skills/`, picked up anywhere in the repository | `.cursor/worktrees.json` (officially documented) | yes — `.cursor/hooks.json` |
+| **Other AGENTS.md readers** (opencode, Gemini CLI, Copilot, Zed, Windsurf, Aider…) | `AGENTS.md` (native) | opencode reads `.opencode/skills`, `.claude/skills` then `.agents/skills`; varies by tool | none required | varies |
 
-Lecture de la matrice : **la source de vérité `.agents/` est déjà lisible nativement par tout le monde sauf Claude Code**. Le travail de projection se concentre donc sur Claude Code (symlinks ou copies vers `CLAUDE.md` et `.claude/*`) et sur les métadonnées d'interface Codex (`agents/openai.yaml` + icône par skill).
+How to read the matrix: **the `.agents/` source of truth is already readable natively by everyone except Claude Code**. The projection work therefore focuses on Claude Code (symlinks or copies to `CLAUDE.md` and `.claude/*`) and on the Codex interface metadata (`agents/openai.yaml` + icon per skill).
 
-## 2. Faits d'adoption (août 2026)
+## 2. Adoption facts (August 2026)
 
-- **AGENTS.md est un standard** : lancé par OpenAI en août 2025, transféré à l'Agentic AI Foundation (Linux Foundation) pour une gouvernance neutre. Plus de 60 000 dépôts publics, lu nativement par plus de 30 agents.
-- **Claude Code est l'exception** : il ne lit que `CLAUDE.md` ; la demande de support natif d'`AGENTS.md` est massive mais sans réponse officielle. C'est précisément la projection que `agentsdir` installe — et la moitié « pont » de la proposition de valeur.
-- **Agent Skills (SKILL.md) est un standard ouvert** : spécification publiée par Anthropic fin 2025 (agentskills.io), adoptée en 48 heures par Microsoft et OpenAI ; plus de 30 outils la lisent.
-- **`.agents/skills/` est la convention inter-clients** : Codex la scanne nativement, Cursor la ramasse n'importe où dans le dépôt, opencode la lit en dernier recours. Installer cette convention, c'est suivre les standards, pas imposer un format propriétaire.
-- **`agents/openai.yaml` est le format officiel** de métadonnées de skill pour Codex/ChatGPT (`display_name`, `short_description`, icônes, `brand_color`, `default_prompt`, politique d'invocation). Aucun outil recensé ne le génère automatiquement : c'est un différenciateur net d'`agentsdir`.
+- **AGENTS.md is a standard**: launched by OpenAI in August 2025, transferred to the Agentic AI Foundation (Linux Foundation) for neutral governance. More than 60,000 public repositories, read natively by more than 30 agents.
+- **Claude Code is the exception**: it only reads `CLAUDE.md`; the demand for native `AGENTS.md` support is massive but has received no official answer. This is precisely the projection that `agentsdir` installs — and the "bridge" half of the value proposition.
+- **Agent Skills (SKILL.md) is an open standard**: specification published by Anthropic at the end of 2025 (agentskills.io), adopted within 48 hours by Microsoft and OpenAI; more than 30 tools read it.
+- **`.agents/skills/` is the cross-client convention**: Codex scans it natively, Cursor picks it up anywhere in the repository, opencode reads it as a last resort. Installing this convention means following the standards, not imposing a proprietary format.
+- **`agents/openai.yaml` is the official format** for skill metadata in Codex/ChatGPT (`display_name`, `short_description`, icons, `brand_color`, `default_prompt`, invocation policy). No surveyed tool generates it automatically: it is a clear differentiator for `agentsdir`.
 
-## 3. Hooks : un script portable, trois enregistrements
+## 3. Hooks: one portable script, three registrations
 
-Les trois harness ont convergé sur le **même jeu d'événements** — `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `SessionStart`… — mais leurs fichiers d'enregistrement sont incompatibles. Formats revalidés le 2026-08-29 contre les trois documentations officielles (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks, cursor.com/docs/hooks) ; la matrice exacte codée vit dans `src/core/hook-registries.ts` :
+The three harnesses have converged on the **same event set** — `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, `SessionStart`… — but their registration files are incompatible. Formats revalidated on 2026-08-29 against the three official documentation sites (code.claude.com/docs/en/hooks, developers.openai.com/codex/hooks, cursor.com/docs/hooks); the exact matrix as coded lives in `src/core/hook-registries.ts`:
 
-- **Claude Code** — `.claude/settings.json` : enveloppe `hooks`, groupes `{ "matcher": "…", "hooks": [{ "type": "command", "command": "…" }] }` par événement.
-- **Codex** — `.codex/hooks.json` : même enveloppe `hooks` et mêmes groupes que Claude, dans un fichier dédié. (Correction du 2026-08-29 : une version antérieure de ce document affirmait « événements à la racine, sans enveloppe » — la documentation officielle publiée par OpenAI montre l'enveloppe `hooks` ; des guides tiers divergent encore, la doc officielle prévaut.)
-- **Cursor** — `.cursor/hooks.json` : `"version": 1` obligatoire, enveloppe `hooks`, clés d'événements en lowerCamelCase avec renommages (`preToolUse`, `stop`, `sessionStart`, et `beforeSubmitPrompt` pour `UserPromptSubmit`), entrées plates `{ "command": "…" }`. Le `matcher` y existe mais avec le vocabulaire d'outils propre à Cursor (`Shell`, pas `Bash`) : un matcher écrit pour Claude n'y correspond à rien — `add hook` ne le projette donc jamais côté Cursor.
+- **Claude Code** — `.claude/settings.json`: `hooks` wrapper, `{ "matcher": "…", "hooks": [{ "type": "command", "command": "…" }] }` groups per event.
+- **Codex** — `.codex/hooks.json`: the same `hooks` wrapper and the same groups as Claude, in a dedicated file. (Correction of 2026-08-29: an earlier version of this document claimed "events at the root, without a wrapper" — the official documentation published by OpenAI shows the `hooks` wrapper; third-party guides still diverge, the official documentation prevails.)
+- **Cursor** — `.cursor/hooks.json`: mandatory `"version": 1`, `hooks` wrapper, event keys in lowerCamelCase with renamings (`preToolUse`, `stop`, `sessionStart`, and `beforeSubmitPrompt` for `UserPromptSubmit`), flat entries `{ "command": "…" }`. The `matcher` exists there but with Cursor's own tool vocabulary (`Shell`, not `Bash`): a matcher written for Claude matches nothing there — so `add hook` never projects it on the Cursor side.
 
-Le script du hook, lui, est portable (Node sans dépendances, entrée JSON sur stdin). D'où le générateur `add hook` : écrire le script une fois, l'enregistrer trois fois.
+The hook script itself is portable (dependency-free Node, JSON input on stdin). Hence the `add hook` generator: write the script once, register it three times.
 
 ```mermaid
 flowchart LR
-    S[".agents/hooks/&lt;nom&gt;.mjs<br/>script portable — écrit une fois"]
-    S --> A[".claude/settings.json<br/>enveloppe hooks + matcher"]
-    S --> B[".codex/hooks.json<br/>enveloppe hooks, groupes matcher"]
-    S --> C[".cursor/hooks.json<br/>version: 1, cles lowerCamelCase"]
+    S[".agents/hooks/&lt;name&gt;.mjs<br/>portable script — written once"]
+    S --> A[".claude/settings.json<br/>hooks wrapper + matcher"]
+    S --> B[".codex/hooks.json<br/>hooks wrapper, matcher groups"]
+    S --> C[".cursor/hooks.json<br/>version: 1, lowerCamelCase keys"]
 ```
 
-**Avertissement** : les formats de hooks de Cursor ont déjà cassé entre deux versions de l'outil. Chaque release d'`agentsdir` doit revalider les trois formats d'enregistrement contre les documentations à jour, et `doctor` doit signaler un format inconnu plutôt que d'écrire à l'aveugle.
+**Warning**: Cursor's hook formats have already broken between two versions of the tool. Every `agentsdir` release must revalidate the three registration formats against the current documentation, and `doctor` must report an unknown format rather than writing blindly.
 
-## 4. Points non standardisés ou à vérifier
+## 4. Non-standardized points, or points to verify
 
-- **`.codex/environments/environment.toml`** : observé dans le dépôt NowStack (marqué « autogenerated », probablement écrit par l'application Codex elle-même), mais corroboré par **aucune documentation publique** — les environnements Codex cloud se configurent dans l'interface web. La CLI **ne doit pas générer ce fichier en v1** ; à réévaluer si OpenAI le documente.
-- **`.cursor/worktrees.json`** : documenté officiellement par Cursor (clés `setup-worktree`, `setup-worktree-unix`, `setup-worktree-windows` pointant vers des scripts). C'est la cible du pack worktrees.
-- **`conductor.json`** (Conductor) : même motif que Cursor (scripts `setup`/`archive`), hors périmètre v1 mais trivial à ajouter si demandé.
-- **`.codex/config.toml`** : n'est chargé que si le dépôt est « trusted » côté Codex ; aucune projection nécessaire en v1.
+- **`.codex/environments/environment.toml`**: observed in the NowStack repository (marked "autogenerated", probably written by the Codex application itself), but corroborated by **no public documentation** — Codex cloud environments are configured in the web interface. The CLI **must not generate this file in v1**; to be reassessed if OpenAI documents it.
+- **`.cursor/worktrees.json`**: officially documented by Cursor (keys `setup-worktree`, `setup-worktree-unix`, `setup-worktree-windows` pointing to scripts). It is the target of the worktrees pack.
+- **`conductor.json`** (Conductor): same pattern as Cursor (`setup`/`archive` scripts), out of v1 scope but trivial to add if requested.
+- **`.codex/config.toml`**: it is only loaded if the repository is "trusted" on the Codex side; no projection needed in v1.
 
-## 5. Ce que chaque harness reçoit après `init`
+## 5. What each harness receives after `init`
 
 **Claude Code**
-- `CLAUDE.md` → projection d'`AGENTS.md` — symlink, ou copie avec en-tête en mode copie (repli) ;
-- `.claude/rules`, `.claude/skills`, `.claude/agents` → projections de `.agents/*` ;
-- `.claude/settings.json` : liste blanche de permissions couvrant exactement les scripts émis, et enregistrements de hooks le cas échéant.
+- `CLAUDE.md` → projection of `AGENTS.md` — a symlink, or a copy with a header in copy mode (fallback);
+- `.claude/rules`, `.claude/skills`, `.claude/agents` → projections of `.agents/*`;
+- `.claude/settings.json`: a permission allowlist covering exactly the emitted scripts, and hook registrations where applicable.
 
 **Codex (OpenAI)**
-- `AGENTS.md` lu tel quel (fichier réel, aucune projection nécessaire) ;
-- `.agents/skills/` scanné nativement ; par skill, `agents/openai.yaml` + `assets/icon.svg` générés depuis le frontmatter (voir [conventions.md](conventions.md)) ;
-- `.codex/hooks.json` si des hooks sont installés.
+- `AGENTS.md` read as is (a real file, no projection needed);
+- `.agents/skills/` scanned natively; per skill, `agents/openai.yaml` + `assets/icon.svg` generated from the frontmatter (see [conventions.md](conventions.md));
+- `.codex/hooks.json` if hooks are installed.
 
 **Cursor**
-- `AGENTS.md` lu tel quel ; `.agents/skills/` ramassé nativement ;
-- `.cursor/worktrees.json` si le pack worktrees est installé ;
-- `.cursor/hooks.json` si des hooks sont installés.
+- `AGENTS.md` read as is; `.agents/skills/` picked up natively;
+- `.cursor/worktrees.json` if the worktrees pack is installed;
+- `.cursor/hooks.json` if hooks are installed.
 
-**Autres lecteurs d'AGENTS.md** (opencode, Gemini CLI, Copilot…)
-- Rien à générer : `AGENTS.md` et `.agents/skills/` suffisent. C'est la conséquence directe du choix « suivre les standards » : chaque nouveau harness conforme est couvert gratuitement.
+**Other AGENTS.md readers** (opencode, Gemini CLI, Copilot…)
+- Nothing to generate: `AGENTS.md` and `.agents/skills/` are enough. This is the direct consequence of the "follow the standards" choice: every new conformant harness is covered for free.
 
-Voir aussi : [architecture.md](architecture.md) (moteur de projections), [commandes.md](commandes.md) (`init`, `sync`, `check`, `add hook`), [roadmap.md](roadmap.md) (périmètre v1).
+See also: [architecture.md](architecture.md) (projection engine), [commandes.md](commandes.md) (`init`, `sync`, `check`, `add hook`), [roadmap.md](roadmap.md) (v1 scope).

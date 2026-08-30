@@ -16,6 +16,7 @@ import {
   ensureValidName,
   isInteractive,
   renderGeneratorReport,
+  resyncProjections,
   runGeneratorCli,
   type GeneratorResult,
 } from "./add-common.js";
@@ -37,16 +38,19 @@ export async function runAddAgent(
       `Agent "${answers.name}" already exists (${agentPath}). Pick another name, or edit the existing file.`,
     );
   }
+  const source = renderAgentTemplate(answers);
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "agents"), { recursive: true });
-    await writeFile(
-      join(root, ".agents", "agents", agentFile),
-      renderAgentTemplate(answers),
-      "utf8",
-    );
+    await writeFile(join(root, ".agents", "agents", agentFile), source, "utf8");
   }
   return {
-    changes: [{ path: agentPath, action: "created" }],
+    changes: [
+      { path: agentPath, action: "created" as const },
+      ...(await resyncProjections(root, manifest, {
+        ...options,
+        overlay: { [agentPath]: source },
+      })),
+    ],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
   };

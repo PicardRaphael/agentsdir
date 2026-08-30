@@ -233,6 +233,11 @@ describe("09 - add skill", () => {
       ".agents/skills/demo-skill/SKILL.md",
       ".agents/skills/demo-skill/agents/openai.yaml",
       ".agents/skills/demo-skill/assets/icon.svg",
+      // the generator also projects to the harnesses, so the skill is usable
+      // right away in copy mode as it already is in symlink mode
+      ".claude/skills/demo-skill/SKILL.md",
+      ".claude/skills/demo-skill/agents/openai.yaml",
+      ".claude/skills/demo-skill/assets/icon.svg",
     ]);
     expect(await pathExists(join(dir, ".agents", "skills", "demo-skill"))).toBe(
       false,

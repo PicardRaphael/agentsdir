@@ -172,6 +172,54 @@ async function ownedCopies(
   return owned;
 }
 
+/**
+ * Copies left behind by a deleted source (a rule removed from `.agents/rules/`
+ * keeps its `.claude/rules/` mirror otherwise). Symlink mode has none: its four
+ * targets are fixed and always point at a live source.
+ */
+export async function removeOrphanProjections(
+  root: string,
+  options: {
+    mode: ProjectionMode;
+    hashes: Record<string, string>;
+    dryRun?: boolean;
+  },
+): Promise<{ removed: string[] }> {
+  if (options.mode === "symlink") {
+    return { removed: [] };
+  }
+  const expected = new Set(
+    (await expectedCopies(root, {})).map((file) => file.path),
+  );
+  const removed: string[] = [];
+  for (const path of Object.keys(options.hashes).sort()) {
+    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+      continue;
+    }
+    removed.push(path);
+  }
+  if (!options.dryRun) {
+    for (const path of removed) {
+      await rm(toAbsolute(root, path), { force: true });
+    }
+    for (const spec of CLAUDE_PROJECTIONS) {
+      if (spec.kind === "dir") {
+        await rmdirIfEmpty(root, spec.target);
+      }
+    }
+  }
+  return { removed };
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function rmdirIfEmpty(root: string, path: string): Promise<void> {
   const abs = toAbsolute(root, path);
   try {
@@ -190,7 +238,12 @@ export interface VerifyOptions {
 }
 
 export type DriftKind =
-  "missing" | "modified" | "replaced-by-copy" | "header-removed";
+  | "missing"
+  | "modified"
+  | "replaced-by-copy"
+  | "header-removed"
+  | "stale"
+  | "orphan";
 
 export interface ProjectionDrift {
   path: string;
@@ -334,10 +387,15 @@ async function verifyCopies(
   hashes: Record<string, string>,
 ): Promise<ProjectionDrift[]> {
   const drifts: ProjectionDrift[] = [];
-  const entries = Object.entries(hashes).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0,
+  // the source of truth is the reference, not the fingerprint of the last sync:
+  // comparing to the recorded hash alone would call a copy correct while its
+  // source has moved on — the most common drift of all (edit, forget to sync)
+  const expected = new Map(
+    (await expectedCopies(root, {})).map((file) => [file.path, file]),
   );
-  for (const [path, recorded] of entries) {
+  for (const [path, file] of [...expected].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
     let current: Buffer;
     try {
       current = await readFile(toAbsolute(root, path));
@@ -349,8 +407,11 @@ async function verifyCopies(
       });
       continue;
     }
+    if (current.equals(file.content)) {
+      continue;
+    }
     if (
-      path.endsWith(".md") &&
+      file.isMarkdown &&
       !current.toString("utf8").includes(GENERATED_HEADER)
     ) {
       drifts.push({
@@ -361,14 +422,35 @@ async function verifyCopies(
       });
       continue;
     }
-    if (sha256(current) !== recorded) {
-      drifts.push({
-        path,
-        kind: "modified",
-        detail:
-          "content differs from the fingerprint recorded in .agents.toml — move your edits into .agents/ and run `agentsdir sync`.",
-      });
+    // matching the recorded fingerprint means the copy is intact but stale:
+    // its source changed since the last sync
+    drifts.push(
+      hashes[path] === sha256(current)
+        ? {
+            path,
+            kind: "stale",
+            detail:
+              "the source in .agents/ changed since the last sync — run `agentsdir sync`.",
+          }
+        : {
+            path,
+            kind: "modified",
+            detail:
+              "content differs from the source of truth — move your edits into .agents/ and run `agentsdir sync`.",
+          },
+    );
+  }
+  // recorded projections whose source is gone: sync removes them
+  for (const path of Object.keys(hashes).sort()) {
+    if (expected.has(path) || !(await pathExists(toAbsolute(root, path)))) {
+      continue;
     }
+    drifts.push({
+      path,
+      kind: "orphan",
+      detail:
+        "projection left behind by a deleted source — run `agentsdir sync` to remove it.",
+    });
   }
   return drifts;
 }

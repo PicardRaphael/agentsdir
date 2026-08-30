@@ -1,51 +1,51 @@
 # agentsdir
 
-> Installe dans n'importe quel repo l'architecture d'agents que Codex, Cursor et opencode lisent déjà nativement — et fait le pont pour Claude Code.
+> Installs into any repo the agent architecture that Codex, Cursor and opencode already read natively — and bridges it to Claude Code.
 
-`agentsdir` est une CLI open source (MIT) qui met en place, dans un projet existant — quel que soit son langage —, une architecture de configuration d'agents de code fondée sur les standards ouverts :
+`agentsdir` is an open source CLI (MIT) that sets up, in an existing project — whatever its language —, a code agent configuration architecture based on open standards:
 
-- **une source de vérité unique** : le répertoire `.agents/` (`rules/`, `skills/`, `agents/`, `tasks/`, `plan/`, `memory/`) et le fichier `AGENTS.md` ;
-- **des projections par harness** : `CLAUDE.md` et `.claude/*` pour Claude Code (symlinks, ou copies synchronisées quand les symlinks ne sont pas disponibles), `agents/openai.yaml` + icône SVG par skill pour Codex, enregistrements de hooks pour Claude Code, Codex et Cursor ;
-- **zéro dérive** : tout ce qui est généré est vérifiable (`agentsdir check`, branché en CI dès l'installation) et régénérable (`agentsdir sync`).
+- **a single source of truth**: the `.agents/` directory (`rules/`, `skills/`, `agents/`, `tasks/`, `plan/`, `memory/`) and the `AGENTS.md` file;
+- **per-harness projections**: `CLAUDE.md` and `.claude/*` for Claude Code (symlinks, or synchronized copies when symlinks are not available), `agents/openai.yaml` + an SVG icon per skill for Codex, hook registrations for Claude Code, Codex and Cursor;
+- **zero drift**: everything generated is verifiable (`agentsdir check`, wired into CI from installation onwards) and regenerable (`agentsdir sync`).
 
-## Statut
+## Status
 
-**Phase de conception.** Aucun code n'est encore écrit : ce repo contient le plan, la documentation d'architecture et le backlog de la v1. Le point d'entrée est [`docs/roadmap.md`](docs/roadmap.md).
+**v1.0.0.** The CLI is implemented (`init`, `add skill` / `rule` / `agent` / `hook`, `pack add` / `remove`, `sync`, `check`, `doctor`), tested (Vitest unit tests plus end-to-end tests on ubuntu and windows) and this repo is managed by its own CLI. The entry point is [`docs/roadmap.md`](docs/roadmap.md).
 
-## Pourquoi
+## Why
 
-`AGENTS.md` est devenu un standard (Agentic AI Foundation / Linux Foundation) lu par plus de trente agents, et `.agents/skills/` est la convention de skills que Codex, Cursor et opencode découvrent nativement. Mais aucun outil n'installe cette architecture complète dans un repo, ne gère le repli quand les symlinks ne sont pas disponibles (Windows sans mode développeur), ne génère les métadonnées Codex par skill, ni n'enregistre un même hook dans les trois harness. C'est le créneau d'`agentsdir` — l'étude complète est dans [`docs/recherche/paysage-open-source.md`](docs/recherche/paysage-open-source.md).
+`AGENTS.md` has become a standard (Agentic AI Foundation / Linux Foundation) read by more than thirty agents, and `.agents/skills/` is the skills convention that Codex, Cursor and opencode discover natively. But no tool installs this complete architecture into a repo, handles the fallback when symlinks are not available (Windows without developer mode), generates the Codex metadata per skill, or registers a single hook in all three harnesses. That is the gap `agentsdir` fills — the full study is in [`docs/recherche/paysage-open-source.md`](docs/recherche/paysage-open-source.md).
 
-## Aperçu (cible v1)
+## Overview (v1 target)
 
 ```bash
-npx agentsdir init          # installe l'architecture, interactif
+npx agentsdir init          # installs the architecture, interactive
 npx agentsdir add skill ma-procedure
 npx agentsdir add rule conventions-api --paths "src/api/**"
 npx agentsdir add hook PreToolUse
-npx agentsdir sync          # régénère les projections
-npx agentsdir check         # vérifie invariants et dérive (CI)
-npx agentsdir doctor        # diagnostic de l'environnement
+npx agentsdir sync          # regenerates the projections
+npx agentsdir check         # verifies invariants and drift (CI)
+npx agentsdir doctor        # environment diagnostic
 ```
 
 ## Documentation
 
-| Document | Contenu |
+| Document | Contents |
 | --- | --- |
-| [`docs/SPEC.md`](docs/SPEC.md) | Positionnement, principes de design, décisions actées |
-| [`docs/architecture.md`](docs/architecture.md) | Architecture technique de la CLI, manifeste, stratégie symlink/repli |
-| [`docs/commandes.md`](docs/commandes.md) | Spécification de chaque commande |
-| [`docs/creation-assistee.md`](docs/creation-assistee.md) | Création assistée : méta-skills, rubriques de qualité, interviews |
-| [`docs/conventions.md`](docs/conventions.md) | Contrats installés et validés : skills, règles, blocs gérés, verrou |
-| [`docs/harness.md`](docs/harness.md) | Matrice d'intégration Claude Code / Codex / Cursor |
-| [`docs/roadmap.md`](docs/roadmap.md) | Jalons v0.1 → v1 → v1.x → v2 et critères d'acceptation |
-| [`docs/recherche/`](docs/recherche/) | Analyse du modèle source (NowStack) et paysage concurrentiel |
-| [`.agents/tasks/`](.agents/tasks/) | Backlog v1, une tâche auto-suffisante par fichier |
+| [`docs/SPEC.md`](docs/SPEC.md) | Positioning, design principles, settled decisions |
+| [`docs/architecture.md`](docs/architecture.md) | Technical architecture of the CLI, manifest, symlink/fallback strategy |
+| [`docs/commandes.md`](docs/commandes.md) | Specification of each command |
+| [`docs/creation-assistee.md`](docs/creation-assistee.md) | Assisted creation: meta-skills, quality rubrics, interviews |
+| [`docs/conventions.md`](docs/conventions.md) | Installed and validated contracts: skills, rules, managed blocks, lock |
+| [`docs/harness.md`](docs/harness.md) | Claude Code / Codex / Cursor integration matrix |
+| [`docs/roadmap.md`](docs/roadmap.md) | v0.1 → v1 → v1.x → v2 milestones and acceptance criteria |
+| [`docs/recherche/`](docs/recherche/) | Analysis of the source model (NowStack) and competitive landscape |
+| [`.agents/tasks/`](.agents/tasks/) | v1 backlog, one self-contained task per file |
 
-Ce repo applique sa propre architecture dès aujourd'hui : les agents qui y travaillent lisent [`AGENTS.md`](AGENTS.md).
+This repo applies its own architecture today: the agents working in it read [`AGENTS.md`](AGENTS.md).
 
-> Note : la documentation est rédigée en français pendant la phase de conception. Le README, la documentation publique et les messages de la CLI seront publiés en anglais avant la première release (voir la tâche dédiée du backlog).
+> Note: the documentation is written in French during the design phase. The README, the public documentation and the CLI messages will be published in English before the first release (see the dedicated backlog task).
 
-## Licence
+## License
 
 [MIT](LICENSE) © 2026 Raphael Picard

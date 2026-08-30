@@ -18,6 +18,7 @@ import {
   ensureValidName,
   isInteractive,
   renderGeneratorReport,
+  resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
@@ -90,7 +91,13 @@ export async function runAddRule(
     }
   }
   return {
-    changes,
+    changes: [
+      ...changes,
+      ...(await resyncProjections(root, manifest, {
+        ...options,
+        overlay: { [rulePath]: source },
+      })),
+    ],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
   };

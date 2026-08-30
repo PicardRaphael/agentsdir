@@ -34,6 +34,7 @@ import {
 } from "../templates/agents-md.js";
 import {
   renderGeneratorReport,
+  resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
@@ -150,7 +151,16 @@ export async function runPackAdd(
     );
   }
   return {
-    changes: sortChanges(changes),
+    changes: sortChanges([
+      ...changes,
+      // the pack's skills and rules must reach the harnesses right away
+      ...(await resyncProjections(root, nextManifest, {
+        ...options,
+        overlay: Object.fromEntries(
+          toWrite.map((file) => [file.path, file.content]),
+        ),
+      })),
+    ]),
     notes,
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
@@ -297,7 +307,13 @@ export async function runPackRemove(
     );
   }
   return {
-    changes: sortChanges(changes),
+    changes: sortChanges([
+      ...changes,
+      // removing a pack strands the projections of the files it took away
+      ...(await resyncProjections(root, nextManifest, {
+        dryRun: options.dryRun,
+      })),
+    ]),
     notes: [],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,

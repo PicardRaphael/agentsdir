@@ -22,6 +22,7 @@ import { computeSkillHash } from "../../core/validate.js";
 import { renderAgentsCheckWorkflow } from "../../templates/bootstrap.js";
 import { runCheck } from "../check.js";
 import { runInit, type InitAnswers } from "../init.js";
+import { runSync } from "../sync.js";
 
 const execFileAsync = promisify(execFile);
 const cliPath = fileURLToPath(new URL("../../../dist/cli.js", import.meta.url));
@@ -174,6 +175,8 @@ describe("07 - check command", () => {
   it("Given a freshly initialized repo with a valid skill, When check runs, Then it reports no violation and exits 0", async () => {
     const dir = await initializedRepo();
     await addSkill(dir, "demo", skillSource("demo"));
+    // the helper writes the source by hand; sync projects it to the harnesses
+    await runSync(dir, { dryRun: false });
     const result = await runCheck(dir);
     expect(result.violations).toEqual([]);
     expect(result.exitCode).toBe(0);
@@ -336,6 +339,7 @@ describe("07 - check command", () => {
   it("Given lock fingerprints, When a vendored skill drifts it is an error, and When agentsdir-installed content drifts it is only an info", async () => {
     const vendored = await initializedRepo();
     const vendoredDir = await addSkill(vendored, "vend", skillSource("vend"));
+    await runSync(vendored, { dryRun: false });
     await writeFile(
       join(vendored, "skills-lock.json"),
       JSON.stringify({
@@ -359,6 +363,7 @@ describe("07 - check command", () => {
 
     const installed = await initializedRepo();
     const installedDir = await addSkill(installed, "meta", skillSource("meta"));
+    await runSync(installed, { dryRun: false });
     await writeFile(
       join(installed, "skills-lock.json"),
       JSON.stringify({
@@ -377,7 +382,14 @@ describe("07 - check command", () => {
     );
     await writeFile(join(installedDir, "notes.txt"), "local change\n", "utf8");
     const info = await runCheck(installed);
-    expect(info.exitCode).toBe(0);
+    // the new file also lacks its mirror until the next sync; what this test
+    // pins down is that agentsdir-installed content never fails the lock
+    expect(
+      info.violations.filter(
+        (violation) =>
+          violation.rule.startsWith("lock-") && violation.severity === "error",
+      ),
+    ).toEqual([]);
     const local = info.violations.find(
       (violation) => violation.rule === "lock-local-change",
     );
@@ -429,6 +441,70 @@ describe("07 - check command", () => {
   });
 });
 
+describe("14 - copy projections are verified against the source of truth", () => {
+  it("Given a rule edited in .agents/ without a sync, When check runs, Then the stale projection is reported and sync repairs it", async () => {
+    const dir = await initializedRepo();
+    const rule = join(dir, ".agents", "rules", "tasks.md");
+    await writeFile(rule, `${await readFile(rule, "utf8")}\n- New line.\n`);
+    const result = await runCheck(dir);
+    expect(result.exitCode).toBe(1);
+    const stale = result.violations.filter(
+      (violation) => violation.rule === "projection-stale",
+    );
+    expect(stale.map((violation) => violation.path)).toEqual([
+      ".claude/rules/tasks.md",
+    ]);
+    await runSync(dir, { dryRun: false });
+    expect((await runCheck(dir)).exitCode).toBe(0);
+    expect(
+      await readFile(join(dir, ".claude", "rules", "tasks.md"), "utf8"),
+    ).toContain("- New line.");
+  });
+
+  it("Given a rule deleted from .agents/, When check runs, Then its leftover projection is reported as an orphan and sync removes it", async () => {
+    const dir = await initializedRepo();
+    await writeFile(
+      join(dir, ".agents", "rules", "extra.md"),
+      "# Extra rule\n\nRead before shipping anything.\n",
+      "utf8",
+    );
+    await runSync(dir, { dryRun: false });
+    await rm(join(dir, ".agents", "rules", "extra.md"));
+    const result = await runCheck(dir);
+    expect(
+      result.violations
+        .filter((violation) => violation.rule === "projection-orphan")
+        .map((violation) => violation.path),
+    ).toEqual([".claude/rules/extra.md"]);
+    const sync = await runSync(dir, { dryRun: false });
+    expect(sync.exitCode).toBe(0);
+    expect(
+      sync.changes.some(
+        (change) =>
+          change.path === ".claude/rules/extra.md" &&
+          change.action === "removed",
+      ),
+    ).toBe(true);
+    await expect(
+      readFile(join(dir, ".claude", "rules", "extra.md"), "utf8"),
+    ).rejects.toThrow();
+    expect((await runCheck(dir)).exitCode).toBe(0);
+  });
+
+  it("Given a projection edited by hand, When check runs, Then it is reported as modified, not as stale", async () => {
+    const dir = await initializedRepo();
+    const copy = join(dir, ".claude", "rules", "tasks.md");
+    await writeFile(copy, `${await readFile(copy, "utf8")}\nedited by hand\n`);
+    const result = await runCheck(dir);
+    expect(result.exitCode).toBe(1);
+    expect(
+      result.violations
+        .filter((violation) => violation.path === ".claude/rules/tasks.md")
+        .map((violation) => violation.rule),
+    ).toEqual(["projection-modified"]);
+  });
+});
+
 function externalSkillSource(name: string): string {
   return `---\nname: ${name}\ndescription: A skill installed by another tool, open spec only.\n---\n\n# ${name}\n\nExternal content, no catalogue field.\n`;
 }
@@ -444,6 +520,8 @@ describe("14 - external skill interop (open Agent Skills spec)", () => {
       externalSkillSource("external-skill"),
       "utf8",
     );
+    // sync mirrors it to the harnesses without touching the skill folder
+    await runSync(dir, { dryRun: false });
     const result = await runCheck(dir);
     expect(result.exitCode).toBe(0);
     const external = result.violations.filter((violation) =>
@@ -465,8 +543,11 @@ describe("14 - external skill interop (open Agent Skills spec)", () => {
     );
     const result = await runCheck(dir);
     expect(result.exitCode).toBe(1);
+    // only the skill contract matters here; the missing mirrors are a separate
+    // concern (sync refuses to project a repo whose source is invalid)
     const errors = result.violations.filter(
-      (violation) => violation.severity === "error",
+      (violation) =>
+        violation.severity === "error" && violation.rule.startsWith("skill-"),
     );
     expect(rules(errors)).toEqual(["skill-name-identity"]);
   });

@@ -1,58 +1,57 @@
-# Spécification des commandes
+# Command specification
 
-Ce document spécifie la surface de commandes de la CLI `agentsdir`. Les concepts
-(source de vérité, projections, blocs gérés, manifeste) sont définis dans
-[architecture.md](architecture.md) ; les contrats de contenu (skill, règle,
-agent, hook) dans [conventions.md](conventions.md) ; le détail par harness dans
-[harness.md](harness.md) ; le découpage par version dans [roadmap.md](roadmap.md).
+This document specifies the command surface of the `agentsdir` CLI. The concepts
+(source of truth, projections, managed blocks, manifest) are defined in
+[architecture.md](architecture.md); the content contracts (skill, rule,
+agent, hook) in [conventions.md](conventions.md); the per-harness details in
+[harness.md](harness.md); the version-by-version split in [roadmap.md](roadmap.md).
 
-## Tableau récapitulatif
+## Summary table
 
-| Commande | Version | Écrit | Rôle |
+| Command | Version | Writes | Role |
 | --- | --- | --- | --- |
-| `init` | v1 | oui | Installe l'architecture `.agents/` + projections dans un repo existant |
-| `add skill <name>` | v1 | oui | Crée un skill conforme + ses projections Codex |
-| `add rule <name>` | v1 | oui | Crée une règle + son entrée dans l'index des règles |
-| `add agent <name>` | v1 | oui | Crée un sous-agent |
-| `add hook <event>` | v1 | oui | Crée un script de hook portable et l'enregistre sur chaque harness |
-| `sync` | v1 | oui | Régénère toutes les projections depuis la source de vérité |
-| `check` | v1 | non | Vérifie invariants, dérive et santé des symlinks (mode CI) |
-| `doctor` | v1 | non | Diagnostique l'environnement local |
-| `pack add <name>` | v1 | oui | Installe un pack : fichiers, blocs gérés, manifeste |
-| `pack remove <name>` | v1 | oui | Désinstalle un pack proprement (refus si modifié localement, sauf `--force`) |
-| `vendor <owner/repo>` | v1.x | oui | Importe un skill externe et le verrouille |
-| `update` | v1.x | oui | Met à niveau la structure vers un nouveau schéma de manifeste |
-| `migrate` | v2 | oui | Bascule une configuration `.claude/` ou `.cursor/` existante vers `.agents/` |
+| `init` | v1 | yes | Installs the `.agents/` architecture + projections in an existing repo |
+| `add skill <name>` | v1 | yes | Creates a conformant skill + its Codex projections |
+| `add rule <name>` | v1 | yes | Creates a rule + its entry in the rules index |
+| `add agent <name>` | v1 | yes | Creates a sub-agent |
+| `add hook <event>` | v1 | yes | Creates a portable hook script and registers it on every harness |
+| `sync` | v1 | yes | Regenerates every projection from the source of truth |
+| `check` | v1 | no | Checks invariants, drift and symlink health (CI mode) |
+| `doctor` | v1 | no | Diagnoses the local environment |
+| `pack add <name>` | v1 | yes | Installs a pack: files, managed blocks, manifest |
+| `pack remove <name>` | v1 | yes | Uninstalls a pack cleanly (refuses if modified locally, unless `--force`) |
+| `vendor <owner/repo>` | v1.x | yes | Imports an external skill and locks it |
+| `update` | v1.x | yes | Upgrades the structure to a new manifest schema |
+| `migrate` | v2 | yes | Switches an existing `.claude/` or `.cursor/` configuration over to `.agents/` |
 
-## Conventions transverses
+## Cross-cutting conventions
 
-Ces règles s'appliquent à toutes les commandes.
+These rules apply to every command.
 
-**Codes de sortie.**
+**Exit codes.**
 
-| Code | Signification |
+| Code | Meaning |
 | --- | --- |
-| `0` | Succès — aucun écart constaté ou toutes les écritures effectuées |
-| `1` | Dérive ou invariant violé — le contenu du repo contredit la source de vérité ou les contrats |
-| `2` | Erreur d'environnement ou d'utilisation — hors racine du repo, git absent, manifeste illisible, permissions insuffisantes, nom déjà pris dans un générateur |
+| `0` | Success — no discrepancy found, or every write performed |
+| `1` | Drift or violated invariant — the repo content contradicts the source of truth or the contracts |
+| `2` | Environment or usage error — outside the repo root, git missing, unreadable manifest, insufficient permissions, name already taken in a generator |
 
-**Racine du repo.** Toute commande se résout depuis la racine du dépôt git
-(remontée jusqu'à `.git/`). Lancée hors d'un dépôt git : code `2` avec un
-message actionnable.
+**Repo root.** Every command resolves from the git repository root (walking up
+to `.git/`). Run outside a git repository: exit code `2` with an actionable
+message.
 
-**`--dry-run`.** Toutes les commandes qui écrivent acceptent `--dry-run` : le
-plan complet des créations/modifications est affiché, rien n'est écrit, code de
-sortie identique à celui qu'aurait produit l'exécution réelle.
+**`--dry-run`.** Every command that writes accepts `--dry-run`: the full plan of
+creations/modifications is printed, nothing is written, and the exit code is
+identical to the one a real run would have produced.
 
-**Idempotence.** Relancer une commande sans changement intermédiaire ne produit
-aucune écriture (comparaison octet à octet avant réécriture) et sort en `0`.
-Exception assumée : les générateurs (`add …`) refusent en `2` la relance sur un
-nom déjà pris — créer deux fois n'est pas « sans changement », c'est une erreur
-d'utilisation.
+**Idempotence.** Re-running a command with no intervening change produces no
+write (byte-for-byte comparison before rewriting) and exits `0`. Deliberate
+exception: the generators (`add …`) refuse with `2` when re-run on a name that
+is already taken — creating twice is not "no change", it is a usage error.
 
-**Blocs gérés.** La CLI n'écrit jamais dans le contenu libre d'un fichier
-partagé avec l'utilisateur (`AGENTS.md`, `.claude/settings.json`,
-`.gitignore`). Elle ne touche que ses blocs délimités :
+**Managed blocks.** The CLI never writes into the free-form content of a file
+shared with the user (`AGENTS.md`, `.claude/settings.json`, `.gitignore`). It
+only touches its delimited blocks:
 
 ```markdown
 <!-- agentsdir:begin rules-index -->
@@ -60,12 +59,12 @@ partagé avec l'utilisateur (`AGENTS.md`, `.claude/settings.json`,
 <!-- agentsdir:end rules-index -->
 ```
 
-Un bloc absent est ajouté en fin de fichier ; un bloc présent est remplacé ;
-tout le reste du fichier est préservé à l'octet près.
+A missing block is appended at the end of the file; an existing block is
+replaced; everything else in the file is preserved byte for byte.
 
-**Sortie machine.** Chaque commande accepte `--json` et écrit alors sur stdout
-un objet unique `{command, mode, changes[], errors[], exitCode}` destiné aux
-scripts et à la CI.
+**Machine output.** Every command accepts `--json` and then writes a single
+object `{command, mode, changes[], errors[], exitCode}` to stdout, intended for
+scripts and CI.
 
 ---
 
@@ -79,97 +78,96 @@ npx agentsdir init [options]
 
 ### Options
 
-| Option | Effet |
+| Option | Effect |
 | --- | --- |
-| `--yes` | Accepte tous les défauts, aucune question (utilisable en script) |
-| `--dry-run` | Affiche le plan sans écrire |
-| `--harness claude,codex,cursor` | Restreint les harness ciblés (défaut : les trois) |
-| `--packs core,creator,verification,changelog,worktrees` | Restreint les packs installés (défaut : `core,creator`) |
-| `--mode symlink\|copy` | Force le mode de projection au lieu de la détection |
-| `--json` | Sortie machine |
+| `--yes` | Accepts every default, no questions asked (scriptable) |
+| `--dry-run` | Prints the plan without writing |
+| `--harness claude,codex,cursor` | Restricts the targeted harnesses (default: all three) |
+| `--packs core,creator,verification,changelog,worktrees` | Restricts the installed packs (default: `core,creator`) |
+| `--mode symlink\|copy` | Forces the projection mode instead of detecting it |
+| `--json` | Machine output |
 
-### Comportement
+### Behavior
 
-1. **Garde-fous.** Vérifie la racine git (`2` sinon). Si un manifeste
-   `.agents.toml` existe déjà, `init` ne réécrit rien et sort en `0` avec le
-   message « déjà initialisé — utiliser `sync` pour régénérer ».
-2. **Interview** (sautée avec `--yes`) : nom du produit, description d'une
-   phrase, puis **détection de stack** — présence de `package.json`,
-   `pyproject.toml`, `go.mod`, `Cargo.toml` — pour pré-remplir les commandes
-   `dev`, `test`, `lint` que l'utilisateur confirme ou corrige. La détection ne
-   sert qu'à paramétrer les gabarits : aucune dépendance n'est ajoutée au
-   projet, quel que soit son langage.
-3. **Choix des harness** (Claude Code, Codex, Cursor) et **des packs**
-   (`core` obligatoire ; `creator` coché par défaut — la création assistée,
-   voir [creation-assistee.md](creation-assistee.md) ; `verification`,
-   `changelog`, `worktrees` optionnels).
-   Les deux questions sont à **sélection multiple** (cases à cocher
-   `@clack/prompts`, les trois harness précochés) : on peut n'en garder qu'un,
-   deux, ou les trois. Pour activer un harness après coup, ajouter son nom à
-   `[harness] enabled` dans `.agents.toml` puis lancer `sync`, qui crée les
-   projections manquantes ; le retrait suit le même chemin (les projections
-   orphelines sont signalées par `check` et retirées par `sync`).
-4. **Détection du mode de projection.** La CLI crée un symlink d'essai dans un
-   répertoire temporaire du repo, lit `git config core.symlinks`, puis conclut
-   `mode = "symlink"` ou `mode = "copy"` (repli), inscrit dans le manifeste.
-   `--mode` court-circuite la détection.
-5. **Écriture de la source de vérité** : arborescence
-   `.agents/{rules,skills,agents,hooks,tasks,plan,memory}`, règles génériques
-   du pack `core` paramétrées par les réponses, `AGENTS.md` (sections produit
-   pré-remplies + blocs gérés), fichiers d'amorçage (`tasks/README.md`,
-   modèle `.agents/memory.template/` versionné, `memory/` exclu de git et
-   créé localement).
-6. **Projections** selon les harness choisis : `CLAUDE.md` et
-   `.claude/{rules,skills,agents}` (symlinks ou copies), `.claude/settings.json`
-   (bloc géré de permissions couvrant les scripts émis), projections Codex par
-   skill (`agents/openai.yaml`, `assets/icon.svg`), fichiers du pack
-   `worktrees` le cas échéant (`.cursor/worktrees.json`).
-7. **Hygiène du repo** : entrées `.gitignore` (blocs gérés), `.gitattributes`
-   avec `eol=lf` sur les scripts et fichiers hachés, workflow
-   `.github/workflows/agents-check.yml` exécutant `npx agentsdir check`.
-8. **Cas du repo déjà rempli** : comportement strictement additif. Un
-   `AGENTS.md` existant est conservé — la CLI y insère uniquement ses blocs
-   gérés ; un `CLAUDE.md` existant n'est jamais écrasé : `init` s'arrête sur ce
-   point précis avec un message renvoyant vers `migrate` (v2), code `1`.
-9. **Rapport final** : liste des fichiers créés, mode retenu, commandes
-   suivantes (`add skill`, `check`).
+1. **Guard rails.** Checks the git root (`2` otherwise). If an `.agents.toml`
+   manifest already exists, `init` rewrites nothing and exits `0` with the
+   message "already initialized — use `sync` to regenerate".
+2. **Interview** (skipped with `--yes`): product name, one-sentence
+   description, then **stack detection** — presence of `package.json`,
+   `pyproject.toml`, `go.mod`, `Cargo.toml` — to pre-fill the `dev`, `test`
+   and `lint` commands that the user confirms or corrects. Detection only
+   serves to parameterize the templates: no dependency is added to the
+   project, whatever its language.
+3. **Choice of harnesses** (Claude Code, Codex, Cursor) and **of packs**
+   (`core` mandatory; `creator` checked by default — assisted creation,
+   see [creation-assistee.md](creation-assistee.md); `verification`,
+   `changelog`, `worktrees` optional).
+   Both questions are **multiple choice** (`@clack/prompts` checkboxes, all
+   three harnesses pre-checked): you can keep only one, two, or all three. To
+   enable a harness afterwards, add its name to `[harness] enabled` in
+   `.agents.toml` then run `sync`, which creates the missing projections;
+   removal follows the same path (orphan projections are reported by `check`
+   and removed by `sync`).
+4. **Projection mode detection.** The CLI creates a trial symlink in a
+   temporary directory inside the repo, reads `git config core.symlinks`, then
+   concludes `mode = "symlink"` or `mode = "copy"` (fallback), recorded in the
+   manifest. `--mode` short-circuits detection.
+5. **Writing the source of truth**: the
+   `.agents/{rules,skills,agents,hooks,tasks,plan,memory}` tree, the generic
+   rules of the `core` pack parameterized by the answers, `AGENTS.md`
+   (pre-filled product sections + managed blocks), bootstrap files
+   (`tasks/README.md`, versioned `.agents/memory.template/` model, `memory/`
+   excluded from git and created locally).
+6. **Projections** according to the chosen harnesses: `CLAUDE.md` and
+   `.claude/{rules,skills,agents}` (symlinks or copies), `.claude/settings.json`
+   (managed permissions block covering the emitted scripts), per-skill Codex
+   projections (`agents/openai.yaml`, `assets/icon.svg`), files of the
+   `worktrees` pack where applicable (`.cursor/worktrees.json`).
+7. **Repo hygiene**: `.gitignore` entries (managed blocks), `.gitattributes`
+   with `eol=lf` on scripts and hashed files, the
+   `.github/workflows/agents-check.yml` workflow running `npx agentsdir check`.
+8. **Case of an already-populated repo**: strictly additive behavior. An
+   existing `AGENTS.md` is kept — the CLI only inserts its managed blocks
+   there; an existing `CLAUDE.md` is never overwritten: `init` stops on that
+   precise point with a message pointing to `migrate` (v2), exit code `1`.
+9. **Final report**: list of created files, selected mode, next commands
+   (`add skill`, `check`).
 
 ```mermaid
 flowchart TD
-    A[npx agentsdir init] --> B{Racine git ?}
-    B -- non --> E2[exit 2]
-    B -- oui --> C{.agents.toml existe ?}
-    C -- oui --> OK0[déjà initialisé : utiliser sync — exit 0]
-    C -- non --> D[Interview : produit, description]
-    D --> F[Détection de stack<br/>package.json / pyproject.toml / go.mod / Cargo.toml]
-    F --> G[Confirmation des commandes dev / test / lint]
-    G --> H[Choix des harness et des packs]
-    H --> I{Test symlink réel<br/>+ git config core.symlinks}
-    I -- support confirmé --> J[mode = symlink]
-    I -- échec --> K[mode = copy — repli]
-    J --> L[Écriture .agents/ + AGENTS.md<br/>blocs gérés si fichier existant]
+    A[npx agentsdir init] --> B{Git root?}
+    B -- no --> E2[exit 2]
+    B -- yes --> C{.agents.toml exists?}
+    C -- yes --> OK0[already initialized: use sync — exit 0]
+    C -- no --> D[Interview: product, description]
+    D --> F[Stack detection<br/>package.json / pyproject.toml / go.mod / Cargo.toml]
+    F --> G[Confirmation of the dev / test / lint commands]
+    G --> H[Choice of harnesses and packs]
+    H --> I{Real symlink test<br/>+ git config core.symlinks}
+    I -- support confirmed --> J[mode = symlink]
+    I -- failure --> K[mode = copy — fallback]
+    J --> L[Write .agents/ + AGENTS.md<br/>managed blocks if the file exists]
     K --> L
-    L --> M[Projections par harness :<br/>CLAUDE.md, .claude/*, openai.yaml + icônes]
-    M --> N[.gitattributes, .gitignore,<br/>workflow CI agentsdir check]
-    N --> O[Manifeste .agents.toml :<br/>version, harness, packs, mode]
-    O --> P[Rapport + exit 0]
+    L --> M[Per-harness projections:<br/>CLAUDE.md, .claude/*, openai.yaml + icons]
+    M --> N[.gitattributes, .gitignore,<br/>CI workflow agentsdir check]
+    N --> O[Manifest .agents.toml:<br/>version, harness, packs, mode]
+    O --> P[Report + exit 0]
 ```
 
 ### Idempotence
 
-Un second `init` ne réécrit rien et sort en `0` avec le message « déjà
-initialisé — utiliser `sync` pour régénérer ». La régénération est le rôle de
-`sync`.
+A second `init` rewrites nothing and exits `0` with the message "already
+initialized — use `sync` to regenerate". Regeneration is the job of `sync`.
 
-### Sorties
+### Outputs
 
-Rapport humain (ou `--json`) : fichiers créés, mode de projection, packs
-installés, prochaines commandes.
+Human-readable report (or `--json`): created files, projection mode, installed
+packs, next commands.
 
-### Codes de sortie
+### Exit codes
 
-`0` succès ou repo déjà initialisé · `1` conflit de contenu (ex. `CLAUDE.md`
-étranger) · `2` environnement (hors git, permissions).
+`0` success or repo already initialized · `1` content conflict (e.g. foreign
+`CLAUDE.md`) · `2` environment (outside git, permissions).
 
 ---
 
@@ -181,54 +179,57 @@ installés, prochaines commandes.
 npx agentsdir add skill <name> [--implicit] [--read-only] [--dry-run] [--json]
 ```
 
-### Comportement
+### Behavior
 
-1. Valide `<name>` (kebab-case, unique dans `.agents/skills/`).
-2. Crée `.agents/skills/<name>/SKILL.md` avec le **frontmatter étendu qui sert
-   de catalogue** (voir [conventions.md](conventions.md)). Les champs sont
-   demandés interactivement — description « Use when… », nom affiché, courte
-   description (25 à 64 caractères), couleur, icône choisie dans le jeu embarqué
-   (l'invite liste les noms valides), prompt par défaut ; sans TTY, des valeurs
-   par défaut valides sont utilisées :
+1. Validates `<name>` (kebab-case, unique within `.agents/skills/`).
+2. Creates `.agents/skills/<name>/SKILL.md` with the **extended frontmatter
+   that acts as a catalog** (see [conventions.md](conventions.md)). The fields
+   are asked interactively — "Use when…" description, display name, short
+   description (25 to 64 characters), color, icon chosen from the embedded set
+   (the prompt lists the valid names), default prompt; without a TTY, valid
+   default values are used:
 
    ```yaml
    ---
-   name: <name>                # invariant : identique au nom du dossier
-   description: >-             # déclencheurs — « Use when… »
+   name: <name>                # invariant: identical to the folder name
+   description: >-             # triggers — "Use when…"
      …
    display-name: "…"
-   short-description: "…"      # 25 à 64 caractères
+   short-description: "…"      # 25 to 64 characters
    color: "#RRGGBB"
    icon: <icone-du-jeu-embarque>
-   default-prompt: "Use $<name> to …"   # doit contenir $<name>
-   disable-model-invocation: true       # défaut : invocation explicite
-   implicit: false                      # facultatif ; true réservé aux skills en lecture seule
+   default-prompt: "Use $<name> to …"   # must contain $<name>
+   disable-model-invocation: true       # default: explicit invocation
+   implicit: false                      # optional; true reserved for read-only skills
    ---
    ```
 
-   Le corps est un gabarit guidé (objectif, procédure, vérification) qui
-   satisfait l'invariant des 12 lignes significatives minimum.
-3. Génère immédiatement les projections Codex : `agents/openai.yaml`
-   (`interface` + `policy`) et `assets/icon.svg` (icône du jeu embarqué sur
-   fond `color`), dérivées du frontmatter — jamais éditées à la main.
-4. `--implicit` retire `disable-model-invocation` et pose
-   `allow_implicit_invocation: true` côté Codex — **refusé** (code `2`, erreur
-   d'utilisation) sans la déclaration explicite `--read-only` : seul un skill
-   en lecture seule peut être invocable implicitement, sur les deux harness à
-   la fois. La déclaration est matérialisée dans le frontmatter par un
-   `allowed-tools` limité aux outils de lecture (`Read`, `Grep`, `Glob`).
-5. Exécute la passe de validation de `check` sur le skill créé avant de
-   conclure.
+   The body is a guided template (objective, procedure, verification) that
+   satisfies the invariant of at least 12 significant lines.
+3. Immediately generates the Codex projections: `agents/openai.yaml`
+   (`interface` + `policy`) and `assets/icon.svg` (icon from the embedded set
+   on a `color` background), derived from the frontmatter — never hand-edited.
+4. `--implicit` removes `disable-model-invocation` and sets
+   `allow_implicit_invocation: true` on the Codex side — **refused** (exit code
+   `2`, usage error) without the explicit `--read-only` declaration: only a
+   read-only skill may be implicitly invocable, on both harnesses at once. The
+   declaration is materialized in the frontmatter by an `allowed-tools` limited
+   to read tools (`Read`, `Grep`, `Glob`).
+5. Runs the validation pass of `check` on the created skill before concluding.
+6. Refreshes the Claude Code projections according to the manifest mode, so the
+   skill is usable immediately — in copy mode as it already is in symlink mode —
+   and `check` stays green without a manual `sync`. The same step closes
+   `add rule`, `add agent`, `add hook`, `pack add` and `pack remove`.
 
 ### Idempotence
 
-Si le dossier existe déjà : refus en `2` (aucune fusion silencieuse) ;
-la régénération des projections d'un skill existant passe par `sync`.
+If the folder already exists: refusal with `2` (no silent merge);
+regenerating the projections of an existing skill goes through `sync`.
 
-### Codes de sortie
+### Exit codes
 
-`0` créé · `2` `--implicit` sur un skill écrivant, nom déjà pris ou
-environnement (erreurs d'utilisation).
+`0` created · `2` `--implicit` on a writing skill, name already taken or
+environment (usage errors).
 
 ---
 
@@ -240,26 +241,26 @@ environnement (erreurs d'utilisation).
 npx agentsdir add rule <name> [--paths "<glob>[,<glob>]"] [--dry-run] [--json]
 ```
 
-### Comportement
+### Behavior
 
-1. Crée `.agents/rules/<name>.md` au gabarit maison : H1 = nom de la règle,
-   ton impératif (**CRITICAL**, NEVER/ALWAYS), paires d'exemples `GOOD/BAD`
-   en blocs de code, tableaux de référence.
-2. `--paths` ajoute un frontmatter `paths:` avec les globs fournis — règle
-   scopée aux fichiers concernés ; sans `--paths`, la règle est globale et
-   n'est découvrable que par l'index.
-3. Met à jour la ligne correspondante dans le bloc géré
-   `agentsdir:rules-index` d'`AGENTS.md` : `\`.agents/rules/<name>.md\` — <quand
-   la lire>` (l'invite demande la condition de lecture en une phrase).
+1. Creates `.agents/rules/<name>.md` from the house template: H1 = rule name,
+   imperative tone (**CRITICAL**, NEVER/ALWAYS), `GOOD/BAD` example pairs
+   in code blocks, reference tables.
+2. `--paths` adds a `paths:` frontmatter with the supplied globs — a rule
+   scoped to the files concerned; without `--paths`, the rule is global and
+   is discoverable only through the index.
+3. Updates the corresponding line in the managed block
+   `agentsdir:rules-index` of `AGENTS.md`: `\`.agents/rules/<name>.md\` — <quand
+   la lire>` (the prompt asks for the reading condition in one sentence).
 
 ### Idempotence
 
-Fichier existant : refus en `2`. L'index est régénéré intégralement à chaque
-`sync` — l'entrée n'est donc jamais dupliquée.
+Existing file: refusal with `2`. The index is regenerated in full on every
+`sync` — the entry is therefore never duplicated.
 
-### Codes de sortie
+### Exit codes
 
-`0` créé · `2` nom déjà pris ou environnement.
+`0` created · `2` name already taken or environment.
 
 ---
 
@@ -271,27 +272,28 @@ Fichier existant : refus en `2`. L'index est régénéré intégralement à chaq
 npx agentsdir add agent <name> [--model <model>] [--dry-run] [--json]
 ```
 
-### Comportement
+### Behavior
 
-Crée `.agents/agents/<name>.md` : frontmatter `name` (kebab-case, identique au
-nom du fichier — voir l'invariant 14 de [conventions.md](conventions.md)),
-`description` (quand déléguer à cet agent), `color`, `model` (défaut
-`inherit`), suivi du prompt système. Le fichier est exposé à Claude Code par la
-projection `.claude/agents` ; les autres harness le découvrent via `AGENTS.md`.
+Creates `.agents/agents/<name>.md`: `name` frontmatter (kebab-case, identical to
+the file name — see invariant 14 in [conventions.md](conventions.md)),
+`description` (when to delegate to this agent), `color`, `model` (default
+`inherit`), followed by the system prompt. The file is exposed to Claude Code by
+the `.claude/agents` projection; the other harnesses discover it through
+`AGENTS.md`.
 
-### Idempotence et codes de sortie
+### Idempotence and exit codes
 
-Identiques à `add rule` : refus en `2` si le fichier existe, `0` sinon.
+Identical to `add rule`: refusal with `2` if the file exists, `0` otherwise.
 
 ---
 
 ## `add hook <event>` — v1
 
-Le différenciateur de la CLI : les trois harness ont convergé sur les mêmes
-noms d'événements (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`,
-`SessionStart`…) mais chacun a son propre fichier d'enregistrement. Le script
-est portable ; son enregistrement ne l'est pas. `add hook` écrit le script une
-fois et l'enregistre partout.
+The differentiator of the CLI: the three harnesses have converged on the same
+event names (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`,
+`SessionStart`…) but each one has its own registration file. The script is
+portable; its registration is not. `add hook` writes the script once and
+registers it everywhere.
 
 ### Synopsis
 
@@ -299,49 +301,49 @@ fois et l'enregistre partout.
 npx agentsdir add hook <event> [--name <slug>] [--matcher "<pattern>"] [--dry-run] [--json]
 ```
 
-### Comportement
+### Behavior
 
-1. Valide `<event>` contre la table des événements communs (voir
-   [harness.md](harness.md) pour la matrice complète et les événements propres
-   à un seul harness, acceptés avec avertissement).
-2. Crée **un seul script portable Node sans dépendances** :
-   `.agents/hooks/<event>-<slug>.mjs` (slug par défaut : `hook`), qui lit le
-   payload JSON sur stdin et répond selon le protocole commun (gabarit
-   commenté). La première ligne du script est un commentaire de métadonnées
-   `// agentsdir:hook {"event": …, "matcher": …}` : c'est elle que `sync`
-   relit pour régénérer les enregistrements.
-3. L'enregistre sur chaque harness actif du manifeste. JSON ne portant pas de
-   commentaires, il n'y a pas de bloc géré : la fusion est **structurelle**,
-   et la propriété d'une entrée se reconnaît à sa commande
-   `node .agents/hooks/…` — les entrées de l'utilisateur ne sont jamais
-   touchées. Formats exacts dans [harness.md](harness.md) §3 :
-   - Claude Code — `.claude/settings.json` (`hooks.<event>[]`, groupes
-     `{matcher, hooks: [{type: "command", command}]}`) ;
-   - Codex — `.codex/hooks.json` (même enveloppe `hooks` et mêmes groupes que
-     Claude, dans un fichier dédié) ;
-   - Cursor — `.cursor/hooks.json` (`"version": 1`, clés lowerCamelCase —
-     `preToolUse` —, entrées plates `{command}`, sans matcher : son
-     vocabulaire d'outils diffère, le script filtre lui-même).
-4. La commande invoquée est identique partout : `node .agents/hooks/<fichier>`.
+1. Validates `<event>` against the table of common events (see
+   [harness.md](harness.md) for the full matrix and the events specific to a
+   single harness, accepted with a warning).
+2. Creates **a single portable Node script with no dependencies**:
+   `.agents/hooks/<event>-<slug>.mjs` (default slug: `hook`), which reads the
+   JSON payload on stdin and responds according to the common protocol
+   (commented template). The first line of the script is a metadata comment
+   `// agentsdir:hook {"event": …, "matcher": …}`: that is the line `sync`
+   re-reads to regenerate the registrations.
+3. Registers it on every harness enabled in the manifest. Since JSON carries no
+   comments, there is no managed block: the merge is **structural**, and
+   ownership of an entry is recognized by its
+   `node .agents/hooks/…` command — the user's entries are never
+   touched. Exact formats in [harness.md](harness.md) §3:
+   - Claude Code — `.claude/settings.json` (`hooks.<event>[]`, groups
+     `{matcher, hooks: [{type: "command", command}]}`);
+   - Codex — `.codex/hooks.json` (same `hooks` envelope and same groups as
+     Claude, in a dedicated file);
+   - Cursor — `.cursor/hooks.json` (`"version": 1`, lowerCamelCase keys —
+     `preToolUse` —, flat entries `{command}`, with no matcher: its tool
+     vocabulary differs, the script filters by itself).
+4. The invoked command is identical everywhere: `node .agents/hooks/<fichier>`.
 
 ```mermaid
 flowchart LR
-    S[.agents/hooks/pretooluse-guard.mjs<br/>un seul script Node portable]
-    S --> C1[.claude/settings.json<br/>hooks.PreToolUse, groupes matcher]
-    S --> C2[.codex/hooks.json<br/>enveloppe hooks, groupes matcher]
-    S --> C3[.cursor/hooks.json<br/>version 1, preToolUse, entrées plates]
+    S[.agents/hooks/pretooluse-guard.mjs<br/>a single portable Node script]
+    S --> C1[.claude/settings.json<br/>hooks.PreToolUse, matcher groups]
+    S --> C2[.codex/hooks.json<br/>hooks envelope, matcher groups]
+    S --> C3[.cursor/hooks.json<br/>version 1, preToolUse, flat entries]
 ```
 
 ### Idempotence
 
-Script existant : refus en `2`. Les trois enregistrements sont régénérés par
-`sync` depuis les scripts de `.agents/hooks/` — pas de doublon possible, et un
-script supprimé perd ses enregistrements au `sync` suivant.
+Existing script: refusal with `2`. The three registrations are regenerated by
+`sync` from the scripts in `.agents/hooks/` — no duplicate is possible, and a
+deleted script loses its registrations on the next `sync`.
 
-### Codes de sortie
+### Exit codes
 
-`0` créé et enregistré · `2` événement inconnu de tous les harness, script
-déjà présent ou environnement inutilisable (erreur d'utilisation).
+`0` created and registered · `2` event unknown to every harness, script
+already present or unusable environment (usage error).
 
 ---
 
@@ -353,69 +355,68 @@ déjà présent ou environnement inutilisable (erreur d'utilisation).
 npx agentsdir sync [--mode symlink|copy] [--dry-run] [--json]
 ```
 
-`--mode symlink|copy` bascule explicitement le mode de projection : les
-projections de l'ancien mode sont d'abord retirées (lignes `removed` du
-rapport), puis toutes les projections sont régénérées dans le nouveau mode et
-le manifeste est mis à jour. C'est la commande que `doctor` recommande quand
-l'environnement a changé.
+`--mode symlink|copy` explicitly switches the projection mode: the projections
+of the old mode are removed first (`removed` lines in the report), then every
+projection is regenerated in the new mode and the manifest is updated. This is
+the command `doctor` recommends when the environment has changed.
 
-Le retrait ne supprime que ce qu'`agentsdir` possède : un lien correct, ou une
-copie dont l'empreinte est enregistrée au manifeste ou qui porte l'en-tête
-généré. Tout autre fichier reste sur le disque et la projection du nouveau mode
-le signale comme cible étrangère. Ce retrait préalable n'est pas cosmétique :
-sans lui, écrire une copie par-dessus un symlink resté en place écrirait *à
-travers* le lien, dans la source de vérité.
+Removal only deletes what `agentsdir` owns: a correct link, or a copy whose
+fingerprint is recorded in the manifest or that carries the generated header.
+Any other file stays on disk and the projection of the new mode reports it as a
+foreign target. This prior removal is not cosmetic: without it, writing a copy
+over a symlink left in place would write *through* the link, into the source of
+truth.
 
-### Comportement
+### Behavior
 
-Régénère l'intégralité des projections depuis la source de vérité, dans cet
-ordre :
+Regenerates every projection from the source of truth, in this order:
 
-1. **Validation** — mêmes contrôles que `check` ; toute violation d'invariant
-   interrompt avant la moindre écriture (code `1`).
-2. **Projections de liens** — selon le `mode` du manifeste : (re)création des
-   symlinks `CLAUDE.md → AGENTS.md` et `.claude/{rules,skills,agents} →
-   ../.agents/*`, ou réécriture des copies marquées « GENERATED by agentsdir —
-   edit the source in .agents/ and run `agentsdir sync` ».
-3. **Projections Codex** — `agents/openai.yaml` et `assets/icon.svg` de chaque
-   skill, dérivés du frontmatter, comparés octet à octet (réécrits seulement
-   si différents).
-4. **Blocs gérés** — index des règles d'`AGENTS.md`, permissions de
-   `.claude/settings.json`, enregistrements de hooks, entrées `.gitignore`.
-5. **Verrou** — recalcul des empreintes sha256 de `skills-lock.json` pour les
-   skills vendorés (`sourceType: "github"`) ; les entrées `"agentsdir"` restent
-   épinglées à la version installée (protection d'`update`), jamais recalculées.
-6. **Projections orphelines** — les projections d'un harness retiré de
-   `[harness] enabled` sont supprimées (listées dans le rapport) ; `sync` ne
-   touche jamais un fichier qui ne porte pas l'en-tête généré ou qui n'est pas
-   un lien connu du manifeste.
-7. **Manifeste** — horodatage et version du schéma.
+1. **Validation** — the same checks as `check`; any invariant violation
+   interrupts before the slightest write (exit code `1`).
+2. **Link projections** — according to the `mode` of the manifest:
+   (re)creation of the symlinks `CLAUDE.md → AGENTS.md` and
+   `.claude/{rules,skills,agents} → ../.agents/*`, or rewriting of the copies
+   marked "GENERATED by agentsdir — edit the source in .agents/ and run
+   `agentsdir sync`".
+3. **Codex projections** — `agents/openai.yaml` and `assets/icon.svg` of each
+   skill, derived from the frontmatter, compared byte for byte (rewritten only
+   if different).
+4. **Managed blocks** — rules index of `AGENTS.md`, permissions of
+   `.claude/settings.json`, hook registrations, `.gitignore` entries.
+5. **Lock** — recomputation of the sha256 fingerprints of `skills-lock.json`
+   for vendored skills (`sourceType: "github"`); the `"agentsdir"` entries stay
+   pinned to the installed version (`update` protection), never recomputed.
+6. **Orphan projections** — the projections of a harness removed from
+   `[harness] enabled` are deleted (listed in the report); `sync` never touches
+   a file that does not carry the generated header or that is not a link known
+   to the manifest.
+7. **Manifest** — timestamp and schema version.
 
 ```mermaid
 flowchart LR
-    subgraph SRC["Source de vérité"]
+    subgraph SRC["Source of truth"]
         A[.agents/** + AGENTS.md]
     end
     A --> V{Validation<br/>invariants}
-    V -- violation --> X[exit 1, zéro écriture]
-    V -- ok --> P1[Liens ou copies :<br/>CLAUDE.md, .claude/*]
-    V -- ok --> P2[Codex :<br/>openai.yaml + icon.svg]
-    V -- ok --> P3[Blocs gérés :<br/>index des règles, settings, hooks]
+    V -- violation --> X[exit 1, zero writes]
+    V -- ok --> P1[Links or copies:<br/>CLAUDE.md, .claude/*]
+    V -- ok --> P2[Codex:<br/>openai.yaml + icon.svg]
+    V -- ok --> P3[Managed blocks:<br/>rules index, settings, hooks]
     P1 --> L[skills-lock.json]
     P2 --> L
     P3 --> L
-    L --> M[Manifeste .agents.toml]
-    M --> R[Rapport : removed / created / updated / ok]
+    L --> M[Manifest .agents.toml]
+    M --> R[Report: removed / created / updated / ok]
 ```
 
 ### Idempotence
 
-Totale : deux `sync` consécutifs → le second ne réécrit rien et sort en `0`.
+Total: two consecutive `sync` runs → the second rewrites nothing and exits `0`.
 
-### Codes de sortie
+### Exit codes
 
-`0` projections à jour · `1` invariant violé (rien n'est écrit) · `2`
-environnement.
+`0` projections up to date · `1` violated invariant (nothing is written) · `2`
+environment.
 
 ---
 
@@ -427,34 +428,34 @@ environnement.
 npx agentsdir check [--json]
 ```
 
-Strictement en lecture seule. C'est la commande exécutée par le workflow
-GitHub Actions généré par `init` — la version CI de la discipline que le repo
-source de l'analyse n'avait jamais branchée.
+Strictly read-only. This is the command run by the GitHub Actions workflow
+generated by `init` — the CI version of the discipline that the repo the
+analysis came from had never wired up.
 
-### Comportement
+### Behavior
 
-1. **Invariants de contenu** (voir [conventions.md](conventions.md)) :
-   bijection entre dossiers de skills et frontmatters valides ; `name` =
-   dossier ; `short-description` entre 25 et 64 caractères ; `default-prompt`
-   contenant `$<name>` ; `color` en `#RRGGBB` ; corps ≥ 12 lignes
-   significatives ; existence de chaque fichier `references/`, `scripts/`,
-   `steps/` cité ; parité `disable-model-invocation` ⟺
-   `allow_implicit_invocation` ; implicite réservé à la lecture seule.
-2. **Dérive des projections** : chaque fichier généré (openai.yaml, icônes,
-   copies du mode copie, blocs gérés) est recalculé en mémoire et comparé à
-   l'état du disque.
-3. **Santé des liens** (mode symlink) : `git ls-files -s` doit rapporter le
-   mode `120000` pour `CLAUDE.md` et `.claude/{rules,skills,agents}`, et
-   l'état du disque doit être un lien réel — détecte le remplacement
-   silencieux d'un symlink par une copie.
-4. **Verrou** : empreinte sha256 recalculée de chaque skill vendoré comparée à
+1. **Content invariants** (see [conventions.md](conventions.md)):
+   bijection between skill folders and valid frontmatters; `name` =
+   folder; `short-description` between 25 and 64 characters; `default-prompt`
+   containing `$<name>`; `color` in `#RRGGBB`; body ≥ 12 significant
+   lines; existence of every `references/`, `scripts/`, `steps/` file cited;
+   parity `disable-model-invocation` ⟺ `allow_implicit_invocation`;
+   implicit reserved for read-only.
+2. **Projection drift**: every generated file (openai.yaml, icons, copies of
+   copy mode, managed blocks) is recomputed in memory and compared to the state
+   on disk.
+3. **Link health** (symlink mode): `git ls-files -s` must report mode
+   `120000` for `CLAUDE.md` and `.claude/{rules,skills,agents}`, and the state
+   on disk must be a real link — detects the silent replacement of a
+   symlink by a copy.
+4. **Lock**: recomputed sha256 fingerprint of each vendored skill compared to
    `skills-lock.json`.
-5. Rapport listant chaque écart avec la commande de correction (`sync`,
-   `vendor`, édition manuelle).
+5. Report listing each discrepancy with the command that fixes it (`sync`,
+   `vendor`, manual editing).
 
-### Codes de sortie
+### Exit codes
 
-`0` conforme · `1` au moins un écart (chaque écart listé) · `2` environnement.
+`0` conformant · `1` at least one discrepancy (each one listed) · `2` environment.
 
 ---
 
@@ -466,27 +467,27 @@ source de l'analyse n'avait jamais branchée.
 npx agentsdir doctor [--json]
 ```
 
-Lecture seule. Diagnostique la machine et le clone, pas le contenu :
+Read-only. Diagnoses the machine and the clone, not the content:
 
-- support réel des symlinks (création d'essai) et `git config core.symlinks` ;
-- sous Windows : mode développeur actif ou droits d'administrateur ;
-- état des liens existants (réels ou matérialisés en fichiers texte par un
-  checkout sans support — le piège classique) ;
-- harness détectés sur la machine et dans le repo ;
-- version du schéma du manifeste vs version de la CLI (oriente vers `update`) ;
-- cohérence `.gitattributes` (`eol=lf` sur les fichiers hachés).
+- real symlink support (trial creation) and `git config core.symlinks`;
+- on Windows: developer mode enabled or administrator rights;
+- state of the existing links (real, or materialized as text files by a
+  checkout without support — the classic trap);
+- harnesses detected on the machine and in the repo;
+- manifest schema version vs CLI version (points to `update`);
+- `.gitattributes` consistency (`eol=lf` on hashed files).
 
-Chaque constat est assorti de la correction exacte (commande ou réglage).
-Diagnostic, pas vérification : l'échec CI appartient à `check`.
+Each finding comes with the exact fix (command or setting).
+Diagnosis, not verification: CI failure belongs to `check`.
 
-La sortie `--json` porte chaque constat dans `errors[]` avec sa sévérité
-(`ok`, `info`, `warn`, `error`) ; `exitCode` reste `0` — un consommateur
-machine ne doit pas lire un `errors[]` non vide comme un échec.
+The `--json` output carries each finding in `errors[]` with its severity
+(`ok`, `info`, `warn`, `error`); `exitCode` stays `0` — a machine
+consumer must not read a non-empty `errors[]` as a failure.
 
-### Codes de sortie
+### Exit codes
 
-`0` diagnostic rendu, même quand des anomalies sont détectées · `2`
-environnement inutilisable, diagnostic impossible.
+`0` diagnosis produced, even when anomalies are detected · `2`
+unusable environment, diagnosis impossible.
 
 ---
 
@@ -499,118 +500,118 @@ npx agentsdir pack add <name> [--dry-run] [--json]
 npx agentsdir pack remove <name> [--force] [--dry-run] [--json]
 ```
 
-### Comportement
+### Behavior
 
-`pack add` installe un pack (`creator`, `verification`, `changelog`, `worktrees`) :
-fichiers du pack, entrées d'index en blocs gérés, mise à jour de
-`[packs] installed` du manifeste. `pack remove` retire ces mêmes éléments ;
-il **refuse** si des fichiers du pack ont été modifiés localement, sauf
+`pack add` installs a pack (`creator`, `verification`, `changelog`, `worktrees`):
+pack files, index entries in managed blocks, update of
+`[packs] installed` in the manifest. `pack remove` removes those same elements;
+it **refuses** if pack files have been modified locally, unless
 `--force`.
 
-Mécanique commune aux packs :
+Mechanics common to all packs:
 
-- Les skills installés par un pack reçoivent leur entrée
-  `sourceType: "agentsdir"` dans `skills-lock.json` (empreinte du dossier
-  complet, artefacts Codex compris, et version installée — voir
-  [conventions.md](conventions.md) §7) ; `pack remove` retire l'entrée.
-- « Modifié localement » se constate par comparaison octet à octet contre le
-  rendu installé, fichiers ajoutés dans le dossier du skill compris.
-- **Mode copie** : `pack remove` supprime aussi les copies `.claude/` dont
-  les empreintes du manifeste prouvent qu'elles appartiennent au pack, et
-  retire ces empreintes dans la même écriture du manifeste — sans quoi
-  Claude Code continuerait de découvrir un skill supprimé.
-- Un `CHANGELOG.md` préexistant est conservé tel quel à l'installation du
-  pack `changelog` (note émise) ; à la désinstallation, un changelog qui a
-  vécu diffère de l'amorce et tombe sous le refus exit `1` — `--force`
-  supprime en connaissance de cause.
-- Le pack `creator` installe les cinq méta-skills de création assistée
+- The skills installed by a pack get their `sourceType: "agentsdir"` entry
+  in `skills-lock.json` (fingerprint of the complete folder, Codex artifacts
+  included, and installed version — see
+  [conventions.md](conventions.md) §7); `pack remove` removes the entry.
+- "Modified locally" is established by byte-for-byte comparison against the
+  installed rendering, including files added inside the skill folder.
+- **Copy mode**: `pack remove` also deletes the `.claude/` copies whose
+  manifest fingerprints prove they belong to the pack, and removes those
+  fingerprints in the same manifest write — without which Claude Code
+  would keep discovering a deleted skill.
+- A pre-existing `CHANGELOG.md` is kept as is when the `changelog` pack is
+  installed (a note is emitted); on uninstall, a changelog that has lived
+  differs from the seed and falls under the exit `1` refusal — `--force`
+  deletes it knowingly.
+- The `creator` pack installs the five assisted-creation meta-skills
   (`$create-skill`, `$create-hook`, `$create-rule`, `$create-agent`,
-  `$setup-context` — voir [creation-assistee.md](creation-assistee.md)),
-  chacune verrouillée `sourceType: "agentsdir"` pour la protection
-  d'`update`.
-- Le pack `worktrees` sème une section `[worktrees]` vide dans le manifeste
-  (`setup`, `cleanup` — les points d'extension des scripts de cycle de vie) ;
-  `pack remove` la retire seulement si elle est restée vide, les commandes
-  déclarées par l'utilisateur sont conservées.
+  `$setup-context` — see [creation-assistee.md](creation-assistee.md)),
+  each locked with `sourceType: "agentsdir"` for `update`
+  protection.
+- The `worktrees` pack seeds an empty `[worktrees]` section in the manifest
+  (`setup`, `cleanup` — the extension points of the lifecycle scripts);
+  `pack remove` removes it only if it has stayed empty, the commands declared
+  by the user are kept.
 
-### Codes de sortie
+### Exit codes
 
-`0` installé ou retiré · `1` fichiers du pack modifiés localement (sans
-`--force`) · `2` pack inconnu, déjà installé/absent ou environnement.
+`0` installed or removed · `1` pack files modified locally (without
+`--force`) · `2` unknown pack, already installed/absent, or environment.
 
 ---
 
-## `vendor <owner/repo>` — v1.x (spécification abrégée)
+## `vendor <owner/repo>` — v1.x (abridged specification)
 
 ```
 npx agentsdir vendor <owner/repo> [--path <sous-chemin>] [--dry-run]
 ```
 
-Importe un skill publié dans un dépôt GitHub externe vers
-`.agents/skills/<name>/`, puis l'enregistre dans `skills-lock.json` :
-`{source, sourceType: "github", skillPath, computedHash}` — empreinte sha256
-du dossier complet (chemins relatifs triés + contenus). `check` échoue ensuite
-à la moindre modification locale non verrouillée, ce qui protège les
-adaptations locales d'un écrasement par une réimportation irréfléchie.
-Codes : `0` importé · `1` empreinte existante divergente (dérive détectée) ·
-`2` collision de nom, réseau ou environnement (erreur d'utilisation).
+Imports a skill published in an external GitHub repository into
+`.agents/skills/<name>/`, then registers it in `skills-lock.json`:
+`{source, sourceType: "github", skillPath, computedHash}` — sha256 fingerprint
+of the complete folder (sorted relative paths + contents). `check` then fails
+on the slightest unlocked local modification, which protects local adaptations
+from being overwritten by a careless re-import.
+Exit codes: `0` imported · `1` existing fingerprint diverges (drift detected) ·
+`2` name collision, network or environment (usage error).
 
 ---
 
-## `update` — v1.x (spécification abrégée)
+## `update` — v1.x (abridged specification)
 
 ```
 npx agentsdir update [--dry-run]
 ```
 
-Migre la structure quand le schéma du manifeste évolue (nouvelle version
-majeure de la CLI) : transformations déclarées d'une version de schéma à la
-suivante, appliquées uniquement aux **blocs gérés et aux projections** — le
-contenu rédigé par l'utilisateur (`SKILL.md`, règles, corps d'`AGENTS.md`)
-n'est jamais réécrit. Met aussi à niveau les **contenus installés par la CLI**
-(méta-skills du pack `creator`, règles génériques, gabarits), suivis par
-empreinte dans `skills-lock.json` (`sourceType: "agentsdir"`) : un contenu
-intact est remplacé par la nouvelle version ; un contenu modifié localement
-est préservé, signalé avec le diff upstream, fusion proposée — jamais
-d'écrasement silencieux (voir
-[creation-assistee.md](creation-assistee.md)). Termine par un `sync` complet.
-Codes : `0` à niveau · `1` transformation impossible sans décision humaine ·
-`2` environnement.
+Migrates the structure when the manifest schema evolves (new major CLI
+version): declared transformations from one schema version to the next,
+applied only to the **managed blocks and the projections** — the content
+written by the user (`SKILL.md`, rules, body of `AGENTS.md`) is never
+rewritten. It also upgrades the **content installed by the CLI**
+(meta-skills of the `creator` pack, generic rules, templates), tracked by
+fingerprint in `skills-lock.json` (`sourceType: "agentsdir"`): intact content
+is replaced by the new version; locally modified content is preserved,
+reported with the upstream diff, merge offered — never a silent
+overwrite (see
+[creation-assistee.md](creation-assistee.md)). Ends with a full `sync`.
+Exit codes: `0` up to date · `1` transformation impossible without a human
+decision · `2` environment.
 
 ---
 
-## `migrate` — v2 (spécification abrégée)
+## `migrate` — v2 (abridged specification)
 
 ```
 npx agentsdir migrate [--from claude|cursor|auto] [--dry-run]
 ```
 
-Le canal d'acquisition : bascule une configuration existante vers la
-convention `.agents/`.
+The acquisition channel: switches an existing configuration over to the
+`.agents/` convention.
 
-1. **Inventaire** : `CLAUDE.md`, `.claude/{skills,agents,commands,settings}`,
-   `.cursor/rules`, `.cursorrules`, `AGENTS.md` existant.
-2. **Classement** : chaque élément est mappé vers sa destination
+1. **Inventory**: `CLAUDE.md`, `.claude/{skills,agents,commands,settings}`,
+   `.cursor/rules`, `.cursorrules`, an existing `AGENTS.md`.
+2. **Classification**: each element is mapped to its destination
    (`instructions → AGENTS.md`, `skills → .agents/skills/`,
-   `agents → .agents/agents/`, `règles → .agents/rules/`), les doublons entre
-   sources sont détectés et arbitrés interactivement.
-3. **Bascule** : écriture de la source de vérité, puis `init` interne
-   (manifeste, projections, CI) et remplacement des originaux par les
-   projections correspondantes.
-4. **Rapport de migration** : provenance → destination pour chaque fichier,
-   éléments non migrables laissés en place et listés.
+   `agents → .agents/agents/`, `règles → .agents/rules/`), duplicates between
+   sources are detected and arbitrated interactively.
+3. **Switch-over**: writing of the source of truth, then an internal `init`
+   (manifest, projections, CI) and replacement of the originals by the
+   corresponding projections.
+4. **Migration report**: origin → destination for each file, elements that
+   cannot be migrated are left in place and listed.
 
 ```mermaid
 flowchart TD
-    A[Inventaire :<br/>CLAUDE.md, .claude/**, .cursor/rules, .cursorrules] --> B[Classement par type :<br/>instructions / skills / agents / règles]
-    B --> C{Doublons entre sources ?}
-    C -- oui --> D[Arbitrage interactif]
-    C -- non --> E[Écriture de .agents/ + AGENTS.md]
+    A[Inventory:<br/>CLAUDE.md, .claude/**, .cursor/rules, .cursorrules] --> B[Classification by type:<br/>instructions / skills / agents / rules]
+    B --> C{Duplicates between sources?}
+    C -- yes --> D[Interactive arbitration]
+    C -- no --> E[Write .agents/ + AGENTS.md]
     D --> E
-    E --> F[Manifeste + projections + CI<br/>équivalent init]
-    F --> G[Originaux remplacés par les projections]
-    G --> H[Rapport de migration + exit 0]
+    E --> F[Manifest + projections + CI<br/>equivalent to init]
+    F --> G[Originals replaced by the projections]
+    G --> H[Migration report + exit 0]
 ```
 
-Codes : `0` migré · `1` conflit non arbitré (`--yes` interdit sur les
-conflits) · `2` environnement.
+Exit codes: `0` migrated · `1` unarbitrated conflict (`--yes` forbidden on
+conflicts) · `2` environment.

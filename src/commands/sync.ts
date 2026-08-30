@@ -18,7 +18,11 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { project, unproject } from "../core/projections.js";
+import {
+  project,
+  removeOrphanProjections,
+  unproject,
+} from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import {
   computeSkillHash,
@@ -59,6 +63,8 @@ const REPAIRABLE_RULES = new Set([
   "projection-modified",
   "projection-replaced-by-copy",
   "projection-header-removed",
+  "projection-stale",
+  "projection-orphan",
   "codex-artifact-missing",
   "codex-artifact-drift",
   "rules-index-missing",
@@ -111,8 +117,9 @@ export async function runSync(
   // a switch removes the previous mode's projections first: a stale symlink
   // would otherwise be written *through* to its source, and a stale copy would
   // read as a foreign target
-  const removed =
-    claudeEnabled && switching
+  const removed = !claudeEnabled
+    ? []
+    : switching
       ? (
           await unproject(root, {
             mode: previousMode,
@@ -120,7 +127,14 @@ export async function runSync(
             previousHashes: manifest.projections.hashes,
           })
         ).removed
-      : [];
+      : // same mode: only the copies whose source was deleted
+        (
+          await removeOrphanProjections(root, {
+            mode,
+            hashes: manifest.projections.hashes,
+            dryRun: true,
+          })
+        ).removed;
   if (claudeEnabled) {
     const plan = await project(root, {
       mode,
@@ -182,6 +196,11 @@ export async function runSync(
         await unproject(root, {
           mode: previousMode,
           previousHashes: manifest.projections.hashes,
+        });
+      } else {
+        await removeOrphanProjections(root, {
+          mode,
+          hashes: manifest.projections.hashes,
         });
       }
       await project(root, {

@@ -19,7 +19,7 @@ mode = "copy"
 [projections.hashes]
 ".claude/agents/.gitkeep" = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ".claude/rules/code-conventions.md" = "sha256:3fb7391608a2f8815358e1b99694c31b648efb62575dd6c47b3598349a8ef828"
-".claude/rules/documentation.md" = "sha256:24c1a498a41d3459698be34dacdd63c92fda607ad852f01e06611ae7f1d89f5c"
+".claude/rules/documentation.md" = "sha256:c9f336b30b1894163050334e59440eeac03df965645c524dd36bfecd6c07d85e"
 ".claude/rules/memory.md" = "sha256:1c9d09fdc56c4411faabf09f374a70e28623bf170017d858ce0acc1b3dfb2b23"
 ".claude/rules/taches.md" = "sha256:49597e9879008d873819f1aaee034c1838c73b07b24f3aab75ca634bbdf57921"
 ".claude/skills/.gitkeep" = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

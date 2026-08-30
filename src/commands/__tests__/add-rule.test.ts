@@ -191,6 +191,8 @@ describe("09 - add rule", () => {
     expect(dry.changes).toEqual([
       { path: ".agents/rules/api-conventions.md", action: "created" },
       { path: "AGENTS.md", action: "updated" },
+      // the generator projects to the harnesses too
+      { path: ".claude/rules/api-conventions.md", action: "created" },
     ]);
     expect(
       await pathExists(join(dir, ".agents", "rules", "api-conventions.md")),

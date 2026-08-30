@@ -1,6 +1,11 @@
 import * as prompts from "@clack/prompts";
 import { CliError } from "../core/errors.js";
-import type { ProjectionMode } from "../core/manifest.js";
+import {
+  writeManifest,
+  type Manifest,
+  type ProjectionMode,
+} from "../core/manifest.js";
+import { project, removeOrphanProjections } from "../core/projections.js";
 import { NAME_SPEC } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 
@@ -19,6 +24,70 @@ export interface GeneratorResult {
   changes: GeneratorChange[];
   exitCode: ExitCode;
   mode: ProjectionMode;
+}
+
+/**
+ * Refreshes the Claude Code projections after a generator wrote to the source
+ * of truth, so a created skill or rule is visible right away in copy mode as
+ * it already is in symlink mode — and `check` stays green without a manual
+ * `sync`. Deliberately narrower than `sync`: no full `validateRepo`, so a
+ * generator never fails on the state of unrelated content.
+ */
+export async function resyncProjections(
+  root: string,
+  manifest: Manifest,
+  options: {
+    dryRun: boolean;
+    /**
+     * Content of the source files the generator is about to write, so a dry
+     * run plans the same projections as the run that writes them first.
+     */
+    overlay?: Record<string, string>;
+  },
+): Promise<GeneratorChange[]> {
+  if (!manifest.harness.enabled.includes("claude")) {
+    return [];
+  }
+  const mode = manifest.projections.mode;
+  const changes: GeneratorChange[] = [];
+  const orphans = await removeOrphanProjections(root, {
+    mode,
+    hashes: manifest.projections.hashes,
+    dryRun: options.dryRun,
+  });
+  for (const path of orphans.removed) {
+    changes.push({ path, action: "removed" });
+  }
+  const overlay: Record<string, Buffer> = {};
+  for (const [path, content] of Object.entries(options.overlay ?? {})) {
+    overlay[path] = Buffer.from(content, "utf8");
+  }
+  const projection = await project(root, {
+    mode,
+    dryRun: options.dryRun,
+    previousHashes: manifest.projections.hashes,
+    overlay,
+  });
+  for (const change of projection.changes) {
+    if (change.action === "unchanged") {
+      continue;
+    }
+    changes.push({
+      path: change.path,
+      action: change.existed ? "updated" : "created",
+    });
+  }
+  if (!options.dryRun) {
+    await writeManifest(root, {
+      ...manifest,
+      projections: { mode, hashes: projection.hashes },
+    });
+  }
+  // sorted so a dry run and the real run report the same order, whether the
+  // sources came from the overlay or from disk
+  return changes.sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
 }
 
 /** Usage error (exit 2) when the name is not kebab-case per the Agent Skills spec. */

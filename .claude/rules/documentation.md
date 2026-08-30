@@ -6,8 +6,11 @@
 
 ## Règles
 
-- **Français** pendant la phase de conception, orthographe et accents irréprochables ; identifiants techniques (fichiers, commandes, champs, événements) en anglais. La doc publique passe en anglais à la release (tâche 14).
-- **Terminologie canonique**, à employer telle quelle : « source de vérité », « projection », « mode symlink / mode copie (repli) », « blocs gérés », « manifeste `.agents.toml` », « harness ».
+- **Deux langues, deux périmètres**, depuis la release 1.0.0 :
+  - **Anglais** — tout ce que lit un utilisateur du produit : `README.md`, `docs/**` (sauf `docs/recherche/` et `docs/readme-fr.md`), `CHANGELOG.md`, les messages de la CLI et les contenus qu'elle émet.
+  - **Français** — la documentation de travail interne : `AGENTS.md`, `TESTING.md`, `.agents/rules/`, `.agents/tasks/`, `.agents/plan/`, `docs/recherche/` (étude interne) et `docs/readme-fr.md` (archive du README de conception).
+  - Dans les deux cas : orthographe et accents irréprochables ; identifiants techniques (fichiers, commandes, champs, événements) toujours en anglais.
+- **Terminologie canonique**, à employer telle quelle. En français : « source de vérité », « projection », « mode symlink / mode copie (repli) », « blocs gérés », « manifeste `.agents.toml` », « harness ». En anglais : "source of truth", "projection", "symlink mode / copy mode (fallback)", "managed blocks", "the `.agents.toml` manifest", "harness".
 - **`docs/architecture.md` fait foi** en cas de conflit entre documents ; la correction se propage aux autres dans le même commit.
 - Diagrammes en Mermaid dans les `.md` versionnés ; sauts de ligne d'étiquette en `<br/>`, jamais `\n` ; identifiants de nœuds sans accents ni espaces.
 - Liens relatifs corrects depuis l'emplacement du fichier source ; vérifier la cible avant de committer.
