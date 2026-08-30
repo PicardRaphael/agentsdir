@@ -1,6 +1,6 @@
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
 import { parseSkillMarkdown } from "../core/frontmatter.js";
-import { hashSkillFiles } from "../core/validate.js";
+import { hashSkillFiles } from "../core/skill-hash.js";
 import { CLI_VERSION } from "../version.js";
 import { changelogPack } from "./changelog.js";
 import { creatorPack } from "./creator.js";

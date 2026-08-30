@@ -1,10 +1,10 @@
 import { pathExists } from "./fs-utils.js";
-import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
 import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
 import { extractBlock } from "./managed-blocks.js";
+import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
 import { verify } from "./projections.js";
 
@@ -35,60 +35,6 @@ export async function validateRepo(
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
   return violations;
-}
-
-/**
- * Fingerprint of a skill folder, per the documented lock algorithm: sorted
- * relative paths (excluding .git and node_modules), one rolling sha256 fed
- * with each path then its content. The optional overlay (skill-relative POSIX
- * paths) stands in for files about to be written, so `sync --dry-run` computes
- * the same fingerprint as the real run.
- */
-export async function computeSkillHash(
-  dir: string,
-  overlay: Record<string, Buffer> = {},
-): Promise<string> {
-  const walked = await walkSorted(dir, "");
-  const files: Record<string, Buffer> = {};
-  for (const rel of walked) {
-    files[rel] = overlay[rel] ?? (await readFile(join(dir, ...rel.split("/"))));
-  }
-  for (const [rel, content] of Object.entries(overlay)) {
-    files[rel] = content;
-  }
-  return hashSkillFiles(files);
-}
-
-/**
- * Same fingerprint, computed from in-memory contents (skill-relative POSIX
- * paths) — for folders that are not on disk yet (`pack add --dry-run`).
- */
-export function hashSkillFiles(files: Record<string, Buffer>): string {
-  const paths = Object.keys(files).sort(pathCompare);
-  const hash = createHash("sha256");
-  for (const rel of paths) {
-    hash.update(rel);
-    hash.update(files[rel] ?? Buffer.alloc(0));
-  }
-  return hash.digest("hex");
-}
-
-/**
- * Segment-wise path order — the exact order `walkSorted` produces, so merging
- * overlay paths never reorders the fingerprint input of files already on disk.
- */
-function pathCompare(a: string, b: string): number {
-  const left = a.split("/");
-  const right = b.split("/");
-  const shared = Math.min(left.length, right.length);
-  for (let index = 0; index < shared; index += 1) {
-    const x = left[index] ?? "";
-    const y = right[index] ?? "";
-    if (x !== y) {
-      return x < y ? -1 : 1;
-    }
-  }
-  return left.length - right.length;
 }
 
 async function validateProjections(
@@ -528,23 +474,5 @@ function referencedPaths(body: string): string[] {
   ].filter((path) => path !== "");
 }
 
-async function walkSorted(
-  absDir: string,
-  relPrefix: string,
-): Promise<string[]> {
-  const entries = await readdir(absDir, { withFileTypes: true });
-  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.name === ".git" || entry.name === "node_modules") {
-      continue;
-    }
-    const rel = relPrefix === "" ? entry.name : `${relPrefix}/${entry.name}`;
-    if (entry.isDirectory()) {
-      files.push(...(await walkSorted(join(absDir, entry.name), rel)));
-    } else if (entry.isFile()) {
-      files.push(rel);
-    }
-  }
-  return files;
-}
+// re-exported so `check` keeps a single entry point for its callers
+export { computeSkillHash, hashSkillFiles };

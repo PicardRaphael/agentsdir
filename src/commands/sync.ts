@@ -20,11 +20,8 @@ import {
 import { refreshProjections } from "../core/projections.js";
 import { planRulesIndex } from "./rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
-import {
-  computeSkillHash,
-  validateRepo,
-  type Violation,
-} from "../core/validate.js";
+import { computeSkillHash } from "../core/skill-hash.js";
+import { validateRepo, type Violation } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import { CLI_VERSION } from "../version.js";
 
