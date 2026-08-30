@@ -296,6 +296,20 @@ function attributeScript(
   return event === undefined ? undefined : { file, event, matcher: undefined };
 }
 
+/**
+ * Why the registries a harness owns are read-only checked as well as merged:
+ * `sync` refuses a malformed registry, so `check` must refuse it too. Otherwise
+ * CI stays green on a repository the next `sync` cannot repair.
+ */
+export function registryProblem(raw: string, path: string): string | undefined {
+  try {
+    parseRegistry(raw, path);
+    return undefined;
+  } catch (error) {
+    return error instanceof CliError ? error.message : String(error);
+  }
+}
+
 function parseRegistry(raw: string, path: string): Record<string, unknown> {
   let data: unknown;
   try {

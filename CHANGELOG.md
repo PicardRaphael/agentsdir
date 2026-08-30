@@ -8,6 +8,12 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`check` now inspects the hook registries, like `sync` does.** A malformed
+  `.claude/settings.json` (an array, or invalid JSON) passed `check` with exit
+  `0` while `sync` refused to run — CI green on a repository that could not be
+  synced. The registries of every enabled harness are held to the same contract
+  by both commands (`hook-registry-invalid`).
+
 - **`init` can no longer write outside the repository it resolved.** Existence
   was tested with `stat`, which follows symlinks, so a dangling
   `AGENTS.md -> /elsewhere/file` read as absent, was planned as a create, and

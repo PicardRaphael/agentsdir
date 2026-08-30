@@ -3,6 +3,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
 import { parseOpenSkillMarkdown, parseSkillMarkdown } from "./frontmatter.js";
+import {
+  HOOK_REGISTRY_PATHS,
+  registryProblem,
+  type HookHarness,
+} from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
 import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
@@ -34,6 +39,7 @@ export async function validateRepo(
   violations.push(...(await validateSkills(root)));
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
+  violations.push(...(await validateHookRegistries(root, manifest)));
   return violations;
 }
 
@@ -476,3 +482,37 @@ function referencedPaths(body: string): string[] {
 
 // re-exported so `check` keeps a single entry point for its callers
 export { computeSkillHash, hashSkillFiles };
+
+/**
+ * The hook registries of the enabled harnesses, held to the same contract
+ * `sync` applies. Without this, `check` passed on a repo whose registries
+ * `sync` refuses — a green CI on a repository that cannot be synced.
+ */
+async function validateHookRegistries(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  const violations: Violation[] = [];
+  for (const harness of manifest.harness.enabled) {
+    const path = HOOK_REGISTRY_PATHS[harness as HookHarness];
+    if (path === undefined) {
+      continue;
+    }
+    let raw: string;
+    try {
+      raw = await readFile(join(root, ...path.split("/")), "utf8");
+    } catch {
+      continue; // no registry yet is the normal state
+    }
+    const problem = registryProblem(raw, path);
+    if (problem !== undefined) {
+      violations.push({
+        path,
+        rule: "hook-registry-invalid",
+        message: problem,
+        severity: "error",
+      });
+    }
+  }
+  return violations;
+}

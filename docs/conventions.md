@@ -109,6 +109,7 @@ Exhaustive list:
 13. **Rules index in sync**: the rules index of `AGENTS.md` is in sync with `.agents/rules/` (managed block `rules-index`).
 14. **Sub-agent frontmatter**: every `.agents/agents/*.md` carries a non-empty `name` (lowercase and dashes) and `description` — a file without them is silently ignored by Claude Code, which makes it the most insidious flaw.
 15. **Hook script protocol**: every script in `.agents/hooks/` can be invoked dry (sample JSON on stdin) and follows the protocol — stdout empty or starting with `{`, documented exit code.
+16. **Hook registry shape**: every registry of an enabled harness (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`) that exists on disk is valid JSON with an object at the top level. `check` and `sync` hold it to the same contract, so CI never passes on a repository `sync` would refuse.
 
 ## 5. Rule format
 
