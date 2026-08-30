@@ -8,7 +8,9 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 prête à publier, dette de structure suivie.** Le backlog v1 est livré (CLI complète, packs, création assistée, tests unitaires et e2e sur ubuntu + windows, documentation publique en anglais). Il reste à l'utilisateur `npm publish`, le tag `v1.0.0` et l'annonce. Un audit d'architecture, de robustesse et de sécurité a rouvert `.agents/tasks/` : les tâches 17 à 23 traitent la dette technique constatée, les tâches 24 à 27 la suite produit — proposition d'ensemble après `init`, pack `usage` (savoir si la configuration sert), validation par un agent réel, projection des serveurs MCP. Les défauts qui détruisaient des données, sortaient du dépôt ou rendaient la CI mensongère ont été corrigés avant la publication, pas différés ; le relevé du paysage concurrentiel qui motive les tâches produit est dans [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md).
+**Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** Le code est prêt — 15 défauts corrigés dont 7 de sécurité, CI verte sur ubuntu et windows, paquet npm éprouvé — mais **l'utilisateur a demandé de ne pas publier** tant que la direction produit n'est pas arrêtée. Ne pas lancer `npm publish` ni poser le tag sans sa demande explicite.
+
+**Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est celle d'une référence pour les équipes qui installent et gouvernent des skills, agents et hooks sur plusieurs harness — ce que personne ne fait : vérifier que la configuration ne dérive pas (`check`/`sync`), mesurer si elle **sert** (tâche 25), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
 
 ## Index des règles
 
@@ -49,6 +51,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 27 (produit).
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue de l'audit), 24 à 28 (produit).
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
