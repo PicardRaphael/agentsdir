@@ -6,6 +6,7 @@ import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
   readAgentFrontmatter,
+  skillFrontmatterProblems,
 } from "./frontmatter.js";
 import {
   HOOK_REGISTRY_PATHS,
@@ -274,26 +275,30 @@ async function validateSkill(
   let parsed;
   try {
     parsed = parseSkillMarkdown(source);
-  } catch (error) {
+  } catch {
+    // report every bad field at once, and the root identity invariant first:
+    // a wrong `name` makes `default-prompt` fail too, and fixing the symptom
+    // before the cause is exactly the loop this used to send the user around
+    const identity = validateSkillNameIdentity(
+      open.frontmatter.name,
+      folder,
+      skillPath,
+    );
     return [
-      {
+      ...identity,
+      ...skillFrontmatterProblems(source).map((message) => ({
         path: skillPath,
         rule: "skill-frontmatter",
-        message: error instanceof Error ? error.message : String(error),
-        severity: "error",
-      },
+        message,
+        severity: "error" as const,
+      })),
     ];
   }
   const violations: Violation[] = [];
   const frontmatter = parsed.frontmatter;
-  if (frontmatter.name !== folder) {
-    violations.push({
-      path: skillPath,
-      rule: "skill-name-identity",
-      message: `frontmatter \`name\` is "${frontmatter.name}" but the folder is "${folder}" — they must be identical (no alias).`,
-      severity: "error",
-    });
-  }
+  violations.push(
+    ...validateSkillNameIdentity(frontmatter.name, folder, skillPath),
+  );
   if (!NAME_SPEC.test(frontmatter.name)) {
     violations.push({
       path: skillPath,
@@ -402,6 +407,24 @@ async function validateSkill(
     });
   }
   return violations;
+}
+
+/** The root invariant: the folder name and the frontmatter name are the same. */
+function validateSkillNameIdentity(
+  name: string,
+  folder: string,
+  skillPath: string,
+): Violation[] {
+  return name === folder
+    ? []
+    : [
+        {
+          path: skillPath,
+          rule: "skill-name-identity",
+          message: `frontmatter \`name\` is "${name}" but the folder is "${folder}" — they must be identical (no alias).`,
+          severity: "error",
+        },
+      ];
 }
 
 /** Open-spec invariants only: folder identity and the shared name grammar. */

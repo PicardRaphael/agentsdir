@@ -134,6 +134,88 @@ function parseFrontmatterBlock(source: string): {
   };
 }
 
+/**
+ * Every frontmatter problem of a SKILL.md, instead of the first one.
+ *
+ * `validateFrontmatter` throws at the first bad field, which is right for the
+ * generators — they are writing one file and stop. It was wrong for `check`,
+ * which reported a single problem per skill while concluding "1 violation(s);
+ * each line above names the fix": the user fixed one field, ran it again, and
+ * found the next.
+ */
+export function skillFrontmatterProblems(source: string): string[] {
+  let table: Record<string, unknown>;
+  try {
+    table = parseFrontmatterBlock(source).table;
+  } catch (error) {
+    return [error instanceof Error ? error.message : String(error)];
+  }
+  const problems: string[] = [];
+  const collect = (check: () => unknown): void => {
+    try {
+      check();
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  };
+  for (const field of ["name", "description"]) {
+    collect(() => requireString(table, field));
+  }
+  for (const field of [
+    "display-name",
+    "short-description",
+    "color",
+    "icon",
+    "default-prompt",
+  ]) {
+    collect(() => requireSingleLine(table, field));
+  }
+  collect(() => optionalBoolean(table, "implicit"));
+  collect(() => optionalBoolean(table, "disable-model-invocation"));
+  collect(() => optionalString(table, "argument-hint"));
+  collect(() => optionalStringArray(table, "allowed-tools"));
+  // the checks that need a well-formed value: skipped when the field itself is
+  // already reported, so the user never sees a consequence before its cause
+  collect(() => {
+    const short = requireSingleLine(table, "short-description");
+    checkShortDescriptionLength(short);
+  });
+  collect(() => checkColor(requireSingleLine(table, "color")));
+  collect(() =>
+    checkDefaultPromptToken(
+      requireString(table, "name"),
+      requireSingleLine(table, "default-prompt"),
+    ),
+  );
+  return [...new Set(problems)];
+}
+
+function checkShortDescriptionLength(shortDescription: string): void {
+  const shortLength = [...shortDescription].length;
+  if (shortLength < 25 || shortLength > 64) {
+    throw invariant(
+      `Frontmatter field \`short-description\` must be 25 to 64 characters (Unicode code points); got ${shortLength}.`,
+    );
+  }
+}
+
+function checkColor(color: string): void {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
+    throw invariant(
+      `Frontmatter field \`color\` must be a #RRGGBB hex color; got "${color}".`,
+    );
+  }
+}
+
+function checkDefaultPromptToken(name: string, defaultPrompt: string): void {
+  const token = new RegExp(`\\$${escapeRegExp(name)}(?![a-z0-9-])`);
+  if (!token.test(defaultPrompt)) {
+    throw invariant(
+      `Frontmatter field \`default-prompt\` must contain the exact token \`$${name}\`.`,
+    );
+  }
+}
+
 function validateFrontmatter(table: Record<string, unknown>): SkillFrontmatter {
   const name = requireString(table, "name");
   const description = requireString(table, "description");
@@ -142,23 +224,9 @@ function validateFrontmatter(table: Record<string, unknown>): SkillFrontmatter {
   const color = requireSingleLine(table, "color");
   const icon = requireSingleLine(table, "icon");
   const defaultPrompt = requireSingleLine(table, "default-prompt");
-  const shortLength = [...shortDescription].length;
-  if (shortLength < 25 || shortLength > 64) {
-    throw invariant(
-      `Frontmatter field \`short-description\` must be 25 to 64 characters (Unicode code points); got ${shortLength}.`,
-    );
-  }
-  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
-    throw invariant(
-      `Frontmatter field \`color\` must be a #RRGGBB hex color; got "${color}".`,
-    );
-  }
-  const token = new RegExp(`\\$${escapeRegExp(name)}(?![a-z0-9-])`);
-  if (!token.test(defaultPrompt)) {
-    throw invariant(
-      `Frontmatter field \`default-prompt\` must contain the exact token \`$${name}\`.`,
-    );
-  }
+  checkShortDescriptionLength(shortDescription);
+  checkColor(color);
+  checkDefaultPromptToken(name, defaultPrompt);
   return {
     name,
     description,

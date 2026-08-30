@@ -318,3 +318,46 @@ describe("33 - a projection with no source is seen, and removed", () => {
     expect((await runCheck(dir)).exitCode).toBe(0);
   });
 });
+
+describe("33 - every frontmatter problem at once, cause before symptom", () => {
+  it("Given a SKILL.md with several bad fields and a wrong name, When check runs, Then all of them are reported, identity first", async () => {
+    // validateFrontmatter throws at the first bad field, which is right for the
+    // generators and wrong for check: it reported one problem per skill while
+    // concluding "each line above names the fix"
+    const dir = await makeTempDir("blind-spots-frontmatter");
+    await runInit(dir, initAnswers(), { dryRun: false });
+    await mkdir(join(dir, ".agents", "skills", "broken"), { recursive: true });
+    await writeFile(
+      join(dir, ".agents", "skills", "broken", "SKILL.md"),
+      [
+        "---",
+        "name: wrong-name",
+        "description: Does X. Use when the user asks for X.",
+        'display-name: "Broken"',
+        'short-description: "too short"',
+        'color: "blue"',
+        "icon: terminal",
+        'default-prompt: "Use it."',
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await runCheck(dir);
+
+    const own = result.violations.filter(
+      (violation) => violation.path === ".agents/skills/broken/SKILL.md",
+    );
+    expect(own[0]?.rule).toBe("skill-name-identity");
+    const messages = own
+      .filter((violation) => violation.rule === "skill-frontmatter")
+      .map((violation) => violation.message)
+      .join(" | ");
+    expect(messages).toContain("short-description");
+    expect(messages).toContain("color");
+    expect(messages).toContain("default-prompt");
+  });
+});
