@@ -1,12 +1,23 @@
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { detectSymlinkSupport } from "../../core/detect.js";
 import { resolveHookEvent } from "../../core/hook-registries.js";
 import { initAnswers, makeTempDir } from "../../test-support/index.js";
 import { runAddHook } from "../add-hook.js";
 import { runCheck } from "../check.js";
 import { runInit } from "../init.js";
 import { runSync } from "../sync.js";
+
+const symlinkProbe = await makeTempDir("blind-spots-probe");
+const symlinkSupported = (await detectSymlinkSupport(symlinkProbe)).supported;
 
 async function repoWithHook(): Promise<string> {
   const dir = await makeTempDir("blind-spots");
@@ -21,6 +32,22 @@ async function repoWithHook(): Promise<string> {
     { dryRun: false },
   );
   return dir;
+}
+
+/**
+ * Rewrites the first prose line of a rule — the one `sync` lifts into the
+ * index as "when to read it". The heading is left alone.
+ */
+function withNewPurpose(source: string): string {
+  const lines = source.split("\n");
+  const index = lines.findIndex(
+    (line) => line.trim() !== "" && !line.startsWith("#"),
+  );
+  if (index === -1) {
+    throw new Error("the rule has no prose line to rewrite");
+  }
+  lines[index] = "Read before touching anything at all.";
+  return lines.join("\n");
 }
 
 const hookRule = (violation: { rule: string }): boolean =>
@@ -135,5 +162,102 @@ describe("33 - hook registrations are compared, not just parsed", () => {
           candidate.path === ".codex/hooks.json",
       ),
     ).toBe(true);
+  });
+});
+
+describe("33 - what the harness loads but check never read", () => {
+  it.runIf(symlinkSupported)(
+    "Given a skill folder that is a symlink, When check runs, Then it is reported instead of skipped in silence",
+    async () => {
+      // a Dirent for a symlink answers false to isDirectory(), so the folder
+      // was skipped — while the harness follows the link and loads it
+      const outside = await makeTempDir("blind-spots-skill-outside");
+      await writeFile(
+        join(outside, "SKILL.md"),
+        ["---", "name: ghost", "description: never validated", "---", ""].join(
+          "\n",
+        ),
+        "utf8",
+      );
+      const dir = await makeTempDir("blind-spots-linked-skill");
+      await runInit(dir, initAnswers(), { dryRun: false });
+      await symlink(outside, join(dir, ".agents", "skills", "ghost"), "dir");
+
+      const result = await runCheck(dir);
+
+      const violation = result.violations.find(
+        (candidate) => candidate.rule === "skill-symlinked",
+      );
+      expect(violation?.path).toBe(".agents/skills/ghost");
+      expect(result.exitCode).toBe(1);
+    },
+  );
+
+  it.runIf(symlinkSupported)(
+    "Given a sub-agent file that is a symlink, When check runs, Then it is reported too",
+    async () => {
+      const outside = await makeTempDir("blind-spots-agent-outside");
+      const target = join(outside, "ghost.md");
+      await writeFile(
+        target,
+        [
+          "---",
+          "name: ghost",
+          'description: "never validated"',
+          "---",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const dir = await makeTempDir("blind-spots-linked-agent");
+      await runInit(dir, initAnswers(), { dryRun: false });
+      await mkdir(join(dir, ".agents", "agents"), { recursive: true });
+      await symlink(target, join(dir, ".agents", "agents", "ghost.md"));
+
+      const result = await runCheck(dir);
+
+      expect(
+        result.violations.some(
+          (candidate) => candidate.rule === "agent-symlinked",
+        ),
+      ).toBe(true);
+    },
+  );
+});
+
+describe("33 - the rules index is compared to its render, not searched for paths", () => {
+  it("Given a rule whose first line changed since the last sync, When check runs, Then the stale text is reported", async () => {
+    // sync regenerates "path — when to read it" from that first line; checking
+    // that the path appears could never see the description going stale
+    const dir = await makeTempDir("blind-spots-index");
+    await runInit(dir, initAnswers(), { dryRun: false });
+    const rule = join(dir, ".agents", "rules", "tasks.md");
+    const before = await readFile(rule, "utf8");
+    await writeFile(rule, withNewPurpose(before), "utf8");
+
+    const result = await runCheck(dir);
+
+    const violation = result.violations.find(
+      (candidate) =>
+        candidate.rule === "rules-index-out-of-sync" &&
+        candidate.path === "AGENTS.md",
+    );
+    expect(violation?.message).toContain("not the right text");
+    expect(result.exitCode).toBe(1);
+  });
+
+  it("Given that stale text, When sync runs, Then the index is regenerated and check goes green", async () => {
+    const dir = await makeTempDir("blind-spots-index-repair");
+    await runInit(dir, initAnswers(), { dryRun: false });
+    const rule = join(dir, ".agents", "rules", "tasks.md");
+    const before = await readFile(rule, "utf8");
+    await writeFile(rule, withNewPurpose(before), "utf8");
+
+    await runSync(dir, { dryRun: false });
+
+    expect(await readFile(join(dir, "AGENTS.md"), "utf8")).toContain(
+      "touching anything at all",
+    );
+    expect((await runCheck(dir)).exitCode).toBe(0);
   });
 });

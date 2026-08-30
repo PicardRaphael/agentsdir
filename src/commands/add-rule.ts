@@ -18,7 +18,7 @@ import {
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
-import { planRulesIndex } from "./rules-index.js";
+import { planRulesIndex } from "../core/rules-index.js";
 
 export const DEFAULT_RULE_HOOK =
   "Read before touching the files this rule covers.";

@@ -31,7 +31,7 @@ import {
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
-import { planRulesIndex } from "./rules-index.js";
+import { planRulesIndex } from "../core/rules-index.js";
 
 export interface PackResult extends GeneratorResult {
   /** Human notes (kept files…) — stderr, never stdout. */

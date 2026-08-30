@@ -14,6 +14,8 @@ import {
   type HookHarness,
 } from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
+import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
+import { renderRulesIndexContent } from "../templates/agents-md.js";
 import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
 import { verify } from "./projections.js";
@@ -63,11 +65,24 @@ async function validateSubAgents(root: string): Promise<Violation[]> {
   } catch {
     return [];
   }
+  const violations: Violation[] = [];
+  for (const entry of entries) {
+    // same blind spot as skill folders: a symlink is neither a file nor a
+    // directory to a Dirent, so it used to be skipped without a word
+    if (entry.isSymbolicLink() && entry.name.endsWith(".md")) {
+      violations.push({
+        path: `.agents/agents/${entry.name}`,
+        rule: "agent-symlinked",
+        message:
+          "sub-agent file is a symlink — the harness follows it and loads what it points at, which agentsdir can neither validate nor project. Move the file into the repository, or remove the link.",
+        severity: "error",
+      });
+    }
+  }
   const files = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
     .sort();
-  const violations: Violation[] = [];
   for (const file of files) {
     const path = `.agents/agents/${file}`;
     let source: string;
@@ -181,6 +196,19 @@ async function validateSkills(root: string): Promise<Violation[]> {
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const violations: Violation[] = [];
   for (const entry of entries) {
+    // a Dirent for a symlink answers false to isDirectory(), so a linked skill
+    // folder used to be skipped in silence — while the harness follows the link
+    // and loads the SKILL.md at the other end, unvalidated
+    if (entry.isSymbolicLink()) {
+      violations.push({
+        path: `.agents/skills/${entry.name}`,
+        rule: "skill-symlinked",
+        message:
+          "skill folder is a symlink — the harness follows it and loads what it points at, which agentsdir can neither validate nor project. Move the skill into the repository, or remove the link.",
+        severity: "error",
+      });
+      continue;
+    }
     if (!entry.isDirectory()) {
       continue;
     }
@@ -469,14 +497,7 @@ async function validateRulesIndex(root: string): Promise<Violation[]> {
       },
     ];
   }
-  let ruleFiles: string[] = [];
-  try {
-    ruleFiles = (await readdir(join(root, ".agents", "rules")))
-      .filter((file) => file.endsWith(".md"))
-      .sort();
-  } catch {
-    // no rules directory: nothing to index
-  }
+  const ruleFiles = await listRuleFiles(root);
   const violations: Violation[] = [];
   for (const file of ruleFiles) {
     if (!block.includes(`.agents/rules/${file}`)) {
@@ -503,6 +524,23 @@ async function validateRulesIndex(root: string): Promise<Violation[]> {
         severity: "error",
       });
     }
+  }
+  if (violations.length > 0) {
+    return violations;
+  }
+  // every path lines up; the text may still not. `sync` regenerates
+  // "path — when to read it" from the first line of each rule, so a rule whose
+  // purpose changed kept its stale description in AGENTS.md indefinitely —
+  // checking for the presence of paths could never see it.
+  const expected = renderRulesIndexContent(await collectRuleIndexEntries(root));
+  if (block.trim() !== expected.trim()) {
+    violations.push({
+      path: "AGENTS.md",
+      rule: "rules-index-out-of-sync",
+      message:
+        "the `rules-index` block lists the right rules but not the right text — a rule's first line changed since the last sync; run `agentsdir sync`.",
+      severity: "error",
+    });
   }
   return violations;
 }

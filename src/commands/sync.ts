@@ -22,7 +22,7 @@ import {
   ensureNoLinkedParent,
   refreshProjections,
 } from "../core/projections.js";
-import { planRulesIndex } from "./rules-index.js";
+import { planRulesIndex } from "../core/rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { computeSkillHash } from "../core/skill-hash.js";
 import { NAME_SPEC, validateRepo, type Violation } from "../core/validate.js";
