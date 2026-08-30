@@ -488,7 +488,11 @@ function referencedPaths(body: string): string[] {
     body.match(/(?:references|scripts|steps)\/[A-Za-z0-9_\-./]+/g) ?? [];
   return [
     ...new Set(matches.map((match) => match.replace(/[.,)`]+$/, ""))),
-  ].filter((path) => path !== "");
+  ].filter(
+    // a mention is a reference inside the skill, never a way to probe the disk
+    // outside it: a `..` segment is dropped rather than resolved
+    (path) => path !== "" && !path.split("/").includes(".."),
+  );
 }
 
 // re-exported so `check` keeps a single entry point for its callers

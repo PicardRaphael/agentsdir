@@ -1,4 +1,4 @@
-import { pathExists } from "../core/fs-utils.js";
+import { pathExists, resolveInsideRepo } from "../core/fs-utils.js";
 import { readdir, readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
@@ -271,10 +271,11 @@ export async function runPackRemove(
       if (path.startsWith(".agents/skills/")) {
         continue; // removed with the folder
       }
-      await rm(join(root, ...path.split("/")), { force: true });
+      await rm(resolveInsideRepo(root, path), { force: true });
     }
     for (const key of copiesToDelete) {
-      await rm(join(root, ...key.split("/")), { force: true });
+      // keys come from the manifest of a possibly cloned repo: confine them
+      await rm(resolveInsideRepo(root, key), { force: true });
     }
     for (const skill of pack.skills) {
       await removeIfNoFilesLeft(join(root, ".claude", "skills", skill));
