@@ -1,23 +1,20 @@
-import { HARNESSES } from "../core/harnesses.js";
 import { isDirectory, pathExists } from "../core/fs-utils.js";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
-import * as prompts from "@clack/prompts";
-import { defineCommand } from "citty";
+import { HARNESSES } from "../core/harnesses.js";
 import {
-  detectGitSymlinks,
-  detectStack,
-  detectSymlinkSupport,
-} from "../core/detect.js";
+  collectAnswers,
+  type InitAnswers,
+  type InitFlags,
+} from "./init-interview.js";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
-  parseMode,
   renderManifest,
   type Manifest,
-  type ProjectionMode,
 } from "../core/manifest.js";
 import { project } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
@@ -44,23 +41,6 @@ import {
 } from "../templates/bootstrap.js";
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
-
-export interface InitAnswers {
-  productName: string;
-  description: string;
-  commands: { dev?: string; test?: string; lint?: string };
-  harnesses: string[];
-  packs: string[];
-  mode: ProjectionMode;
-  stacks: string[];
-}
-
-export interface InitFlags {
-  yes: boolean;
-  harness?: string;
-  packs?: string;
-  mode?: string;
-}
 
 export type PlannedAction =
   "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";
@@ -140,104 +120,6 @@ export async function runInit(
     await applyPlan(root, [manifestWrite]);
   }
   return { exitCode: EXIT_CODES.ok, alreadyInitialized: false, changes };
-}
-
-/** Collects the interview answers, or the defaults with `--yes` / no TTY. */
-export async function collectAnswers(
-  root: string,
-  flags: InitFlags,
-): Promise<InitAnswers> {
-  const stacks = await detectStack(root);
-  const stackIds = stacks.map((stack) => stack.id);
-  const defaults: InitAnswers = {
-    productName: basename(root),
-    description: "",
-    commands: { ...(stacks[0]?.suggestions ?? {}) },
-    harnesses:
-      flags.harness === undefined
-        ? [...HARNESSES]
-        : parseList(flags.harness, HARNESSES, "--harness"),
-    packs:
-      flags.packs === undefined
-        ? ["core", "creator"]
-        : withCore(parseList(flags.packs, PACKS, "--packs")),
-    mode:
-      flags.mode === undefined ? await detectMode(root) : parseMode(flags.mode),
-    stacks: stackIds,
-  };
-  const interactive =
-    !flags.yes && process.stdin.isTTY === true && process.stdout.isTTY === true;
-  if (!interactive) {
-    if (!flags.yes) {
-      console.error("stdin is not a TTY — using defaults (same as --yes).");
-    }
-    return defaults;
-  }
-  prompts.intro("agentsdir init");
-  const productName = ensureAnswer(
-    await prompts.text({
-      message: "Product name?",
-      initialValue: defaults.productName,
-    }),
-  );
-  const description = ensureAnswer(
-    await prompts.text({
-      message: "One-sentence description?",
-      defaultValue: "",
-      placeholder: "What this product does",
-    }),
-  );
-  const dev = await askCommand(
-    "Dev command? (leave empty to skip)",
-    defaults.commands.dev,
-  );
-  const test = await askCommand(
-    "Test command? (leave empty to skip)",
-    defaults.commands.test,
-  );
-  const lint = await askCommand(
-    "Lint command? (leave empty to skip)",
-    defaults.commands.lint,
-  );
-  let harnesses = defaults.harnesses;
-  if (flags.harness === undefined) {
-    harnesses = ensureAnswer(
-      await prompts.multiselect({
-        message: "Target harnesses?",
-        options: HARNESSES.map((name) => ({
-          value: name as string,
-          label: name,
-        })),
-        initialValues: [...HARNESSES] as string[],
-        required: true,
-      }),
-    );
-  }
-  let packs = defaults.packs;
-  if (flags.packs === undefined) {
-    const optional = ensureAnswer(
-      await prompts.multiselect({
-        message: "Packs to install? (core is always installed)",
-        options: PACKS.filter((name) => name !== "core").map((name) => ({
-          value: name as string,
-          label: name,
-        })),
-        initialValues: ["creator"],
-        required: false,
-      }),
-    );
-    packs = withCore(optional);
-  }
-  prompts.outro("Answers collected.");
-  return {
-    productName,
-    description,
-    commands: { dev, test, lint },
-    harnesses,
-    packs,
-    mode: defaults.mode,
-    stacks: stackIds,
-  };
 }
 
 /** Human report for the collected result; the last lines advise the next commands. */
@@ -513,65 +395,6 @@ async function planUpsertOrCreate(
   }
 }
 
-async function detectMode(root: string): Promise<ProjectionMode> {
-  const support = await detectSymlinkSupport(root);
-  if (!support.supported) {
-    return "copy";
-  }
-  const git = await detectGitSymlinks(root);
-  return git.coreSymlinks === "false" ? "copy" : "symlink";
-}
-
-function parseList(
-  raw: string,
-  allowed: readonly string[],
-  flag: string,
-): string[] {
-  const values = raw
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value !== "");
-  if (values.length === 0) {
-    throw new CliError(
-      `${flag} needs at least one value (allowed: ${allowed.join(", ")}).`,
-    );
-  }
-  for (const value of values) {
-    if (!allowed.includes(value)) {
-      throw new CliError(
-        `Unknown value "${value}" for ${flag} (allowed: ${allowed.join(", ")}).`,
-      );
-    }
-  }
-  return [...new Set(values)];
-}
-
-function withCore(packs: string[]): string[] {
-  return packs.includes("core") ? packs : ["core", ...packs];
-}
-
-async function askCommand(
-  message: string,
-  initial: string | undefined,
-): Promise<string | undefined> {
-  const value = ensureAnswer(
-    await prompts.text({
-      message,
-      initialValue: initial ?? "",
-      defaultValue: "",
-    }),
-  );
-  return value === "" ? undefined : value;
-}
-
-function ensureAnswer<T>(value: T | symbol): T {
-  if (prompts.isCancel(value)) {
-    prompts.cancel("Init cancelled.");
-    throw new CliError("Init cancelled.");
-  }
-  return value as T;
-}
-
 function actionLabel(action: PlannedAction): string {
   switch (action) {
     case "create":
@@ -606,3 +429,6 @@ async function listRuleFiles(root: string): Promise<string[]> {
     return [];
   }
 }
+
+// the interview is the other half of this command; callers import both here
+export { collectAnswers, type InitAnswers, type InitFlags };
