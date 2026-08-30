@@ -1,5 +1,5 @@
 import { HARNESSES, type Harness } from "./harnesses.js";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, type Dirent } from "node:fs/promises";
 import { join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "./errors.js";
@@ -249,7 +249,8 @@ async function listHookScripts(
   const hooksDir = join(root, ".agents", "hooks");
   // no hooks directory is normal; one that cannot be listed is not — reading it
   // as empty would deregister every hook from all three registries, silently
-  let entries: Awaited<ReturnType<typeof readdir>> | undefined;
+  // Dirent explicitly: `ReturnType<typeof readdir>` picks the Buffer overload
+  let entries: Dirent[] | undefined;
   try {
     entries = await readdir(hooksDir, { withFileTypes: true });
   } catch (error) {
