@@ -1,4 +1,4 @@
-import { isDirectory, pathExists } from "../core/fs-utils.js";
+import { entryExists, isDirectory, pathExists } from "../core/fs-utils.js";
 import { HARNESSES } from "../core/harnesses.js";
 import {
   collectAnswers,
@@ -8,7 +8,7 @@ import {
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
-import { asUserFacingError } from "../core/errors.js";
+import { asUserFacingError, CliError } from "../core/errors.js";
 import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
@@ -348,18 +348,29 @@ async function applyPlan(root: string, changes: PlannedWrite[]): Promise<void> {
       change.content !== undefined
     ) {
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, change.content, "utf8");
+      // "wx" fails when the target exists, symlink included: a create never
+      // writes through a link, so the CLI cannot escape the repo it resolved
+      await writeFile(target, change.content, {
+        encoding: "utf8",
+        ...(change.action === "create" ? { flag: "wx" } : {}),
+      });
     }
   }
 }
 
+/**
+ * A symlink — even a broken one — is an existing entry, so `entryExists`
+ * (lstat) decides here rather than `pathExists` (stat, which follows the link).
+ * With stat, a dangling `AGENTS.md -> /elsewhere/file` reads as absent, and the
+ * write below lands outside the repository the CLI resolved.
+ */
 async function planCreate(
   plan: PlannedWrite[],
   root: string,
   path: string,
   content: string,
 ): Promise<void> {
-  if (await pathExists(join(root, path))) {
+  if (await entryExists(join(root, path))) {
     plan.push({ path, action: "skip-exists" });
   } else {
     plan.push({ path, action: "create", content });
@@ -378,9 +389,17 @@ async function planUpsertOrCreate(
   },
 ): Promise<void> {
   const target = join(root, path);
-  if (!(await pathExists(target))) {
+  // entryExists, not pathExists: a dangling symlink is an entry, and planning a
+  // "create" over it would write through the link, outside the repository
+  if (!(await entryExists(target))) {
     plan.push({ path, action: "create", content: spec.create() });
     return;
+  }
+  if (!(await pathExists(target))) {
+    throw new CliError(
+      `${path} is a symlink to a target that does not exist. Remove it or point it at a real file, then run \`agentsdir init\` again — refusing to write through it.`,
+      EXIT_CODES.driftOrInvariant,
+    );
   }
   const current = await readFile(target, "utf8");
   const next = upsertBlock(

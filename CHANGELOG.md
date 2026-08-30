@@ -8,6 +8,25 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`init` can no longer write outside the repository it resolved.** Existence
+  was tested with `stat`, which follows symlinks, so a dangling
+  `AGENTS.md -> /elsewhere/file` read as absent, was planned as a create, and
+  the write landed outside the repo while the report claimed the file had been
+  created. Existence is now tested with `lstat` — a symlink is an entry, broken
+  or not — a create uses the exclusive `wx` flag so it can never write through
+  a link, and a dangling link stops the run with a message naming it.
+- **An unreadable hook registry is never overwritten.** `.claude/settings.json`
+  and its Codex and Cursor counterparts were treated as absent when they could
+  not be read, so the run rewrote them from scratch and dropped whatever the
+  user had registered. Only a genuinely absent registry is created; anything
+  else refuses with exit `2`.
+- **A filesystem failure now respects the exit-code contract.** ENOTDIR, EACCES
+  and friends surfaced as a raw stack trace, exited `1` — the code a CI script
+  reads as drift — and printed nothing on stdout under `--json`. They now exit
+  `2` with an actionable message and a valid JSON object. A `TypeError` still
+  keeps its stack trace: that is a bug in the CLI, not something to hand to the
+  user as advice.
+
 - **`sync` no longer deletes projections when a source directory cannot be
   read.** An absent directory and an unreadable one were both read as "empty",
   so a `.agents/rules` that could not be listed made `sync` remove its mirrors
