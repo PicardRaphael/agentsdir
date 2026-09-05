@@ -45,6 +45,16 @@ export function hashSkillFiles(files: Record<string, Buffer>): string {
 }
 
 /**
+ * Fingerprint of one installed file — the `files` entries of the lock, which
+ * track the rules and scripts a pack writes outside any skill folder. A lone
+ * file has no folder to walk and no path to mix in: the sha256 of its bytes is
+ * the whole fingerprint, and it stays stable whatever the pack renames.
+ */
+export function hashFileContent(content: Buffer | string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
  * Segment-wise path order — the exact order `walkSorted` produces, so merging
  * overlay paths never reorders the fingerprint input of files already on disk.
  */

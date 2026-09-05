@@ -102,7 +102,7 @@ Constraints: these meta-skills themselves follow all the conventions ([conventio
 
 ## Update (`update`) and protection of the installed content
 
-The content installed by the CLI (meta-skills, templates, generic rules of the packs) evolves with it. Tracked by the existing lock mechanism: each piece of CLI content gets an entry in `skills-lock.json` with `sourceType: "agentsdir"` and the fingerprint of the installed version.
+The content installed by the CLI evolves with it. Tracked by the existing lock mechanism: each piece of CLI content gets an entry in `skills-lock.json` with `sourceType: "agentsdir"` and the fingerprint of the installed version — the meta-skills under `skills`, the generic rules and shared scripts of the packs under `files` (see [conventions.md](conventions.md) §7).
 
 - `update` replaces **intact** content (fingerprint = installed version) with the new version. `sync` **never** recomputes the fingerprint of an `"agentsdir"` entry: it stays pinned to the installed version, otherwise the local modification would be "blessed" and the protection lost.
 - **Locally modified** content is preserved: `update` reports it, shows the diff of the upstream changes, and offers the merge — never a silent overwrite (the lesson of the source model's vendored skills, overwritten twice by their upstream tool).

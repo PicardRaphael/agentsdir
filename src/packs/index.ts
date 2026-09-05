@@ -1,6 +1,6 @@
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
 import { parseSkillMarkdown } from "../core/frontmatter.js";
-import { hashSkillFiles } from "../core/skill-hash.js";
+import { hashFileContent, hashSkillFiles } from "../core/skill-hash.js";
 import { CLI_VERSION } from "../version.js";
 import { changelogPack } from "./changelog.js";
 import { creatorPack } from "./creator.js";
@@ -81,9 +81,52 @@ export function agentsdirLockEntry(
   };
 }
 
+/**
+ * Lock entry of an installed file that belongs to no skill folder — the generic
+ * rules of `.agents/rules/` and the shared scripts of `.agents/scripts/` a pack
+ * writes. Same `sourceType` as the meta-skills, because it is the same promise:
+ * `update` upgrades what is intact and never overwrites what the user changed.
+ */
+export function agentsdirFileLockEntry(hash: string): Record<string, unknown> {
+  return {
+    source: "agentsdir",
+    sourceType: "agentsdir",
+    installedVersion: CLI_VERSION,
+    computedHash: hash,
+  };
+}
+
+/**
+ * The `files` lock entries of the files an install actually **wrote**. A file
+ * the install kept as it found it (`keepExisting`, or an `init` that skipped an
+ * existing path) is deliberately absent: locking it against a render agentsdir
+ * never wrote would report it "locally modified" from the very first check, and
+ * an invariant that fires on a correct repository teaches users to ignore it.
+ */
+export function packFileLockEntries(
+  written: PackFile[],
+): { path: string; hash: string }[] {
+  return written
+    .filter((file) => isLockableFile(file.path))
+    .map((file) => ({ path: file.path, hash: hashFileContent(file.content) }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * The content whose provenance the lock tracks outside skill folders: the rules
+ * and the shared scripts. Everything else a pack touches is either generated
+ * from the source of truth (projections, the rules index) or owned by the user.
+ */
+export function isLockableFile(path: string): boolean {
+  return (
+    path.startsWith(".agents/rules/") || path.startsWith(".agents/scripts/")
+  );
+}
+
 /** Fresh skills-lock.json holding only the given agentsdir entries (init). */
 export function renderLockSeed(
   entries: { skill: string; hash: string }[],
+  fileEntries: { path: string; hash: string }[] = [],
 ): string {
   const skills: Record<string, unknown> = {};
   for (const entry of [...entries].sort((a, b) =>
@@ -91,7 +134,19 @@ export function renderLockSeed(
   )) {
     skills[entry.skill] = agentsdirLockEntry(entry.skill, entry.hash);
   }
-  return `${JSON.stringify({ version: 1, skills }, null, 2)}\n`;
+  const files: Record<string, unknown> = {};
+  for (const entry of [...fileEntries].sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  )) {
+    files[entry.path] = agentsdirFileLockEntry(entry.hash);
+  }
+  // an absent `files` table is valid and means "nothing tracked outside the
+  // skills": a repo installing no pack rule keeps the lock it always had
+  const data =
+    Object.keys(files).length === 0
+      ? { version: 1, skills }
+      : { version: 1, skills, files };
+  return `${JSON.stringify(data, null, 2)}\n`;
 }
 
 /** Authored files plus the derived Codex artifacts of the pack's skills. */

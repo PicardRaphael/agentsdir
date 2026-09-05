@@ -461,13 +461,19 @@ analysis came from had never wired up.
 2. **Projection drift**: every generated file (openai.yaml, icons, copies of
    copy mode, managed blocks) is recomputed in memory and compared to the state
    on disk.
-3. **Link health** (symlink mode): `git ls-files -s` must report mode
-   `120000` for `CLAUDE.md` and `.claude/{rules,skills,agents}`, and the state
-   on disk must be a real link — detects the silent replacement of a
-   symlink by a copy.
-4. **Lock**: recomputed sha256 fingerprint of each vendored skill compared to
-   `skills-lock.json`.
-5. Report listing each discrepancy with the command that fixes it (`sync`,
+3. **Link health**: in symlink mode, `CLAUDE.md` and
+   `.claude/{rules,skills,agents}` must be real links on disk — detects the
+   silent replacement of a symlink by a copy. In either mode, a projection
+   `git ls-files -s` reports in mode `120000` while the working tree holds an
+   ordinary file is a violation of its own (`symlink-materialized`).
+4. **Hook script protocol**: every script of `.agents/hooks/` an event can be
+   attributed to is invoked once, dry, with the sample payload of its event on
+   stdin — bounded by a 5-second wall clock — and must answer an empty stdout
+   or one JSON object, with exit code `0` or `2`.
+5. **Lock**: recomputed sha256 fingerprint of each vendored skill compared to
+   `skills-lock.json`, and of each file of its `files` table (the generic rules
+   and shared scripts installed by the packs).
+6. Report listing each discrepancy with the command that fixes it (`sync`,
    `vendor`, manual editing).
 
 ### Exit codes

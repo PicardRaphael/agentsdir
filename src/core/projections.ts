@@ -43,6 +43,17 @@ export const CLAUDE_PROJECTIONS: readonly ProjectionSpec[] = [
   { target: ".claude/agents", source: ".agents/agents", kind: "dir" },
 ];
 
+/**
+ * Whether a repo-relative path is a projection or lives inside one — the filter
+ * the symlink-health invariant applies to what git reports, so the answer stays
+ * derived from the specs above instead of a second hard-coded list.
+ */
+export function isProjectionPath(path: string): boolean {
+  return CLAUDE_PROJECTIONS.some(
+    (spec) => path === spec.target || path.startsWith(`${spec.target}/`),
+  );
+}
+
 export interface ProjectOptions {
   /** Comes from the manifest — never recomputed silently. */
   mode: ProjectionMode;
