@@ -2,6 +2,8 @@ import { pathExists } from "./fs-utils.js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
+import { detectGitSymlinks } from "./detect.js";
+import { probeHookScripts, type HookProbeOptions } from "./hook-protocol.js";
 import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
@@ -17,9 +19,13 @@ import {
 import { extractBlock } from "./managed-blocks.js";
 import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
 import { renderRulesIndexContent } from "../templates/agents-md.js";
-import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
+import {
+  computeSkillHash,
+  hashFileContent,
+  hashSkillFiles,
+} from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
-import { unproject, verify } from "./projections.js";
+import { isProjectionPath, unproject, verify } from "./projections.js";
 
 export interface Violation {
   /** Repo-relative path of the offending file or folder. */
@@ -32,13 +38,20 @@ export interface Violation {
   severity: "error" | "info";
 }
 
+export interface ValidateOptions {
+  /** Bound of one hook probe; only tests ever shorten it. */
+  hooks?: HookProbeOptions;
+}
+
 /**
  * Runs every read-only validation, in the documented order: projections,
- * skill invariants, rules index, lock fingerprints. Never writes anything.
+ * symlink health, skill invariants, rules index, lock fingerprints. Never
+ * writes anything.
  */
 export async function validateRepo(
   root: string,
   manifest: Manifest,
+  options: ValidateOptions = {},
 ): Promise<Violation[]> {
   const violations: Violation[] = [];
   if (manifest.harness.enabled.includes("claude")) {
@@ -46,12 +59,66 @@ export async function validateRepo(
   } else {
     violations.push(...(await validateDisabledHarness(root, manifest)));
   }
+  violations.push(...(await validateSymlinkHealth(root, manifest, violations)));
   violations.push(...(await validateSkills(root)));
   violations.push(...(await validateSubAgents(root)));
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
   violations.push(...(await validateHookRegistries(root, manifest)));
+  violations.push(...(await validateHookProtocol(root, options.hooks)));
   return violations;
+}
+
+/**
+ * Invariant 11, the half `check` never held — the git one. `verify` reads the
+ * disk, so it sees a projection that is a text file where a link belongs; it
+ * cannot see the opposite half of the invariant, a path the *index* records as
+ * a symlink (mode 120000) while the working tree holds an ordinary file. That
+ * state survives a `check` in copy mode without a word, and the next clone on a
+ * machine with symlink support turns each of those files into a link pointing
+ * at its own content.
+ *
+ * The probe is `detect.ts`'s, the one `doctor` already consumes — `doctor`
+ * explains the repair, `check` fails on it. Nothing is duplicated here but the
+ * decision to fail.
+ */
+async function validateSymlinkHealth(
+  root: string,
+  manifest: Manifest,
+  reported: Violation[],
+): Promise<Violation[]> {
+  const git = await detectGitSymlinks(root);
+  // a projection `verify` already reported as replaced by a copy needs no
+  // second line saying the same thing in other words
+  const already = new Set(reported.map((violation) => violation.path));
+  return git.materializedSymlinks
+    .filter((path) => isProjectionPath(path) && !already.has(path))
+    .map((path) => ({
+      path,
+      rule: "symlink-materialized",
+      // the repair depends on which side is wrong. In symlink mode the working
+      // tree lost the link and git is right; in copy mode the file is right and
+      // the index kept a `120000` entry from the repo's symlink days — telling
+      // that repo to "switch to copy mode" would name the mode it is already in
+      message:
+        manifest.projections.mode === "symlink"
+          ? `indexed as a symlink (git mode 120000) but materialized as a regular text file — run \`git config core.symlinks true\` then \`git checkout -- ${path}\` to restore the link, or switch this repo to copy mode with \`agentsdir sync --mode copy\`.`
+          : `this repo projects in copy mode, yet git still indexes this path as a symlink (mode 120000) — run \`git add ${path}\` so the index records a regular file; the next clone would otherwise turn it into a link pointing at its own content.`,
+      severity: "error" as const,
+    }));
+}
+
+/** Invariant 15 — every attributable hook script honours the protocol. */
+async function validateHookProtocol(
+  root: string,
+  options: HookProbeOptions | undefined,
+): Promise<Violation[]> {
+  return (await probeHookScripts(root, options ?? {})).map((problem) => ({
+    path: problem.path,
+    rule: problem.rule,
+    message: problem.message,
+    severity: "error" as const,
+  }));
 }
 
 /**
@@ -693,7 +760,113 @@ async function validateLock(root: string): Promise<Violation[]> {
       });
     }
   }
+  violations.push(...(await validateLockFiles(root, data)));
   return violations;
+}
+
+/**
+ * The `files` table: the rules and shared scripts the CLI installs outside any
+ * skill folder. `docs/conventions.md` §7 promises `sourceType: "agentsdir"`
+ * covers them, and until now nothing did — a generic rule edited locally was
+ * indistinguishable from one still pristine, which is exactly the state the
+ * `update` protection has to tell apart before it overwrites anything.
+ *
+ * The table is optional: a repository that installed no pack rule has no
+ * `files` key, and that is a valid lock, not a missing one.
+ */
+async function validateLockFiles(
+  root: string,
+  data: unknown,
+): Promise<Violation[]> {
+  const files = (data as { files?: unknown }).files;
+  if (files === undefined) {
+    return [];
+  }
+  if (typeof files !== "object" || files === null || Array.isArray(files)) {
+    return [
+      {
+        path: "skills-lock.json",
+        rule: "lock-invalid",
+        message:
+          "`files` must be a table of repo-relative paths — restore skills-lock.json from git history.",
+        severity: "error",
+      },
+    ];
+  }
+  const violations: Violation[] = [];
+  const entries = Object.entries(files as Record<string, unknown>).sort(
+    ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0),
+  );
+  for (const [path, entryRaw] of entries) {
+    // the key is opened as a path: a lock coming from a cloned repository must
+    // never send the reader — or a future `update` — outside the repository
+    if (!isConfinedLockPath(path)) {
+      violations.push({
+        path: "skills-lock.json",
+        rule: "lock-invalid",
+        message: `lock entry "${path}" is not a repo-relative path inside .agents/ — a \`files\` key never escapes the repository.`,
+        severity: "error",
+      });
+      continue;
+    }
+    const entry = (entryRaw ?? {}) as Record<string, unknown>;
+    const recorded = entry["computedHash"];
+    if (typeof recorded !== "string") {
+      violations.push({
+        path,
+        rule: "lock-invalid",
+        message: `lock entry "${path}" has no \`computedHash\` string — restore skills-lock.json from git history.`,
+        severity: "error",
+      });
+      continue;
+    }
+    let content: Buffer;
+    try {
+      content = await readFile(join(root, ...path.split("/")));
+    } catch {
+      violations.push({
+        path,
+        rule: "lock-file-missing",
+        message:
+          "locked file is missing — restore it, or remove its entry from skills-lock.json.",
+        severity: "error",
+      });
+      continue;
+    }
+    if (hashFileContent(content) === recorded) {
+      continue;
+    }
+    violations.push(
+      entry["sourceType"] === "agentsdir"
+        ? {
+            path,
+            rule: "lock-local-change",
+            message:
+              "agentsdir-installed content modified locally — kept as is; `agentsdir update` will propose a merge when available.",
+            severity: "info",
+          }
+        : {
+            path,
+            rule: "lock-drift",
+            message:
+              "sha256 differs from skills-lock.json — the file was overwritten or edited without updating the lock; restore it or update the lock consciously.",
+            severity: "error",
+          },
+    );
+  }
+  return violations;
+}
+
+/** A `files` key: POSIX, relative, inside `.agents/`, with no `..` segment. */
+function isConfinedLockPath(path: string): boolean {
+  if (!path.startsWith(".agents/") || path.includes("\\")) {
+    return false;
+  }
+  const segments = path.split("/");
+  return (
+    segments.length > 1 &&
+    segments.every((segment) => segment !== "" && segment !== "..")
+  );
 }
 
 function referencedPaths(body: string): string[] {

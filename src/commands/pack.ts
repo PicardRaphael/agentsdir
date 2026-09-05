@@ -16,9 +16,11 @@ import {
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import {
+  agentsdirFileLockEntry,
   agentsdirLockEntry,
   getPackContent,
   INSTALLABLE_PACKS,
+  packFileLockEntries,
   packInstallFiles,
   packSkillHash,
   type PackContent,
@@ -113,6 +115,9 @@ export async function runPackAdd(
       hash: packSkillHash(files, skill),
     })),
     remove: [],
+    // toWrite, not files: a `keepExisting` path was kept as the repo had it and
+    // is none of ours to fingerprint
+    addFiles: packFileLockEntries(toWrite),
   });
   if (lock !== undefined) {
     changes.push({ path: "skills-lock.json", action: lock.action });
@@ -228,6 +233,7 @@ export async function runPackRemove(
   const lock = await planLockWith(root, {
     add: [],
     remove: pack.skills,
+    removeFiles: packFileLockEntries(files).map((entry) => entry.path),
   });
   if (lock !== undefined) {
     changes.push({ path: "skills-lock.json", action: lock.action });
@@ -414,11 +420,21 @@ async function planLockWith(
   delta: {
     add: { skill: string; hash: string }[];
     remove: string[];
+    /** Rules and shared scripts the install writes outside any skill folder. */
+    addFiles?: { path: string; hash: string }[];
+    removeFiles?: string[];
   },
 ): Promise<
   { action: "created" | "updated" | "removed"; content?: string } | undefined
 > {
-  if (delta.add.length === 0 && delta.remove.length === 0) {
+  const addFiles = delta.addFiles ?? [];
+  const removeFiles = delta.removeFiles ?? [];
+  if (
+    delta.add.length === 0 &&
+    delta.remove.length === 0 &&
+    addFiles.length === 0 &&
+    removeFiles.length === 0
+  ) {
     return undefined;
   }
   let raw: string | undefined;
@@ -427,7 +443,7 @@ async function planLockWith(
   } catch {
     raw = undefined;
   }
-  if (raw === undefined && delta.add.length === 0) {
+  if (raw === undefined && delta.add.length === 0 && addFiles.length === 0) {
     return undefined;
   }
   let data: Record<string, unknown>;
@@ -469,7 +485,27 @@ async function planLockWith(
   for (const skill of delta.remove) {
     delete skills[skill];
   }
-  if (Object.keys(skills).length === 0) {
+  const filesRaw = data["files"];
+  const files =
+    typeof filesRaw === "object" &&
+    filesRaw !== null &&
+    !Array.isArray(filesRaw)
+      ? (filesRaw as Record<string, unknown>)
+      : {};
+  for (const entry of addFiles) {
+    files[entry.path] = agentsdirFileLockEntry(entry.hash);
+  }
+  for (const path of removeFiles) {
+    delete files[path];
+  }
+  // an empty `files` table is dropped rather than written as `{}`: the absent
+  // table is the documented "nothing tracked outside the skills"
+  if (Object.keys(files).length === 0) {
+    delete data["files"];
+  } else {
+    data["files"] = sortedByKey(files);
+  }
+  if (Object.keys(skills).length === 0 && data["files"] === undefined) {
     return raw === undefined ? undefined : { action: "removed" };
   }
   const rendered = `${JSON.stringify(data, null, 2)}\n`;
@@ -480,6 +516,15 @@ async function planLockWith(
     action: raw === undefined ? "created" : "updated",
     content: rendered,
   };
+}
+
+/** Deterministic key order: the lock is a versioned file, diffed by humans. */
+function sortedByKey(table: Record<string, unknown>): Record<string, unknown> {
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(table).sort()) {
+    sorted[key] = table[key];
+  }
+  return sorted;
 }
 
 function contentOf(files: PackFile[], path: string): string {

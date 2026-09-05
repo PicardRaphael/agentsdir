@@ -26,6 +26,7 @@ import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
   getPackContent,
+  packFileLockEntries,
   packInstallFiles,
   packSkillHash,
   PACKS,
@@ -277,6 +278,7 @@ async function buildPlan(
   }
   // content packs selected at init: files, rules into the index, lock entries
   const lockEntries: { skill: string; hash: string }[] = [];
+  const lockFileEntries: { path: string; hash: string }[] = [];
   for (const packName of answers.packs) {
     const pack = getPackContent(packName);
     if (pack === undefined) {
@@ -303,6 +305,12 @@ async function buildPlan(
         continue;
       }
       await planCreate(plan, root, file.path, file.content);
+      // only what this init really writes gets a lock entry: a rule already in
+      // the repository is kept as it is, and locking it against our render
+      // would report it modified before the user has touched anything
+      if (plan[plan.length - 1]?.action === "create") {
+        lockFileEntries.push(...packFileLockEntries([file]));
+      }
       if (file.path.startsWith(".agents/rules/")) {
         const ruleFile = file.path.slice(".agents/rules/".length);
         if (!ruleSources.has(ruleFile)) {
@@ -311,12 +319,12 @@ async function buildPlan(
       }
     }
   }
-  if (lockEntries.length > 0) {
+  if (lockEntries.length > 0 || lockFileEntries.length > 0) {
     await planCreate(
       plan,
       root,
       "skills-lock.json",
-      renderLockSeed(lockEntries),
+      renderLockSeed(lockEntries, lockFileEntries),
     );
   }
   const ruleEntries: RuleIndexEntry[] = [...ruleSources.keys()]

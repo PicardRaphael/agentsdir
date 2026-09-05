@@ -593,3 +593,23 @@ function makeFlat(registration: HookRegistration): unknown {
 export function isRegistrableScript(name: string): boolean {
   return /^[a-z0-9][a-z0-9-]*\.mjs$/.test(name);
 }
+
+/**
+ * The scripts of `.agents/hooks/` an event can be attributed to, sorted by file
+ * name. Exported so the protocol probe of `check` (invariant 15) enumerates
+ * exactly what the registration planner enumerates: a script this list omits is
+ * user-managed — registered nowhere, so no harness ever runs it, and running it
+ * here would hold a file agentsdir does not own to a protocol it never claimed.
+ */
+export async function listAttributedHookScripts(
+  root: string,
+): Promise<HookRegistration[]> {
+  const attributed: HookRegistration[] = [];
+  for (const script of await listHookScripts(root, {})) {
+    const entry = attributeScript(script.file, script.source);
+    if (entry !== undefined) {
+      attributed.push(entry);
+    }
+  }
+  return attributed;
+}

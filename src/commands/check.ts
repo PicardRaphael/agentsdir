@@ -2,7 +2,11 @@ import { defineCommand } from "citty";
 import { asUserFacingError } from "../core/errors.js";
 import { readManifest, type ProjectionMode } from "../core/manifest.js";
 import { resolveRepoRoot } from "../core/repo.js";
-import { validateRepo, type Violation } from "../core/validate.js";
+import {
+  validateRepo,
+  type ValidateOptions,
+  type Violation,
+} from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 
 export interface CheckResult {
@@ -11,10 +15,17 @@ export interface CheckResult {
   mode: ProjectionMode;
 }
 
-/** Strictly read-only: validates and reports, never writes. */
-export async function runCheck(root: string): Promise<CheckResult> {
+/**
+ * Strictly read-only: validates and reports, never writes. It does invoke the
+ * hook scripts of the repository once each (invariant 15) — the user's own
+ * code, bounded by `hook-protocol.ts`.
+ */
+export async function runCheck(
+  root: string,
+  options: ValidateOptions = {},
+): Promise<CheckResult> {
   const manifest = await readManifest(root);
-  const violations = await validateRepo(root, manifest);
+  const violations = await validateRepo(root, manifest, options);
   const failed = violations.some((violation) => violation.severity === "error");
   return {
     violations,

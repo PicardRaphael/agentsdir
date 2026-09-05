@@ -114,6 +114,27 @@ resolved, on the first ordinary command.
   `.agents/agents/*.md` without a usable `name` and `description` is silently
   ignored by Claude Code: nothing fails, the agent is simply never offered.
   `docs/conventions.md` announced the invariant; nothing implemented it.
+- **`check` verifies the hook script protocol (invariant 15).** Registering a
+  script proved it was declared, never that it could run. Each script an event
+  can be attributed to is now invoked once, dry, with the sample payload of its
+  event on stdin, and held to the protocol its own template documents: an empty
+  stdout or one JSON object, exit code `0` or `2`. The invocation is bounded —
+  five seconds, capped output, stdin closed after the payload, no environment
+  variable added — so a hook that never returns is a named violation instead of
+  a hung CI.
+- **`check` fails on a projection git records as a symlink but holds as text.**
+  The detection existed and only `doctor` consumed it, so `check` covered the
+  disk half of invariant 11 and not the git half: a repository in copy mode
+  carrying a leftover `120000` entry passed, and the next clone on a machine
+  with symlink support turned each of those files into a link pointing at its
+  own content. `doctor` keeps its explanation; `check` now fails.
+- **The lock covers the rules and scripts the CLI installs, not just skills.**
+  `docs/conventions.md` promised `sourceType: "agentsdir"` tracked the generic
+  rules and templates, and nothing did — a rule edited by hand was
+  indistinguishable from one still pristine, which is precisely what the
+  `update` protection has to tell apart before it overwrites anything. A `files`
+  table now records what an install actually wrote; a file the repository
+  already had is deliberately left untracked.
 - **`init` no longer crashes on a large repository.** `git ls-files -sz` ran
   with Node's default 1 MiB output cap; past a few tens of thousands of tracked
   files it threw, and `init`, `sync` and `doctor` all reach it.
