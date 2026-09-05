@@ -9,10 +9,10 @@ import {
   skillFrontmatterProblems,
 } from "./frontmatter.js";
 import {
+  HOOK_HARNESSES,
   HOOK_REGISTRY_PATHS,
   planHookRegistrations,
   registryProblem,
-  type HookHarness,
 } from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
 import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
@@ -712,20 +712,22 @@ function referencedPaths(body: string): string[] {
 export { computeSkillHash, hashSkillFiles };
 
 /**
- * The hook registries of the enabled harnesses, held to the same contract
- * `sync` applies. Without this, `check` passed on a repo whose registries
- * `sync` refuses — a green CI on a repository that cannot be synced.
+ * Every hook registry on disk, held to the same contract `sync` applies.
+ * Without this, `check` passed on a repo whose registries `sync` refuses — a
+ * green CI on a repository that cannot be synced.
+ *
+ * On disk, not "of the enabled harnesses": `sync` reads the registry of a
+ * disabled harness too, to deregister from it. Checking only the enabled ones
+ * reopened the very gap this pass exists to close — a malformed registry of a
+ * removed harness passed `check` with exit 0 and failed `sync` with exit 1.
  */
 async function validateHookRegistries(
   root: string,
   manifest: Manifest,
 ): Promise<Violation[]> {
   const violations: Violation[] = [];
-  for (const harness of manifest.harness.enabled) {
-    const path = HOOK_REGISTRY_PATHS[harness as HookHarness];
-    if (path === undefined) {
-      continue;
-    }
+  for (const harness of HOOK_HARNESSES) {
+    const path = HOOK_REGISTRY_PATHS[harness];
     let raw: string;
     try {
       raw = await readFile(join(root, ...path.split("/")), "utf8");

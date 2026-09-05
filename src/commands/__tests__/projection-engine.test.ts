@@ -191,6 +191,32 @@ describe("34 - the projection engine on its edge cases", () => {
     ).resolves.toContain(`.claude/rules/${rule}`);
   });
 
+  it("Given a malformed registry of a disabled harness, When check runs, Then it fails like sync instead of passing green", async () => {
+    const dir = await copyModeRepo();
+    await disableClaude(dir);
+    await runSync(dir, { dryRun: false });
+    // sync now reads the registry of a disabled harness in order to deregister
+    // from it, so check has to hold that registry to the same contract — or CI
+    // stays green on a repository sync refuses to touch
+    await writeFile(join(dir, ".claude", "settings.json"), "{", "utf8");
+
+    const checked = await runCheck(dir);
+
+    expect(checked.exitCode).toBe(1);
+    expect(
+      checked.violations.some(
+        (violation) => violation.rule === "hook-registry-invalid",
+      ),
+    ).toBe(true);
+    // and both now say the same thing: the shape is reported once, by the pass
+    // that exists for it, instead of check passing and sync throwing raw
+    const synced = await runSync(dir, { dryRun: false });
+    expect(synced.exitCode).toBe(1);
+    expect(synced.violations.map((violation) => violation.rule)).toContain(
+      "hook-registry-invalid",
+    );
+  });
+
   it("Given a repo declaring `* text=auto` without eol=lf, When init runs, Then a managed block pins the projected paths to LF", async () => {
     const dir = await makeTempDir("engine");
     const original = "* text=auto\n";

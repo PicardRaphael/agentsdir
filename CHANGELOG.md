@@ -92,6 +92,9 @@ resolved, on the first ordinary command.
   `[projections.hashes]`, and `CLAUDE.md`, the copies and the hook registrations
   stayed on disk — loaded by the harness, updated by no sync, and green in CI.
   `check` now reports them and `sync` removes them, hook registrations included.
+  `check` holds every hook registry found on disk to the contract, not only
+  those of the enabled harnesses, so a malformed one cannot pass the check and
+  then fail the sync.
 - **`sync` never empties `[projections.hashes]` while the files stay.** The
   fingerprints of a projection it may not remove are kept with it, instead of
   losing the record of what had been written.
