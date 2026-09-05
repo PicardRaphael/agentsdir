@@ -96,7 +96,7 @@ flowchart LR
 | --- | --- | --- |
 | `cli` | Parsing of commands and flags, interactive prompts, terminal output. | Each command is a thin module that orchestrates `core`; no business logic in the CLI layer. |
 | `core/manifest` | Reading, validation and writing of the `.agents.toml` manifest. | The only module allowed to write the manifest; it carries the schema version and the manifest migrations. |
-| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. `refreshProjections` is the single orchestration of "remove what must not survive, then project", shared by `sync` and the generators. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
+| `core/projections` | The symlink \| copy engine: creates, regenerates and compares every declared projection. `refreshProjections` is the single orchestration of "remove what must not survive, then project", shared by `sync` and the generators. The whole plan — including the classification of the arrival mode's targets — is computed **before** the first removal, and a foreign target aborts there: a switch either happens whole or leaves the repository untouched. The removal is subtracted from the disk being classified (`pendingRemovals`), never assumed away. | A projection = a declarative entry (source, target, type). The mode comes from the manifest, never from an on-the-fly detection performed along the way. |
 | `core/validate` | The invariants (see [conventions.md](conventions.md)): name identity, invocation parity, length bounds, existence of referenced files, lock integrity. | Read-only. Used by `check` (failure = exit code 1) and replayed by mutating commands before writing. |
 | `core/frontmatter` | Parses and validates the YAML frontmatter of `SKILL.md` files. **The extended frontmatter IS the catalog**: the Codex fields (`display-name`, `color`, `icon`, `prompt`) live there, ignored by Claude Code. | Fixes the flaw of the source model (TypeScript catalog hard-coded in a script): adding a skill = creating a folder, not editing code. |
 | `core/icons` | Renders a skill's SVG icon from an embedded icon set: lucide paths vendored as static JSON in the package. | No react/lucide dependency at runtime; byte-for-byte deterministic rendering (comparable by fingerprint). |
@@ -227,7 +227,7 @@ The analysis of the NowStack repo ([recherche/analyse-nowstack.md](recherche/ana
 | Flaw observed in NowStack | agentsdir fix |
 | --- | --- |
 | The skill verification announced as "CI" is not wired into any workflow. | `init` emits `.github/workflows/agents-check.yml` running `npx agentsdir check`. |
-| No `.gitattributes`: line endings and sha256 fingerprints depend on the machine. | `init` writes `eol=lf` for the scripts and every hashed file. |
+| No `.gitattributes`: line endings and sha256 fingerprints depend on the machine. | `init` appends a `line-endings` managed block pinning every projected and hashed path to `eol=lf`, on an existing `.gitattributes` as well as on a new one. |
 | `.agents/memory/` versioned with a substitutable personal datum (email address). | `memory/` excluded from git; template versioned separately. |
 | Skill catalog hard-coded in a TypeScript script in the repo. | The extended frontmatter of each `SKILL.md` is the catalog; the CLI reads it, nothing to edit elsewhere. |
 | Unix-only scripts (bash, perl, `lsof`, `trash`). | All emitted scripts are portable Node. |

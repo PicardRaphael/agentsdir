@@ -138,8 +138,10 @@ npx agentsdir init [options]
    (managed permissions block covering the emitted scripts), per-skill Codex
    projections (`agents/openai.yaml`, `assets/icon.svg`), files of the
    `worktrees` pack where applicable (`.cursor/worktrees.json`).
-7. **Repo hygiene**: `.gitignore` entries (managed blocks), `.gitattributes`
-   with `eol=lf` on scripts and hashed files, the
+7. **Repo hygiene**: `.gitignore` entries (managed blocks), a `line-endings`
+   managed block in `.gitattributes` pinning the projected paths to `eol=lf`
+   (appended, so a repository declaring its own `* text=auto` keeps its policy
+   and still gets LF where agentsdir fingerprints; last match wins), the
    `.github/workflows/agents-check.yml` workflow running `npx agentsdir check`.
 8. **Case of an already-populated repo**: strictly additive behavior. An
    existing `AGENTS.md` is kept — the CLI only inserts its managed blocks

@@ -56,11 +56,14 @@ export interface ProjectOptions {
    */
   overlay?: Record<string, Buffer>;
   /**
-   * Plans against a clean slate instead of the current disk: what a mode
-   * switch will find once `unproject` has removed the previous mode's
-   * projections. Dry run only — a writing run must classify the real disk.
+   * Projections `unproject` is about to remove, subtracted from the real disk
+   * when classifying. This is what lets the whole plan — foreign targets
+   * included — be computed before the first deletion. It replaces a blanket
+   * "assume absent": that one short-circuited the classification entirely, so
+   * no foreign target could ever be reported on a mode switch, in a dry run or
+   * anywhere else.
    */
-  assumeAbsent?: boolean;
+  pendingRemovals?: readonly string[];
 }
 
 export interface ProjectionChange {
@@ -115,27 +118,58 @@ export async function refreshProjections(
   options: RefreshOptions,
 ): Promise<RefreshResult> {
   const switching = options.mode !== options.previousMode;
-  const { removed } = switching
-    ? await unproject(root, {
-        mode: options.previousMode,
-        dryRun: options.dryRun,
-        previousHashes: options.previousHashes,
-      })
-    : await removeOrphanProjections(root, {
-        mode: options.mode,
-        hashes: options.previousHashes,
-        dryRun: options.dryRun,
-      });
-  const projection = await project(root, {
+  const remove = async (dryRun: boolean): Promise<{ removed: string[] }> =>
+    switching
+      ? await unproject(root, {
+          mode: options.previousMode,
+          dryRun,
+          previousHashes: options.previousHashes,
+        })
+      : await removeOrphanProjections(root, {
+          mode: options.mode,
+          hashes: options.previousHashes,
+          dryRun,
+        });
+  // what the removal would take, computed without taking it
+  const { removed } = await remove(true);
+  const plan: ProjectOptions = {
     mode: options.mode,
-    dryRun: options.dryRun,
     // on a switch the recorded fingerprints describe the mode being left
     previousHashes: switching ? {} : options.previousHashes,
     ...(options.overlay === undefined ? {} : { overlay: options.overlay }),
-    // a dry run plans against the clean slate the removal above would leave
-    ...(switching && options.dryRun === true ? { assumeAbsent: true } : {}),
-  });
+    pendingRemovals: removed,
+  };
+  // The whole plan, classified against the real disk minus that removal. A
+  // foreign target throws here — before a single copy is deleted. It used to
+  // throw after, leaving a repository half in each mode, with a manifest still
+  // announcing the mode it had left and no command able to describe it.
+  const projection = await planProjection(root, plan, options);
+  if (options.dryRun === true) {
+    return { ...projection, removed };
+  }
+  await remove(false);
+  // the removal happened: the disk now is the clean slate the plan assumed
+  await project(root, { ...plan, pendingRemovals: [] });
   return { ...projection, removed };
+}
+
+/** The plan, with the guarantee the caller cares about stated in the failure. */
+async function planProjection(
+  root: string,
+  plan: ProjectOptions,
+  options: RefreshOptions,
+): Promise<ProjectionResult> {
+  try {
+    return await project(root, { ...plan, dryRun: true });
+  } catch (error) {
+    if (options.mode === options.previousMode || !(error instanceof CliError)) {
+      throw error;
+    }
+    throw new CliError(
+      `${error.message}\nThe switch to ${options.mode} mode was aborted before anything was removed: the repository is untouched, still in ${options.previousMode} mode.`,
+      error.exitCode,
+    );
+  }
 }
 
 export interface UnprojectOptions {
@@ -167,7 +201,7 @@ export async function unproject(
     // the mirrors are ours; leftover entries keep the directory
     for (const spec of CLAUDE_PROJECTIONS) {
       if (spec.kind === "dir") {
-        await rmdirIfEmpty(root, spec.target);
+        await removeIfNoFilesLeft(root, spec.target);
       }
     }
   }
@@ -267,7 +301,7 @@ export async function removeOrphanProjections(
     }
     for (const spec of CLAUDE_PROJECTIONS) {
       if (spec.kind === "dir") {
-        await rmdirIfEmpty(root, spec.target);
+        await removeIfNoFilesLeft(root, spec.target);
       }
     }
   }
@@ -275,32 +309,70 @@ export async function removeOrphanProjections(
 }
 
 /**
- * Removes the directory, and any subdirectory of it, that holds no file at all.
+ * Removes a projection directory once it holds no file at all, at any depth.
  * A non-recursive readdir was not enough: a projected skill has `agents/` and
  * `assets/` subfolders, so the parent survived as a real directory holding only
  * empty ones — enough to make the next mode switch classify it as foreign and
- * throw, after the copies were already deleted.
+ * throw. `pack.ts` had the same defect and the same fix; this reuses the walk
+ * already in this module rather than open-coding a second traversal.
  */
-async function rmdirIfEmpty(root: string, path: string): Promise<void> {
+async function removeIfNoFilesLeft(root: string, path: string): Promise<void> {
   const abs = toAbsolute(root, path);
-  let entries;
   try {
-    entries = await readdir(abs, { withFileTypes: true });
-  } catch {
-    return; // absent or not a directory: nothing to clean up
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      await rmdirIfEmpty(root, `${path}/${entry.name}`);
-    }
-  }
-  try {
-    if ((await readdir(abs)).length === 0) {
+    // the shared walk decides: no file at any depth, and the directory goes —
+    // which is what makes a mode switch find a clean slate instead of a shell
+    // of empty folders it would classify as a foreign target
+    if ((await walkFiles(abs, path)).length === 0) {
       await rm(abs, { recursive: true, force: true });
+      return;
+    }
+    // files remain, so the mirror stays; its emptied subfolders still go, or a
+    // removed skill would leave its `agents/` and `assets/` behind for good
+    for (const entry of await readdir(abs, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        await removeIfNoFilesLeft(root, `${path}/${entry.name}`);
+      }
     }
   } catch {
-    // raced with something else removing it: nothing left to do
+    // unreadable, or raced with something else: cleaning up is best effort and
+    // never a failure of its own — the directory simply stays
   }
+}
+
+/**
+ * Will this target be gone by the time the projection is written? The plan is
+ * computed before the first deletion, so classifying the disk means subtracting
+ * what `unproject` is about to remove. Two shapes, because the two directions
+ * of a switch remove different things:
+ *
+ * - symlink to copy: `unproject` returns `.claude/rules`, the link itself, and
+ *   the copies to plan are files *under* it — so an ancestor counts. Without
+ *   this, `readFile` would follow the still-standing link into the source and
+ *   report every copy as a foreign target.
+ * - copy to symlink: `unproject` returns individual files, and the directory
+ *   goes away only once every file under it is removed. A survivor keeps it
+ *   standing, which is exactly the foreign target a real run would hit.
+ */
+async function willBeRemoved(
+  root: string,
+  target: string,
+  kind: "file" | "dir",
+  pending: ReadonlySet<string>,
+): Promise<boolean> {
+  if (pending.size === 0) {
+    return false;
+  }
+  const parts = target.split("/");
+  for (let depth = parts.length; depth >= 1; depth -= 1) {
+    if (pending.has(parts.slice(0, depth).join("/"))) {
+      return true;
+    }
+  }
+  if (kind !== "dir") {
+    return false;
+  }
+  const files = await walkFiles(toAbsolute(root, target), target);
+  return files.length > 0 && files.every((file) => pending.has(file.rel));
 }
 
 export interface VerifyOptions {
@@ -344,14 +416,14 @@ async function projectSymlinks(
       EXIT_CODES.driftOrInvariant,
     );
   }
+  const pending = new Set(options.pendingRemovals ?? []);
   const changes: ProjectionChange[] = [];
   for (const spec of CLAUDE_PROJECTIONS) {
     const expected = relativeLinkTarget(spec);
     const absTarget = toAbsolute(root, spec.target);
-    const state =
-      options.assumeAbsent === true
-        ? "absent"
-        : await classifyLinkTarget(absTarget, expected);
+    const state = (await willBeRemoved(root, spec.target, spec.kind, pending))
+      ? "absent"
+      : await classifyLinkTarget(absTarget, expected);
     if (state === "correct") {
       changes.push({ path: spec.target, action: "unchanged", existed: true });
       continue;
@@ -390,15 +462,15 @@ async function projectCopies(
   options: ProjectOptions,
 ): Promise<ProjectionResult> {
   const previousHashes = options.previousHashes ?? {};
+  const pending = new Set(options.pendingRemovals ?? []);
   const changes: ProjectionChange[] = [];
   const hashes: Record<string, string> = {};
   for (const file of await expectedCopies(root, options.overlay ?? {})) {
     hashes[file.path] = sha256(file.content);
     const absTarget = toAbsolute(root, file.path);
-    const state =
-      options.assumeAbsent === true
-        ? "absent"
-        : await classifyCopyTarget(absTarget, file, previousHashes);
+    const state = (await willBeRemoved(root, file.path, "file", pending))
+      ? "absent"
+      : await classifyCopyTarget(absTarget, file, previousHashes);
     if (state === "unchanged") {
       changes.push({ path: file.path, action: "unchanged", existed: true });
       continue;

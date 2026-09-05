@@ -9,17 +9,17 @@ import {
   skillFrontmatterProblems,
 } from "./frontmatter.js";
 import {
+  HOOK_HARNESSES,
   HOOK_REGISTRY_PATHS,
   planHookRegistrations,
   registryProblem,
-  type HookHarness,
 } from "./hook-registries.js";
 import { extractBlock } from "./managed-blocks.js";
 import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
 import { renderRulesIndexContent } from "../templates/agents-md.js";
 import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
-import { verify } from "./projections.js";
+import { unproject, verify } from "./projections.js";
 
 export interface Violation {
   /** Repo-relative path of the offending file or folder. */
@@ -43,6 +43,8 @@ export async function validateRepo(
   const violations: Violation[] = [];
   if (manifest.harness.enabled.includes("claude")) {
     violations.push(...(await validateProjections(root, manifest)));
+  } else {
+    violations.push(...(await validateDisabledHarness(root, manifest)));
   }
   violations.push(...(await validateSkills(root)));
   violations.push(...(await validateSubAgents(root)));
@@ -156,6 +158,36 @@ function validateSubAgentFields(
     });
   }
   return violations;
+}
+
+/**
+ * Claude Code taken out of `[harness] enabled`: what it left behind. Removing a
+ * harness is the path `docs/commandes.md` prescribes, and neither half of it
+ * existed — `check` skipped the projections entirely, so it reported "no drift"
+ * on a repository still carrying CLAUDE.md and thirty-odd copies that no `sync`
+ * would ever update again. A frozen configuration the harness keeps loading is
+ * worse than a missing one, because nothing says it is frozen.
+ *
+ * Reuses the dry enumeration of `unproject`: what `sync` would remove is
+ * exactly what `check` has to report, and `projection-orphan` is already the
+ * repairable rule that sends the user there.
+ */
+async function validateDisabledHarness(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  const { removed } = await unproject(root, {
+    mode: manifest.projections.mode,
+    dryRun: true,
+    previousHashes: manifest.projections.hashes,
+  });
+  return removed.map((path) => ({
+    path,
+    rule: "projection-orphan",
+    message:
+      "claude is no longer in `[harness] enabled`, yet this projection is still on disk — the harness keeps loading it while no sync updates it; run `agentsdir sync` to remove it.",
+    severity: "error" as const,
+  }));
 }
 
 async function validateProjections(
@@ -680,20 +712,22 @@ function referencedPaths(body: string): string[] {
 export { computeSkillHash, hashSkillFiles };
 
 /**
- * The hook registries of the enabled harnesses, held to the same contract
- * `sync` applies. Without this, `check` passed on a repo whose registries
- * `sync` refuses — a green CI on a repository that cannot be synced.
+ * Every hook registry on disk, held to the same contract `sync` applies.
+ * Without this, `check` passed on a repo whose registries `sync` refuses — a
+ * green CI on a repository that cannot be synced.
+ *
+ * On disk, not "of the enabled harnesses": `sync` reads the registry of a
+ * disabled harness too, to deregister from it. Checking only the enabled ones
+ * reopened the very gap this pass exists to close — a malformed registry of a
+ * removed harness passed `check` with exit 0 and failed `sync` with exit 1.
  */
 async function validateHookRegistries(
   root: string,
   manifest: Manifest,
 ): Promise<Violation[]> {
   const violations: Violation[] = [];
-  for (const harness of manifest.harness.enabled) {
-    const path = HOOK_REGISTRY_PATHS[harness as HookHarness];
-    if (path === undefined) {
-      continue;
-    }
+  for (const harness of HOOK_HARNESSES) {
+    const path = HOOK_REGISTRY_PATHS[harness];
     let raw: string;
     try {
       raw = await readFile(join(root, ...path.split("/")), "utf8");
@@ -742,8 +776,9 @@ async function compareHookRegistrations(
     .map((plan) => ({
       path: plan.path,
       rule: "hook-registration-drift",
-      message:
-        plan.action === "created"
+      message: plan.deregisters
+        ? "this harness is no longer in `[harness] enabled`, yet it still has hook registrations — it keeps running them; run `agentsdir sync` to deregister."
+        : plan.action === "created"
           ? "hook scripts in .agents/hooks/ are registered nowhere — no harness will ever run them; run `agentsdir sync`."
           : "registrations differ from the scripts in .agents/hooks/ — a script was added, renamed or deleted without a sync; run `agentsdir sync`.",
       severity: "error" as const,

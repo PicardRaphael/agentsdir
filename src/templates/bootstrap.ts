@@ -85,6 +85,34 @@ export function renderGitattributes(): string {
   ].join("\n");
 }
 
+/**
+ * Content of the `line-endings` managed block for `.gitattributes` (markers
+ * excluded): the paths agentsdir writes and fingerprints, pinned to LF.
+ *
+ * Scoped on purpose. A repository that already declares its own normalization
+ * policy keeps it — appending a repo-wide `* text=auto eol=lf` would silently
+ * rewrite a decision that is not ours to make. But the scoped block cannot be
+ * left out either: a repository carrying `* text=auto` without `eol=lf` comes
+ * out of a Windows checkout entirely in CRLF, while the expected bytes are
+ * built with an LF header. The two can never match, so `check` stays red
+ * whatever the user does. Last match wins in `.gitattributes`, so a block at
+ * the end of the file is what settles it.
+ */
+export function renderGitattributesContent(): string {
+  return [
+    "# agentsdir writes these files with LF and fingerprints them: a CRLF",
+    "# checkout would leave `check` in permanent, unfixable drift.",
+    "/AGENTS.md text=auto eol=lf",
+    "/CLAUDE.md text=auto eol=lf",
+    "/.agents.toml text=auto eol=lf",
+    "/skills-lock.json text=auto eol=lf",
+    "/.agents/** text=auto eol=lf",
+    "/.claude/** text=auto eol=lf",
+    "/.codex/** text=auto eol=lf",
+    "/.cursor/** text=auto eol=lf",
+  ].join("\n");
+}
+
 /** Content of the `ignore` managed block for `.gitignore` (markers excluded). */
 export function renderGitignoreContent(): string {
   return ["/.agents/memory/", "/.agents/output/"].join("\n");

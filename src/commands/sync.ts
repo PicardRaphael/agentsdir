@@ -17,10 +17,11 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { writeFileAtomic } from "../core/fs-utils.js";
+import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
 import {
   ensureNoLinkedParent,
   refreshProjections,
+  unproject,
 } from "../core/projections.js";
 import { planRulesIndex } from "../core/rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
@@ -107,8 +108,8 @@ export async function runSync(
     overlay[artifact.path] = artifact.content ?? Buffer.alloc(0);
     planned.push(artifact);
   }
-  let projectionHashes: Record<string, string> = {};
-  let removed: string[] = [];
+  let projectionHashes: Record<string, string>;
+  let removed: string[];
   const claudeEnabled = manifest.harness.enabled.includes("claude");
   if (claudeEnabled) {
     const plan = await refreshProjections(root, {
@@ -131,6 +132,22 @@ export async function runSync(
               : "created",
       });
     }
+  } else {
+    // claude left [harness] enabled: step 6 of `sync` in docs/commandes.md.
+    // Without this branch the projections stayed frozen on disk — loaded by the
+    // harness, updated by nothing — while sync reported "0 removed" and emptied
+    // [projections.hashes], losing even the record of what it had written.
+    const plan = await unproject(root, {
+      mode: previousMode,
+      dryRun: true,
+      previousHashes: manifest.projections.hashes,
+    });
+    removed = plan.removed;
+    projectionHashes = await survivingHashes(
+      root,
+      manifest.projections.hashes,
+      new Set(removed),
+    );
   }
   for (const path of removed) {
     planned.push({ path, action: "removed" });
@@ -173,6 +190,11 @@ export async function runSync(
         previousMode,
         previousHashes: manifest.projections.hashes,
         overlay,
+      });
+    } else {
+      await unproject(root, {
+        mode: previousMode,
+        previousHashes: manifest.projections.hashes,
       });
     }
     // the manifest is written last: its fingerprints describe the final state
@@ -459,6 +481,31 @@ async function planManifest(
     action: "updated",
     content: Buffer.from(rendered, "utf8"),
   };
+}
+
+/**
+ * The fingerprints of the projections still on disk once the removal is done.
+ * A projection agentsdir does not own — hand-edited past recognition — is left
+ * where it is, and its fingerprint has to be left in the manifest with it:
+ * emptying `[projections.hashes]` while the files stay is how the record of
+ * what was written gets lost, and with it any chance of recognizing those
+ * copies as ours later.
+ */
+async function survivingHashes(
+  root: string,
+  hashes: Record<string, string>,
+  removed: ReadonlySet<string>,
+): Promise<Record<string, string>> {
+  const surviving: Record<string, string> = {};
+  for (const [path, hash] of Object.entries(hashes)) {
+    if (removed.has(path)) {
+      continue;
+    }
+    if (await entryExists(join(root, ...path.split("/")))) {
+      surviving[path] = hash;
+    }
+  }
+  return surviving;
 }
 
 async function applyPlannedFile(
