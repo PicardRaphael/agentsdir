@@ -19,7 +19,7 @@ import { collectRuleIndexEntries, listRuleFiles } from "./rules-index.js";
 import { renderRulesIndexContent } from "../templates/agents-md.js";
 import { computeSkillHash, hashSkillFiles } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
-import { verify } from "./projections.js";
+import { unproject, verify } from "./projections.js";
 
 export interface Violation {
   /** Repo-relative path of the offending file or folder. */
@@ -43,6 +43,8 @@ export async function validateRepo(
   const violations: Violation[] = [];
   if (manifest.harness.enabled.includes("claude")) {
     violations.push(...(await validateProjections(root, manifest)));
+  } else {
+    violations.push(...(await validateDisabledHarness(root, manifest)));
   }
   violations.push(...(await validateSkills(root)));
   violations.push(...(await validateSubAgents(root)));
@@ -156,6 +158,36 @@ function validateSubAgentFields(
     });
   }
   return violations;
+}
+
+/**
+ * Claude Code taken out of `[harness] enabled`: what it left behind. Removing a
+ * harness is the path `docs/commandes.md` prescribes, and neither half of it
+ * existed — `check` skipped the projections entirely, so it reported "no drift"
+ * on a repository still carrying CLAUDE.md and thirty-odd copies that no `sync`
+ * would ever update again. A frozen configuration the harness keeps loading is
+ * worse than a missing one, because nothing says it is frozen.
+ *
+ * Reuses the dry enumeration of `unproject`: what `sync` would remove is
+ * exactly what `check` has to report, and `projection-orphan` is already the
+ * repairable rule that sends the user there.
+ */
+async function validateDisabledHarness(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  const { removed } = await unproject(root, {
+    mode: manifest.projections.mode,
+    dryRun: true,
+    previousHashes: manifest.projections.hashes,
+  });
+  return removed.map((path) => ({
+    path,
+    rule: "projection-orphan",
+    message:
+      "claude is no longer in `[harness] enabled`, yet this projection is still on disk — the harness keeps loading it while no sync updates it; run `agentsdir sync` to remove it.",
+    severity: "error" as const,
+  }));
 }
 
 async function validateProjections(
@@ -742,8 +774,9 @@ async function compareHookRegistrations(
     .map((plan) => ({
       path: plan.path,
       rule: "hook-registration-drift",
-      message:
-        plan.action === "created"
+      message: plan.deregisters
+        ? "this harness is no longer in `[harness] enabled`, yet it still has hook registrations — it keeps running them; run `agentsdir sync` to deregister."
+        : plan.action === "created"
           ? "hook scripts in .agents/hooks/ are registered nowhere — no harness will ever run them; run `agentsdir sync`."
           : "registrations differ from the scripts in .agents/hooks/ — a script was added, renamed or deleted without a sync; run `agentsdir sync`.",
       severity: "error" as const,

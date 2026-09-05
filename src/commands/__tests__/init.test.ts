@@ -100,15 +100,17 @@ describe("04 - init command", () => {
 
   it("Given existing .gitattributes and tasks/README.md, When init runs, Then no user file is overwritten, ever", async () => {
     const dir = await makeTempDir("init");
-    await writeFile(join(dir, ".gitattributes"), "*.png binary\n", "utf8");
+    const original = "*.png binary\n";
+    await writeFile(join(dir, ".gitattributes"), original, "utf8");
     const result = await runInit(dir, answers(), { dryRun: false });
-    await expect(readFile(join(dir, ".gitattributes"), "utf8")).resolves.toBe(
-      "*.png binary\n",
-    );
+    // the user's own rules survive verbatim; agentsdir only ever appends its
+    // managed block, the same contract as .gitignore (task 34, defect 4)
+    const updated = await readFile(join(dir, ".gitattributes"), "utf8");
+    expect(updated.startsWith(original)).toBe(true);
     const change = result.changes.find(
       (entry) => entry.path === ".gitattributes",
     );
-    expect(change?.action).toBe("skip-exists");
+    expect(change?.action).toBe("update-block");
   });
 
   it("Given an already initialized repo, When init reruns, Then nothing changes and it reports already initialized with exit 0", async () => {

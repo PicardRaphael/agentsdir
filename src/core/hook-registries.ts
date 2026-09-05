@@ -150,6 +150,8 @@ export interface HookRegistryPlan {
   action: "created" | "updated" | "ok";
   /** Bytes to write; absent when the file is already in step. */
   content?: string;
+  /** The harness left `[harness] enabled`: this plan deregisters, never adds. */
+  deregisters?: boolean;
 }
 
 /**
@@ -190,13 +192,14 @@ export async function planHookRegistrations(
   const attributable = new Set(registrations.map((entry) => entry.file));
   const plans: HookRegistryPlan[] = [];
   for (const harness of HOOK_HARNESSES) {
-    if (!enabledHarnesses.includes(harness)) {
-      continue;
-    }
+    // a disabled harness is not skipped, it is deregistered: skipping left the
+    // hooks of a removed harness registered and running, which the manifest no
+    // longer mentioned and no command reported
+    const enabled = enabledHarnesses.includes(harness);
     const path = HOOK_REGISTRY_PATHS[harness];
-    const expectedHere = registrations.filter((entry) =>
-      supports(harness, entry.event),
-    );
+    const expectedHere = enabled
+      ? registrations.filter((entry) => supports(harness, entry.event))
+      : [];
     // an absent registry is normal (nothing registered yet); an unreadable one
     // must stop the run — treating it as absent would rewrite the file from
     // scratch and drop whatever the user had registered there
@@ -232,6 +235,7 @@ export async function planHookRegistrations(
       path,
       action: raw === undefined ? "created" : "updated",
       content: `${JSON.stringify(next, null, 2)}\n`,
+      ...(enabled ? {} : { deregisters: true }),
     });
   }
   return plans;

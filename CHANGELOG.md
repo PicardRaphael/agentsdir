@@ -75,6 +75,32 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **A mode switch can no longer leave a repository half in each mode.** The
+  copies were deleted first and the arrival mode classified afterwards, so a
+  target agentsdir did not own aborted the run once the removal was
+  irreversible: `CLAUDE.md` had become a link, the copies were gone, and the
+  manifest still announced `mode = "copy"` — a state no command could describe
+  or repair. The whole plan is now computed before the first deletion, and a
+  foreign target aborts while the repository is still untouched.
+- **`--dry-run` no longer promises a switch that would fail.** Planning a mode
+  switch assumed a clean slate, which short-circuited the classification
+  entirely: no foreign target could be reported, in a dry run or anywhere else.
+  The plan now classifies the real disk, minus what the removal would take.
+- **Removing a harness from `[harness] enabled` removes its projections.** The
+  documented path did nothing: `check` skipped the projections of a disabled
+  harness and reported "no drift", `sync` reported "0 removed" while emptying
+  `[projections.hashes]`, and `CLAUDE.md`, the copies and the hook registrations
+  stayed on disk — loaded by the harness, updated by no sync, and green in CI.
+  `check` now reports them and `sync` removes them, hook registrations included.
+- **`sync` never empties `[projections.hashes]` while the files stay.** The
+  fingerprints of a projection it may not remove are kept with it, instead of
+  losing the record of what had been written.
+- **A repository with its own `.gitattributes` is no longer stuck in drift.** An
+  existing file was kept without a word, so a repository declaring `* text=auto`
+  without `eol=lf` came out of a Windows checkout in CRLF while the expected
+  bytes were built with LF: `check` stayed red whatever the user did. `init` now
+  appends a `line-endings` managed block pinning the projected paths to LF,
+  leaving the repository's own normalization policy alone.
 - **A symlink materialized by a checkout is repaired instead of refused.** This
   is the founding scenario of the product: a repository projected with symlinks,
   cloned where they cannot be created, has git write the link target as the file

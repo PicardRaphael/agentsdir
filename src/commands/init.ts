@@ -40,6 +40,7 @@ import {
 import {
   renderAgentsCheckWorkflow,
   renderGitattributes,
+  renderGitattributesContent,
   renderGitignoreContent,
   renderMemoryTemplate,
   renderTasksReadme,
@@ -348,7 +349,20 @@ async function buildPlan(
     blockContent: renderGitignoreContent(),
     style: "hash",
   });
-  await planCreate(plan, root, ".gitattributes", renderGitattributes());
+  // not planCreate: keeping an existing .gitattributes untouched is what left a
+  // repo declaring `* text=auto` without `eol=lf` in permanent drift
+  await planUpsertOrCreate(plan, root, ".gitattributes", {
+    create: () =>
+      upsertBlock(
+        renderGitattributes(),
+        "line-endings",
+        renderGitattributesContent(),
+        "hash",
+      ),
+    blockId: "line-endings",
+    blockContent: renderGitattributesContent(),
+    style: "hash",
+  });
   if (!(await isDirectory(join(root, ".github/workflows")))) {
     plan.push({ path: ".github/workflows/", action: "mkdir" });
   }

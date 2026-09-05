@@ -1,0 +1,211 @@
+import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { detectSymlinkSupport } from "../../core/detect.js";
+import { readManifest } from "../../core/manifest.js";
+import { refreshProjections } from "../../core/projections.js";
+import {
+  initAnswers,
+  makeTempDir,
+  pathExists,
+} from "../../test-support/index.js";
+import { runCheck } from "../check.js";
+import { runInit } from "../init.js";
+import { runSync } from "../sync.js";
+
+const symlinkProbe = await makeTempDir("engine-probe");
+const symlinkSupported = (await detectSymlinkSupport(symlinkProbe)).supported;
+
+/** A copy-mode repo with the creator pack: its skills have subfolders. */
+async function copyModeRepo(): Promise<string> {
+  const dir = await makeTempDir("engine");
+  await runInit(
+    dir,
+    initAnswers({ mode: "copy", packs: ["core", "creator"] }),
+    {
+      dryRun: false,
+    },
+  );
+  return dir;
+}
+
+/**
+ * A file under `.claude/skills` that agentsdir did not generate: no recorded
+ * fingerprint, no generated header. `unproject` must leave it, which keeps the
+ * directory standing, which is what makes the arrival mode see a foreign target.
+ */
+async function plantForeignSkill(dir: string): Promise<void> {
+  await mkdir(join(dir, ".claude", "skills", "intruder"), { recursive: true });
+  await writeFile(
+    join(dir, ".claude", "skills", "intruder", "SKILL.md"),
+    "# Mine\n\nHand-written, not a projection.\n",
+    "utf8",
+  );
+}
+
+/** Takes claude out of `[harness] enabled`, the way the docs prescribe. */
+async function disableClaude(dir: string): Promise<void> {
+  const path = join(dir, ".agents.toml");
+  const manifest = await readFile(path, "utf8");
+  const next = manifest.replace(/^enabled = \[.*\]$/m, 'enabled = ["codex"]');
+  if (next === manifest) {
+    throw new Error("the manifest has no `enabled` line to rewrite");
+  }
+  await writeFile(path, next, "utf8");
+}
+
+/**
+ * Task 34 — the projection engine outside the nominal path: a mode switch, a
+ * harness removed, a repository whose line endings are not ours to choose.
+ * Every one of these was reproduced on a throwaway repo before it was fixed.
+ */
+describe("34 - the projection engine on its edge cases", () => {
+  it("Given a foreign target in the arrival mode, When the mode switch runs, Then it aborts before the first removal and says the repository is untouched", async () => {
+    const dir = await copyModeRepo();
+    await plantForeignSkill(dir);
+    const bridgeBefore = await readFile(join(dir, "CLAUDE.md"), "utf8");
+    const rulesBefore = await readdir(join(dir, ".claude", "rules"));
+
+    await expect(
+      runSync(dir, { dryRun: false, mode: "symlink" }),
+    ).rejects.toThrow(/aborted before anything was removed/);
+
+    // the copies are all still there, still copies: the switch either happens
+    // whole or not at all. It used to delete them, then fail, leaving CLAUDE.md
+    // a link, the copies gone and the manifest still announcing copy mode
+    await expect(readFile(join(dir, "CLAUDE.md"), "utf8")).resolves.toBe(
+      bridgeBefore,
+    );
+    await expect(readdir(join(dir, ".claude", "rules"))).resolves.toEqual(
+      rulesBefore,
+    );
+    await expect(
+      readFile(join(dir, ".agents.toml"), "utf8"),
+    ).resolves.toContain('mode = "copy"');
+  });
+
+  it("Given a foreign target, When refreshProjections switches mode for real, Then nothing is removed before the plan is complete", async () => {
+    const dir = await copyModeRepo();
+    await plantForeignSkill(dir);
+    const manifest = await readManifest(dir);
+    const rulesBefore = await readdir(join(dir, ".claude", "rules"));
+
+    // straight at the engine, with no caller planning ahead of it: the order of
+    // operations has to hold on its own, or a generator calling it — `add rule`,
+    // `add skill` — would be the one leaving the repository half switched
+    await expect(
+      refreshProjections(dir, {
+        mode: "symlink",
+        previousMode: "copy",
+        previousHashes: manifest.projections.hashes,
+      }),
+    ).rejects.toThrow(/aborted before anything was removed/);
+
+    await expect(readdir(join(dir, ".claude", "rules"))).resolves.toEqual(
+      rulesBefore,
+    );
+    await expect(readFile(join(dir, "CLAUDE.md"), "utf8")).resolves.toContain(
+      "@AGENTS.md",
+    );
+  });
+
+  it("Given that same repo, When the switch is planned with --dry-run, Then the foreign target is reported instead of a plan that would succeed", async () => {
+    const dir = await copyModeRepo();
+    await plantForeignSkill(dir);
+
+    // the dry run used to assume a clean slate, which short-circuited the
+    // classification: it could not report a foreign target at all, so it
+    // announced a plan the real run then failed to carry out
+    await expect(
+      runSync(dir, { dryRun: true, mode: "symlink" }),
+    ).rejects.toThrow(/not generated by agentsdir/);
+  });
+
+  it.skipIf(!symlinkSupported)(
+    "Given a projected skill with subfolders, When the mode switches to symlink, Then no emptied directory survives to block it",
+    async () => {
+      const dir = await copyModeRepo();
+      // the shape that used to break it: copies removed, but `agents/` and
+      // `assets/` left `.claude/skills` standing as a real directory
+      expect(
+        await pathExists(join(dir, ".claude", "skills", "create-skill")),
+      ).toBe(true);
+
+      const result = await runSync(dir, { dryRun: false, mode: "symlink" });
+
+      expect(result.exitCode).toBe(0);
+      for (const target of ["rules", "skills", "agents"]) {
+        const stats = await lstat(join(dir, ".claude", target));
+        expect(stats.isSymbolicLink()).toBe(true);
+      }
+    },
+  );
+
+  it("Given claude removed from [harness] enabled, When check runs, Then its projections are reported instead of passing as no drift", async () => {
+    const dir = await copyModeRepo();
+    await disableClaude(dir);
+
+    const result = await runCheck(dir);
+
+    expect(result.exitCode).toBe(1);
+    const orphans = result.violations.filter(
+      (violation) => violation.rule === "projection-orphan",
+    );
+    expect(orphans.map((violation) => violation.path)).toContain("CLAUDE.md");
+    expect(orphans[0]?.message).toContain("`[harness] enabled`");
+  });
+
+  it("Given claude removed from [harness] enabled, When sync runs, Then its projections are removed rather than frozen on disk", async () => {
+    const dir = await copyModeRepo();
+    await disableClaude(dir);
+
+    const result = await runSync(dir, { dryRun: false });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.changes.some((change) => change.action === "removed")).toBe(
+      true,
+    );
+    expect(await pathExists(join(dir, "CLAUDE.md"))).toBe(false);
+    expect(await pathExists(join(dir, ".claude", "rules"))).toBe(false);
+    await expect(runCheck(dir)).resolves.toMatchObject({ exitCode: 0 });
+  });
+
+  it("Given a projection sync may not remove, When claude is disabled, Then [projections.hashes] is not emptied while the file stays", async () => {
+    const dir = await copyModeRepo();
+    const [rule] = (await readdir(join(dir, ".claude", "rules"))).sort();
+    if (rule === undefined) {
+      throw new Error("the core pack must project at least one rule");
+    }
+    // edited past recognition: no generated header, no matching fingerprint —
+    // agentsdir does not own it any more and must leave it where it is
+    await writeFile(join(dir, ".claude", "rules", rule), "Mine now.\n", "utf8");
+    await disableClaude(dir);
+
+    await runSync(dir, { dryRun: false });
+
+    expect(await pathExists(join(dir, ".claude", "rules", rule))).toBe(true);
+    // the fingerprint of a file left on disk is left with it: emptying the
+    // table while the files stay is how the record of what was written is lost
+    await expect(
+      readFile(join(dir, ".agents.toml"), "utf8"),
+    ).resolves.toContain(`.claude/rules/${rule}`);
+  });
+
+  it("Given a repo declaring `* text=auto` without eol=lf, When init runs, Then a managed block pins the projected paths to LF", async () => {
+    const dir = await makeTempDir("engine");
+    const original = "* text=auto\n";
+    await writeFile(join(dir, ".gitattributes"), original, "utf8");
+
+    await runInit(dir, initAnswers(), { dryRun: false });
+
+    const content = await readFile(join(dir, ".gitattributes"), "utf8");
+    expect(content.startsWith(original)).toBe(true);
+    expect(content).toContain("# agentsdir:begin line-endings");
+    expect(content).toContain("/.claude/** text=auto eol=lf");
+    // last match wins in .gitattributes: the block is worth nothing before the
+    // repo-wide rule it has to override
+    expect(content.indexOf("/.claude/**")).toBeGreaterThan(
+      content.indexOf("* text=auto"),
+    );
+  });
+});
