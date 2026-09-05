@@ -8,13 +8,20 @@ import { getPackContent } from "../../packs/index.js";
 import { initAnswers, makeTempDir } from "../../test-support/index.js";
 import { runCheck } from "../check.js";
 import { runInit } from "../init.js";
-import { runPackRemove } from "../pack.js";
+import { runPackAdd, runPackRemove } from "../pack.js";
 import { runSync } from "../sync.js";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * The default 5-second bound everywhere: a passing script must never race a
+ * short deadline on a loaded CI runner, where a cold `node` start alone can
+ * take a while. Only the test that proves the bound shortens it.
+ */
+const PROBE = {};
+
 /** Short enough that a hanging hook costs a test, not a suite. */
-const PROBE = { hooks: { timeoutMs: 700 } };
+const SHORT_PROBE = { hooks: { timeoutMs: 700 } };
 
 async function initializedRepo(
   packs: string[] = ["core"],
@@ -139,7 +146,7 @@ describe("32 - hook script protocol (invariant 15)", () => {
       "setTimeout(() => process.exit(0), 600000);\n",
     );
     const started = Date.now();
-    const result = await runCheck(dir, PROBE);
+    const result = await runCheck(dir, SHORT_PROBE);
     const violation = result.violations.find(
       (entry) => entry.rule === "hook-protocol-timeout",
     );
@@ -259,6 +266,19 @@ describe("32 - the lock covers the generic rules and scripts a pack installs", (
     expect(lock.files[".agents/rules/verification.md"].computedHash).toMatch(
       /^[0-9a-f]{64}$/,
     );
+  });
+
+  it("Given a pack added after init, When pack add writes its rule, Then the lock tracks it exactly as init would", async () => {
+    const dir = await initializedRepo();
+    await runPackAdd(dir, "verification", { dryRun: false });
+    const lock = JSON.parse(
+      await readFile(join(dir, "skills-lock.json"), "utf8"),
+    );
+    expect(lock.files[".agents/rules/verification.md"]).toMatchObject({
+      source: "agentsdir",
+      sourceType: "agentsdir",
+    });
+    expect((await runCheck(dir, PROBE)).exitCode).toBe(0);
   });
 
   it("Given a locked rule edited locally, When check runs, Then it is reported as information and never fails the check", async () => {
