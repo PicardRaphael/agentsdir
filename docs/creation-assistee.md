@@ -1,6 +1,6 @@
 # Assisted creation
 
-This document specifies the assisted artifact creation system — the heart of the product: creating **perfectly**, through an interview, every artifact of the architecture (skills, hooks, rules, sub-agents, and AGENTS.md itself). It complements [commandes.md](commandes.md) (the deterministic generators) and [conventions.md](conventions.md) (the invariants). Decisions taken: hybrid approach, repo analysis by meta-skill, assisted creation in v1; the `update` protection is laid down as early as v0.6 (recorded fingerprints), while the `update` command itself stays in v1.x.
+This document specifies the assisted artifact creation system — the heart of the product: creating **perfectly**, through an interview, every artifact of the architecture (skills, hooks, rules, sub-agents, and AGENTS.md itself). It complements [commandes.md](commandes.md) (the deterministic generators) and [conventions.md](conventions.md) (the invariants). Decisions taken: hybrid approach, repo analysis by meta-skill, assisted creation in v1; the `update` protection is laid down as early as v0.6 (recorded fingerprints), and the `update` command that reads it ships with v1.0.
 
 ## The principle: two stages, one loop
 
@@ -107,3 +107,4 @@ The content installed by the CLI evolves with it. Tracked by the existing lock m
 - `update` replaces **intact** content (fingerprint = installed version) with the new version. `sync` **never** recomputes the fingerprint of an `"agentsdir"` entry: it stays pinned to the installed version, otherwise the local modification would be "blessed" and the protection lost.
 - **Locally modified** content is preserved: `update` reports it, shows the diff of the upstream changes, and offers the merge — never a silent overwrite (the lesson of the source model's vendored skills, overwritten twice by their upstream tool).
 - `check` distinguishes "locally modified" (accepted, reported as information) from "projection drift" (an error).
+- Answering "keep mine" to the merge offer re-pins the entry to the local content for this CLI version: the decision is recorded, and the same merge is not offered again until upstream moves once more. Without a terminal to ask, `update` decides nothing, writes nothing and exits `1`.

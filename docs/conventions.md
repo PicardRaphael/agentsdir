@@ -189,6 +189,8 @@ The optional **`files` table** covers the content the CLI installs outside any s
 
 Two `sourceType` values: `"github"` for a skill vendored from an external repository (`vendor` command), and `"agentsdir"` for content installed by the CLI itself — the meta-skills of the `creator` pack under `skills`, the generic rules and shared scripts of the packs under `files`. The `"agentsdir"` entries carry the installed version and serve the `update` protection: intact content → upgraded; locally modified content → preserved, reported (`lock-local-change`, information, never a failure), merge offered (see [creation-assistee.md](creation-assistee.md)). A locked file that has disappeared is an error (`lock-file-missing`): restore it, or drop its entry.
 
+These fingerprints are the only ones `sync` never recomputes: recomputing them would erase the very difference `update` reads. [`update`](commandes.md#update--v1) is what rewrites them — to the new rendering when it upgrades an intact file, and to the local content when the user answers "keep mine", which is how an acknowledged local version stops being offered a merge it has already declined.
+
 ## 8. State directories
 
 | Directory | Role | Versioned |

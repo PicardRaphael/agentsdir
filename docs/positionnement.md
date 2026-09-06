@@ -144,9 +144,9 @@ ce document : la preuve passe devant, et la mesure d'usage se scinde.
    déjà — et parce que le groupe de travail « Skills over MCP » peut encore
    déplacer la cible.
 
-La dette technique (tâches 17 à 23), la commande `update` (31), les invariants
-non tenus (32) et les correctifs de cohérence se traitent en parallèle, par
-petites touches, sans jamais bloquer cette ligne.
+La dette technique (tâches 17 à 23) et les correctifs de cohérence se traitent
+en parallèle, par petites touches, sans jamais bloquer cette ligne. La commande
+`update` (31) et les invariants non tenus (32) sont livrés.
 
 ## La porte de publication
 

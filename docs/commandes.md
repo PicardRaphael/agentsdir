@@ -20,8 +20,8 @@ agent, hook) in [conventions.md](conventions.md); the per-harness details in
 | `doctor` | v1 | no | Diagnoses the local environment |
 | `pack add <name>` | v1 | yes | Installs a pack: files, managed blocks, manifest |
 | `pack remove <name>` | v1 | yes | Uninstalls a pack cleanly (refuses if modified locally, unless `--force`) |
+| `update` | v1 | yes | Migrates the manifest schema and upgrades the content agentsdir installed |
 | `vendor <owner/repo>` | v1.x | yes | Imports an external skill and locks it |
-| `update` | v1.x | yes | Upgrades the structure to a new manifest schema |
 | `migrate` | v2 | yes | Switches an existing `.claude/` or `.cursor/` configuration over to `.agents/` |
 
 ## Cross-cutting conventions
@@ -564,6 +564,66 @@ Mechanics common to all packs:
 
 ---
 
+## `update` — v1
+
+```
+npx agentsdir update [--dry-run] [--json]
+```
+
+Brings an installation up to the schema and the content this CLI ships. Three
+steps, in this order.
+
+**1. Schema migration.** The transformations declared from one schema version
+to the next are applied in order. Each step declares its **scope** — the
+managed blocks it rebuilds, and whether the projections are rebuilt with them
+— and nothing else is within reach: the content written by the user
+(`SKILL.md`, rules, the body of `AGENTS.md`) is named by no step. A gap no
+declared step bridges stops the run before anything is written (exit `1`).
+
+**2. Content upgrade.** The `sourceType: "agentsdir"` entries of
+`skills-lock.json` (see [conventions.md](conventions.md) §7) record what the
+CLI installed and the fingerprint it had at install time. Each entry is
+classified against that fingerprint and against the rendering this CLI
+produces today:
+
+| On disk | This CLI renders | Outcome |
+| --- | --- | --- |
+| matches the lock | the installed version | nothing to do |
+| matches the lock | a new version | replaced, re-locked to this CLI version |
+| modified locally | the installed version | kept, reported as information |
+| modified locally | a new version | kept, upstream diff shown, merge offered |
+
+The last row is never a silent overwrite. On a terminal each case is a
+question — keep mine, or take the agentsdir version. Answering "keep mine"
+records that answer in the lock, so the question is not asked again until
+upstream moves once more. Without a terminal — a script, `--json`,
+`--dry-run` — nothing is decided and nothing is written: the run prints the
+diff and exits `1`.
+
+Only what the lock names is ever written. A file the install kept as the
+repository already had it is absent from the lock on purpose, and stays out of
+reach; content vendored from elsewhere (`sourceType: "github"`) is left alone.
+
+**3. Closing `sync`.** The run ends with a full [`sync`](#sync--v1): every
+managed block and every projection regenerated from the source of truth, the
+manifest fingerprints written last. Determinism is preserved — a second
+`update` writes nothing.
+
+`sync` never advances the schema. The schema lives in the manifest and only
+`update` moves it, exactly as the projection mode is never recomputed silently:
+a command that stamped a new schema without running its transformations would
+leave `update` with nothing left to migrate.
+
+### Exit codes
+
+`0` up to date, or migrated · `1` a transformation needs a human decision (a
+merge to settle, or a schema gap no declared step bridges) · `2` environment
+or usage.
+
+Abridged specification completed and delivered on 6 September 2026.
+
+---
+
 ## `vendor <owner/repo>` — v1.x (abridged specification)
 
 ```
@@ -578,28 +638,6 @@ on the slightest unlocked local modification, which protects local adaptations
 from being overwritten by a careless re-import.
 Exit codes: `0` imported · `1` existing fingerprint diverges (drift detected) ·
 `2` name collision, network or environment (usage error).
-
----
-
-## `update` — v1.x (abridged specification)
-
-```
-npx agentsdir update [--dry-run]
-```
-
-Migrates the structure when the manifest schema evolves (new major CLI
-version): declared transformations from one schema version to the next,
-applied only to the **managed blocks and the projections** — the content
-written by the user (`SKILL.md`, rules, body of `AGENTS.md`) is never
-rewritten. It also upgrades the **content installed by the CLI**
-(meta-skills of the `creator` pack, generic rules, templates), tracked by
-fingerprint in `skills-lock.json` (`sourceType: "agentsdir"`): intact content
-is replaced by the new version; locally modified content is preserved,
-reported with the upstream diff, merge offered — never a silent
-overwrite (see
-[creation-assistee.md](creation-assistee.md)). Ends with a full `sync`.
-Exit codes: `0` up to date · `1` transformation impossible without a human
-decision · `2` environment.
 
 ---
 

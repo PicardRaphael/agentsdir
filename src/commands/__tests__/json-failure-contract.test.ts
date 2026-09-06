@@ -85,6 +85,12 @@ const FAILURE_CASES: FailureCase[] = [
     because: "the manifest is missing",
   },
   {
+    command: "update",
+    argv: ["update", "--json"],
+    makeRepo: gitRepoWithoutManifest,
+    because: "the manifest is missing",
+  },
+  {
     command: "doctor",
     argv: ["doctor", "--json"],
     makeRepo: unresolvableRepo,

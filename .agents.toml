@@ -1,6 +1,6 @@
 # .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.
 
-schema = 1
+schema = 2
 cli-version = "1.0.0"
 
 [project]

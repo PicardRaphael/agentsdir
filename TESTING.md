@@ -55,9 +55,15 @@ verte) est collée dans le message de commit qui l'introduit.
 
 | Garde | Test | Ce que la mutation retire |
 | --- | --- | --- |
-| Contrat `--json` en cas d'échec, pour les neuf commandes qui exposent le drapeau | `src/commands/__tests__/json-failure-contract.test.ts` | la branche `if (json)` du `catch` de `check`, `sync`, `doctor` et `runGeneratorCli` |
+| Contrat `--json` en cas d'échec, pour les dix commandes qui exposent le drapeau | `src/commands/__tests__/json-failure-contract.test.ts` | la branche `if (json)` du `catch` de `check`, `sync`, `update`, `doctor` et `runGeneratorCli` |
 | Marqueurs de commentaire neutralisés dans la première ligne d'une règle | `src/commands/__tests__/rules-index-injection.test.ts` | `sanitizeHook` (`src/templates/agents-md.ts`) |
 | Clé de `skills-lock.json` refusée comme segment de chemin | `src/core/__tests__/lock-key-escape.test.ts` | le filtre `NAME_SPEC` sur la clé (`src/core/validate.ts`) |
+| Le schéma du manifeste n'avance que par `update` | `src/commands/__tests__/update.test.ts` | la préservation `schema: manifest.schema` dans `planManifest` (`src/commands/sync.ts`) |
+| Aucun écrasement silencieux d'un contenu installé puis modifié localement | `src/commands/__tests__/update.test.ts` | la branche qui classe l'entrée en conflit au lieu de la mettre à niveau (`src/commands/update.ts`) |
+| Le contenu vendorisé (`sourceType: "github"`) n'est jamais mis à niveau | `src/commands/__tests__/update.test.ts` | le filtre `sourceType === "agentsdir"` de `collectInstalled` |
+| Le contenu écrit par l'utilisateur n'est jamais réécrit | `src/commands/__tests__/update.test.ts` | la limitation des suppressions à `entry.onDisk` dans `applyUpgrade` |
+| Le plan de `--dry-run` est celui que le vrai passage exécute | `src/commands/__tests__/update.test.ts` | le `sourceOverlay` remis au `sync` du passage à blanc, puis la cohérence `planWrites`/`applyUpgrade` |
+| Une marche de schéma non déclarée arrête la migration | `src/core/__tests__/migrations.test.ts` | le `throw` sur l'étape absente (`src/core/migrations.ts`) |
 | Sept règles de `check` : `skill-frontmatter`, `skill-md-missing`, `skill-md-unreadable`, `skill-name-spec`, `skill-unknown-icon`, `agents-md-missing`, `rules-index-missing` | `src/commands/__tests__/check-untested-rules.test.ts` | la branche qui pousse la violation |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est

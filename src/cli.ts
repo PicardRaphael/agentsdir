@@ -9,6 +9,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
+import { updateCommand } from "./commands/update.js";
 import { unknownCommand, unknownOption } from "./command-tree.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { CLI_VERSION } from "./version.js";
@@ -66,6 +67,7 @@ const main = defineCommand({
     pack: packCommand,
     sync: syncCommand,
     check: checkCommand,
+    update: updateCommand,
     doctor: doctorCommand,
   },
   async run({ args }) {

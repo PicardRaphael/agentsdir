@@ -31,6 +31,17 @@ export async function computeSkillHash(
 }
 
 /**
+ * The files the fingerprint above is computed from: skill-relative POSIX paths,
+ * sorted, `.git` and `node_modules` excluded. `update` needs the same list to
+ * diff an installed folder against its new rendering and to remove what the
+ * new one no longer ships — deriving it a second time is how the two would
+ * eventually disagree on what belongs to the skill.
+ */
+export function listSkillFiles(dir: string): Promise<string[]> {
+  return walkSorted(dir, "");
+}
+
+/**
  * Same fingerprint, computed from in-memory contents (skill-relative POSIX
  * paths) — for folders that are not on disk yet (`pack add --dry-run`).
  */

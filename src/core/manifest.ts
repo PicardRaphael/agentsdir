@@ -4,7 +4,7 @@ import { parse, stringify, TomlError } from "smol-toml";
 import { CliError } from "./errors.js";
 
 export const MANIFEST_FILE = ".agents.toml";
-export const MANIFEST_SCHEMA = 1;
+export const MANIFEST_SCHEMA = 2;
 
 const MANIFEST_HEADER =
   "# .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.";

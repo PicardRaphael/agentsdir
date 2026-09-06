@@ -125,7 +125,8 @@ apparaît ; vérifier par test qu'aucune requête réseau n'est émise.
 - **La veille active sur des sources externes** — écartée le 30 août 2026, pour
   la raison exposée plus haut.
 - **La commande `update`**, qui fait migrer une structure d'un schéma au
-  suivant : c'est la tâche [31](31-commande-update.md), dont celle-ci ne dépend
-  pas.
+  suivant : livrée le 6 septembre 2026, spécifiée dans
+  [`docs/commandes.md`](../../docs/commandes.md#update--v1) ; celle-ci n'en
+  dépend pas.
 - Modifier la configuration d'un dépôt sur la foi d'une recommandation.
   L'outil informe et propose ; l'équipe décide.

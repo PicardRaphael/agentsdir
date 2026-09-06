@@ -39,7 +39,7 @@ describe("03 - manifest .agents.toml", () => {
     expect(raw.split("\n", 1)[0]).toBe(
       "# .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.",
     );
-    expect(raw).toContain("\nschema = 1");
+    expect(raw).toContain("\nschema = 2");
     expect(raw).toContain('\ncli-version = "0.0.0"');
     expect(raw).toContain("\n[project]");
     expect(raw).toContain("\n[harness]");
@@ -87,7 +87,7 @@ describe("03 - manifest .agents.toml", () => {
   it("Given a manifest whose schema is newer than this CLI supports, When readManifest runs, Then it fails with exit code 2 and suggests upgrading", async () => {
     const dir = await makeTempDir("manifest");
     const raw = renderManifest(sampleManifest()).replace(
-      "schema = 1",
+      /schema = \d+/,
       "schema = 99",
     );
     await writeFile(join(dir, MANIFEST_FILE), raw, "utf8");
