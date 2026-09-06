@@ -140,7 +140,8 @@ npx agentsdir init [options]
    excluded from git and created locally).
 6. **Projections** according to the chosen harnesses: `CLAUDE.md` and
    `.claude/{rules,skills,agents}` (symlinks or copies), `.claude/settings.json`
-   (managed permissions block covering the emitted scripts), per-skill Codex
+   (the permission rules covering the scripts the installed packs tell an agent
+   to run — written only when there are such scripts), per-skill Codex
    projections (`agents/openai.yaml`, `assets/icon.svg`), files of the
    `worktrees` pack where applicable (`.cursor/worktrees.json`).
 7. **Repo hygiene**: `.gitignore` entries (managed blocks), a `line-endings`
@@ -415,8 +416,13 @@ Regenerates every projection from the source of truth, in this order:
 3. **Codex projections** — `agents/openai.yaml` and `assets/icon.svg` of each
    skill, derived from the frontmatter, compared byte for byte (rewritten only
    if different).
-4. **Managed blocks** — rules index of `AGENTS.md`, permissions of
-   `.claude/settings.json`, hook registrations, `.gitignore` entries.
+4. **Managed blocks** — rules index of `AGENTS.md`, `.gitignore` entries, and,
+   in `.claude/settings.json`, both the hook registrations and the permission
+   rules of the installed packs' scripts. That file has no comment markers to
+   delimit a block, so ownership is structural: a rule is agentsdir's iff it
+   reads `Bash(node <path under .agents/> *)`, a registration iff its command is
+   exactly `node .agents/hooks/<file>`. Everything else the file holds is
+   preserved, in place and in order.
 5. **Lock** — recomputation of the sha256 fingerprints of `skills-lock.json`
    for vendored skills (`sourceType: "github"`); the `"agentsdir"` entries stay
    pinned to the installed version (`update` protection), never recomputed.

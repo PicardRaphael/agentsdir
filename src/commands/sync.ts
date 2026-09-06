@@ -7,7 +7,16 @@ import {
   parseOpenSkillMarkdown,
   parseSkillMarkdown,
 } from "../core/frontmatter.js";
-import { planHookRegistrations } from "../core/hook-registries.js";
+import {
+  planHookRegistrations,
+  type HookRegistryPlan,
+} from "../core/hook-registries.js";
+import {
+  applyPermissions,
+  CLAUDE_SETTINGS_FILE,
+  readSettings,
+} from "../core/claude-permissions.js";
+import { packScriptPaths } from "../packs/index.js";
 import {
   MANIFEST_FILE,
   parseMode,
@@ -170,10 +179,14 @@ export async function runSync(
   planned.push(await planRulesIndexFile(root, sourceOverlay));
   // hook registrations: regenerated from the scripts in .agents/hooks/ —
   // a deleted script loses its registrations here (clean deregistration)
-  for (const registry of await planHookRegistrations(
+  const registries = await planHookRegistrations(
     root,
     manifest.harness.enabled,
-  )) {
+  );
+  for (const registry of registries) {
+    if (registry.path === CLAUDE_SETTINGS_FILE) {
+      continue;
+    }
     planned.push({
       path: registry.path,
       action: registry.action,
@@ -181,6 +194,13 @@ export async function runSync(
         ? { content: Buffer.from(registry.content, "utf8") }
         : {}),
     });
+  }
+  // .claude/settings.json carries both the hook registrations and the
+  // permission allowlist: two plans for one path would clobber each other, so
+  // the permissions are merged onto what the registration plan produced
+  const claudeSettings = await planClaudeSettings(root, registries, manifest);
+  if (claudeSettings !== undefined) {
+    planned.push(claudeSettings);
   }
   const lock = await planLock(root, overlay);
   if (lock !== undefined) {
@@ -355,6 +375,43 @@ export const syncCommand = defineCommand({
     }
   },
 });
+
+/**
+ * The single plan for `.claude/settings.json`: the hook registrations this run
+ * computed, with the permission allowlist merged onto them. A harness dropped
+ * from `[harness] enabled` expects no rule, so the same pass removes ours —
+ * the symmetric move to the deregistration the hook planner already does.
+ */
+async function planClaudeSettings(
+  root: string,
+  registries: HookRegistryPlan[],
+  manifest: Manifest,
+): Promise<PlannedFile | undefined> {
+  const registry = registries.find(
+    (plan) => plan.path === CLAUDE_SETTINGS_FILE,
+  );
+  const onDisk = await readSettings(root, CLAUDE_SETTINGS_FILE);
+  // what the registration plan would write, or the file as it stands
+  const base = registry?.content ?? onDisk;
+  const scripts = manifest.harness.enabled.includes("claude")
+    ? packScriptPaths(manifest.packs.installed)
+    : [];
+  const merged = applyPermissions(base, scripts) ?? base;
+  // an absent file with nothing to put in it is not a change and not an "ok"
+  // either: creating one, or naming it in the report, would be noise in a repo
+  // that never asked for it
+  if (merged === undefined) {
+    return undefined;
+  }
+  if (merged === onDisk) {
+    return { path: CLAUDE_SETTINGS_FILE, action: "ok" };
+  }
+  return {
+    path: CLAUDE_SETTINGS_FILE,
+    action: onDisk === undefined ? "created" : "updated",
+    content: Buffer.from(merged, "utf8"),
+  };
+}
 
 /** Codex artifacts of every skill, derived from the frontmatter (the catalogue). */
 async function planCodexArtifacts(

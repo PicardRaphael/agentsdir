@@ -82,9 +82,43 @@ resolved, on the first ordinary command.
   already working in the repository has read the scripts, the CI and the README,
   so it answers better than any default; it just needed somewhere to put the
   answers. The README carries a prompt ready to paste.
+- **The generators can be answered without a terminal too.** `add skill` asked
+  six questions and offered no flag for any of them, so off a TTY — the path a
+  coding agent takes — every catalogue field fell back to a generic template
+  value. All six now have a flag (`--description`, `--display-name`,
+  `--short-description`, `--color`, `--icon`, `--default-prompt`), as do
+  `add rule --hook` and `add agent --description`. A flag is refused by the same
+  rule as the prompt it replaces.
+- **`init --json`.** The command an agent runs first was the only one whose
+  result it could not read: the flag was accepted by nothing, the output stayed
+  the human report. `init` now writes the same single object as the other nine
+  commands, and implies `--yes` — the interview writes its prompts to the very
+  stdout a script came to parse.
+- **`.claude/settings.json` carries the permission rules for the scripts the
+  packs install.** A pack could lay down a skill whose procedure runs a script
+  through `node` while nothing allowed it, so Claude Code asked every single
+  time. `init`, `sync`, `pack add` and `pack remove` now maintain those rules.
+  JSON has no comment markers to delimit a managed block, so ownership is
+  structural — a rule is agentsdir's iff it reads
+  `Bash(node <path under .agents/> *)` — and everything else in the file is
+  preserved, in place and in order.
 
 ### Fixed
 
+- **`AGENTS.md` no longer states commands the repository does not have.** Stack
+  detection tested only for the marker file and wrote the stack's usual commands
+  as facts, so a Python project with no test runner declared got an `AGENTS.md`
+  asserting `pytest` — worse than an empty one, because the agent believes it. A
+  command is now written down only where the repository proves it: a script it
+  declares, a tool it depends on, or a subcommand of the toolchain its marker
+  file declares. The rest is marked to fill in.
+- **A missing required argument exits `2`, not `1`.** The six commands taking a
+  positional let the argument parser handle its absence: it printed the help and
+  exited `1`, the code that means drift. A CI script could not tell a repository
+  that had moved from a command called wrong.
+- **A generator refuses before it asks.** The interview ran ahead of the
+  uniqueness check and the manifest read, so retyping a taken name — or running
+  a generator before `init` — cost six answers before the refusal.
 - **A mode switch can no longer leave a repository half in each mode.** The
   copies were deleted first and the arrival mode classified afterwards, so a
   target agentsdir did not own aborted the run once the removal was

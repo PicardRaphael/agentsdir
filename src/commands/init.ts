@@ -21,13 +21,19 @@ import {
   renderManifest,
   type Manifest,
 } from "../core/manifest.js";
-import { project } from "../core/projections.js";
+import { ensureNoLinkedParent, project } from "../core/projections.js";
+import {
+  applyPermissions,
+  CLAUDE_SETTINGS_FILE,
+  readSettings,
+} from "../core/claude-permissions.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
   getPackContent,
   packFileLockEntries,
   packInstallFiles,
+  packScriptPaths,
   packSkillHash,
   PACKS,
   renderLockSeed,
@@ -453,6 +459,23 @@ async function buildPlan(
     blockContent: renderGitattributesContent(),
     style: "hash",
   });
+  if (answers.harnesses.includes("claude")) {
+    // the allowlist covering the scripts the selected packs tell an agent to
+    // run — without it, every run of one asks for permission
+    const scripts = packScriptPaths(answers.packs);
+    const current = await readSettings(root, CLAUDE_SETTINGS_FILE);
+    const next = applyPermissions(current, scripts);
+    if (next !== undefined) {
+      // never through a link: a `.claude` symlink would carry this write into
+      // the user's global Claude Code settings
+      await ensureNoLinkedParent(root, CLAUDE_SETTINGS_FILE);
+      plan.push({
+        path: CLAUDE_SETTINGS_FILE,
+        action: current === undefined ? "create" : "update-block",
+        content: next,
+      });
+    }
+  }
   if (!(await isDirectory(join(root, ".github/workflows")))) {
     plan.push({ path: ".github/workflows/", action: "mkdir" });
   }
