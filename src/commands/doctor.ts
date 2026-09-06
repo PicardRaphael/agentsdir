@@ -129,7 +129,7 @@ export async function runDoctor(
       message:
         manifest.schema === MANIFEST_SCHEMA
           ? `manifest schema ${manifest.schema} matches this CLI (schema ${MANIFEST_SCHEMA}).`
-          : `manifest schema ${manifest.schema} is older than this CLI (schema ${MANIFEST_SCHEMA}) — run \`agentsdir update\` when available.`,
+          : `manifest schema ${manifest.schema} is older than this CLI (schema ${MANIFEST_SCHEMA}) — run \`agentsdir update\` to migrate it.`,
     });
   }
   findings.push(await workflowFinding(root));

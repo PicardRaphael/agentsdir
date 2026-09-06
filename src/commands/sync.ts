@@ -10,7 +10,6 @@ import {
 import { planHookRegistrations } from "../core/hook-registries.js";
 import {
   MANIFEST_FILE,
-  MANIFEST_SCHEMA,
   parseMode,
   readManifest,
   renderManifest,
@@ -68,6 +67,9 @@ const REPAIRABLE_RULES = new Set([
   "hook-registration-drift",
 ]);
 
+/** A rule of the source of truth, as the overlay keys spell it. */
+const RULE_SOURCE = /^\.agents\/rules\/[^/]+\.md$/;
+
 interface PlannedFile {
   path: string;
   action: SyncAction;
@@ -82,9 +84,20 @@ interface PlannedFile {
  */
 export async function runSync(
   root: string,
-  options: { dryRun: boolean; mode?: ProjectionMode },
+  options: {
+    dryRun: boolean;
+    mode?: ProjectionMode;
+    /**
+     * Source-of-truth files a caller is about to write, keyed by repo-relative
+     * POSIX path. `update` upgrades installed content and then syncs: without
+     * this, its `--dry-run` would plan the projections of the *old* content and
+     * report as "ok" every file the real run updates.
+     */
+    sourceOverlay?: Record<string, Buffer>;
+  },
 ): Promise<SyncResult> {
   const manifest = await readManifest(root);
+  const sourceOverlay = options.sourceOverlay ?? {};
   const previousMode = manifest.projections.mode;
   // an explicit --mode is the only way the mode ever changes (never recomputed);
   // refreshProjections turns the difference into the removal it implies
@@ -103,8 +116,10 @@ export async function runSync(
     };
   }
   const planned: PlannedFile[] = [];
-  const overlay: Record<string, Buffer> = {};
-  for (const artifact of await planCodexArtifacts(root)) {
+  // artifacts are derived from the overlaid sources and override them: both
+  // sides of the projection then describe the same state
+  const overlay: Record<string, Buffer> = { ...sourceOverlay };
+  for (const artifact of await planCodexArtifacts(root, sourceOverlay)) {
     overlay[artifact.path] = artifact.content ?? Buffer.alloc(0);
     planned.push(artifact);
   }
@@ -152,7 +167,7 @@ export async function runSync(
   for (const path of removed) {
     planned.push({ path, action: "removed" });
   }
-  planned.push(await planRulesIndexFile(root));
+  planned.push(await planRulesIndexFile(root, sourceOverlay));
   // hook registrations: regenerated from the scripts in .agents/hooks/ —
   // a deleted script loses its registrations here (clean deregistration)
   for (const registry of await planHookRegistrations(
@@ -342,7 +357,10 @@ export const syncCommand = defineCommand({
 });
 
 /** Codex artifacts of every skill, derived from the frontmatter (the catalogue). */
-async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
+async function planCodexArtifacts(
+  root: string,
+  sourceOverlay: Record<string, Buffer>,
+): Promise<PlannedFile[]> {
   const skillsDir = join(root, ".agents", "skills");
   let entries;
   try {
@@ -356,10 +374,11 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
     if (!entry.isDirectory()) {
       continue;
     }
-    const source = await readFile(
-      join(skillsDir, entry.name, "SKILL.md"),
-      "utf8",
-    );
+    const overlaid = sourceOverlay[`.agents/skills/${entry.name}/SKILL.md`];
+    const source =
+      overlaid === undefined
+        ? await readFile(join(skillsDir, entry.name, "SKILL.md"), "utf8")
+        : overlaid.toString("utf8");
     // no catalogue field means the skill belongs to another tool (npx skills,
     // hand-written to the open spec): sync leaves the folder untouched — a
     // catalogue skill with missing artifacts was already blocked by validateRepo
@@ -386,8 +405,17 @@ async function planCodexArtifacts(root: string): Promise<PlannedFile[]> {
 }
 
 /** Rules index managed block of AGENTS.md, regenerated from `.agents/rules/`. */
-async function planRulesIndexFile(root: string): Promise<PlannedFile> {
-  const plan = await planRulesIndex(root);
+async function planRulesIndexFile(
+  root: string,
+  sourceOverlay: Record<string, Buffer>,
+): Promise<PlannedFile> {
+  const add = Object.entries(sourceOverlay)
+    .filter(([path]) => RULE_SOURCE.test(path))
+    .map(([path, content]) => ({
+      file: path.slice(".agents/rules/".length),
+      content: content.toString("utf8"),
+    }));
+  const plan = await planRulesIndex(root, { add });
   if (plan === undefined) {
     return { path: "AGENTS.md", action: "ok" };
   }
@@ -461,7 +489,12 @@ async function planManifest(
   hashes: Record<string, string>,
 ): Promise<PlannedFile> {
   const next: Manifest = {
-    schema: MANIFEST_SCHEMA,
+    // the schema is preserved, never recomputed: advancing it is `update` and
+    // nothing else. Stamping MANIFEST_SCHEMA here would have `sync` declare a
+    // migration it never ran — the same silent recompute the manifest forbids
+    // for the projection mode, and it would leave `update` with nothing left to
+    // migrate on a repository that had merely been synced.
+    schema: manifest.schema,
     cliVersion: CLI_VERSION,
     project: manifest.project,
     harness: manifest.harness,

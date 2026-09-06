@@ -138,8 +138,10 @@ The manifest is the local contract of the installation: it records what was inst
 ```toml
 # .agents.toml — agentsdir manifest. Managed by the CLI; do not edit by hand.
 
-# Manifest schema version (migrations handled by `agentsdir update`).
-schema = 1
+# Manifest schema version. The transformations from one version to the next are
+# declared as a table in `src/core/migrations.ts` and walked by `agentsdir
+# update`, the only command that ever advances this number: `sync` preserves it.
+schema = 2
 
 # Version of the CLI that produced the last write.
 cli-version = "1.0.0"

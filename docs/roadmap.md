@@ -11,7 +11,7 @@ flowchart LR
     v05 --> v06["v0.6<br/>assisted creation:<br/>creator pack + setup-context"]
     v06 --> v1["v1.0<br/>EN docs, e2e,<br/>publication held"]
     v1 --> gov["after v1<br/>prove, propose,<br/>measure, plug in MCP"]
-    gov --> later["deferred<br/>update, then vendor<br/>and migrate if ever"]
+    gov --> later["deferred<br/>vendor and migrate,<br/>if ever"]
 ```
 
 ## v0.1 — Installable in-house
@@ -71,11 +71,16 @@ the CLI writes, make `init` propose a coherent set, measure usage, measure
 context cost, then plug in MCP. The order and its reasoning are in
 [positionnement.md](positionnement.md); the tasks are in `.agents/tasks/`.
 
-## v1.x — `update`
+## Delivered with v1.0 — `update`
 
-`update` (manifest schema migrations) is the one v1.x item still on the line:
-the CLI already writes `sourceType: "agentsdir"` entries in `skills-lock.json`
-that nothing consumes without it.
+`update` ships with 1.0 rather than after it. The CLI had been writing
+`sourceType: "agentsdir"` entries into `skills-lock.json` since v0.6 for a
+command that did not exist, and `check` and `doctor` both pointed users at it:
+the lock finally has its key. It migrates the manifest schema through a
+declared table of transformations, replaces installed content that is still
+intact, and offers a merge — never an overwrite — for content the user
+edited that also moved upstream. See
+[commandes.md](commandes.md#update--v1).
 
 ## Deferred — `vendor`, `migrate`, and the rest
 

@@ -189,7 +189,7 @@ describe("13 - doctor command", () => {
     const manifest = await readFile(join(dir, ".agents.toml"), "utf8");
     await writeFile(
       join(dir, ".agents.toml"),
-      manifest.replace("schema = 1", "schema = 99"),
+      manifest.replace(/schema = \d+/, "schema = 99"),
       "utf8",
     );
     const result = await runDoctor(dir, probes({}));
@@ -197,6 +197,27 @@ describe("13 - doctor command", () => {
     const found = finding(result.findings, "manifest");
     expect(found.severity).toBe("error");
     expect(found.message).toContain("newer than this CLI");
+  });
+
+  it("Given a manifest schema older than the CLI, When doctor runs, Then it tells the user to run update rather than to wait for it", async () => {
+    // the command exists now: a diagnosis naming it as unavailable sent the
+    // reader looking for something they could not find
+    const dir = await initializedRepo();
+    const manifest = await readFile(join(dir, ".agents.toml"), "utf8");
+    await writeFile(
+      join(dir, ".agents.toml"),
+      manifest.replace(/schema = \d+/, "schema = 1"),
+      "utf8",
+    );
+
+    const found = finding(
+      (await runDoctor(dir, probes({}))).findings,
+      "manifest-schema",
+    );
+
+    expect(found.severity).toBe("warn");
+    expect(found.message).toContain("`agentsdir update` to migrate it");
+    expect(found.message).not.toContain("when available");
   });
 
   it("Given the CI workflow removed and .gitattributes without eol=lf, When doctor runs, Then both lines warn with their fix", async () => {

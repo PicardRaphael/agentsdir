@@ -10,7 +10,7 @@
 
 ## Status
 
-**v1.0.0 — built and verified, not published yet.** The CLI is implemented (`init`, `add skill` / `rule` / `agent` / `hook`, `pack add` / `remove`, `sync`, `check`, `doctor`), tested (Vitest unit tests plus end-to-end tests on ubuntu and windows) and this repo is managed by its own CLI. The entry point is [`docs/roadmap.md`](docs/roadmap.md).
+**v1.0.0 — built and verified, not published yet.** The CLI is implemented (`init`, `add skill` / `rule` / `agent` / `hook`, `pack add` / `remove`, `sync`, `check`, `update`, `doctor`), tested (Vitest unit tests plus end-to-end tests on ubuntu and windows) and this repo is managed by its own CLI. The entry point is [`docs/roadmap.md`](docs/roadmap.md).
 
 > **The package is not on npm yet, so the `npx agentsdir …` commands below do not work from a clone.** Publication is deliberately held until `init` produces a proposed set of rules, hooks and sub-agents fit for your repository, instead of an empty skeleton — the reasoning is in [`docs/positionnement.md`](docs/positionnement.md) (French). Until then, build from source: `npm install && npm run build`, then call `node dist/cli.js <command>` in place of `npx agentsdir <command>`.
 

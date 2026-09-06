@@ -2,7 +2,7 @@ import type { ArgsDef, CommandDef } from "citty";
 
 /** Subcommand names of each group, in the order the help lists them. */
 const COMMAND_TREE: Record<string, string[]> = {
-  "": ["init", "add", "pack", "sync", "check", "doctor"],
+  "": ["init", "add", "pack", "sync", "check", "update", "doctor"],
   add: ["skill", "rule", "agent", "hook"],
   pack: ["add", "remove"],
 };

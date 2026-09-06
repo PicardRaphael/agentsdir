@@ -59,7 +59,7 @@ describe("04 - init command", () => {
     const claudeMd = await readFile(join(dir, "CLAUDE.md"), "utf8");
     expect(claudeMd).toContain("@AGENTS.md");
     const manifest = await readManifest(dir);
-    expect(manifest.schema).toBe(1);
+    expect(manifest.schema).toBe(2);
     expect(manifest.cliVersion).toBe(CLI_VERSION);
     expect(manifest.project).toEqual({ name: "demo", stack: ["node"] });
     expect(manifest.harness.enabled).toEqual(["claude", "codex", "cursor"]);

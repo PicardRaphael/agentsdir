@@ -30,7 +30,7 @@ describe("cli - unknown commands", () => {
 
   it("Given a mistyped command, When the argv is inspected, Then the message names it and lists the alternatives", () => {
     expect(unknownCommand(["sinc"])).toBe(
-      'Unknown command "sinc" (available: init, add, pack, sync, check, doctor).',
+      'Unknown command "sinc" (available: init, add, pack, sync, check, update, doctor).',
     );
     expect(unknownCommand(["add", "skil"])).toContain(
       'Unknown command "add skil"',
