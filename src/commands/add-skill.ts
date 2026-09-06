@@ -116,7 +116,9 @@ function text(
   field: keyof SkillFlags,
   value: unknown,
 ): Partial<Record<keyof SkillFlags, string>> {
-  return typeof value === "string" && value !== "" ? { [field]: value } : {};
+  // an empty flag is *given*, not absent: it reaches the validator and is
+  // refused by name, instead of silently falling back to a template default
+  return typeof value === "string" ? { [field]: value } : {};
 }
 
 /** What `add skill <name>` would create, and why it would refuse to. */

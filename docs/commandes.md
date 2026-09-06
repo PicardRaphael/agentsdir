@@ -117,7 +117,11 @@ npx agentsdir init [options]
    `pyproject.toml`, `go.mod`, `Cargo.toml` — to pre-fill the `dev`, `test`
    and `lint` commands that the user confirms or corrects. Detection only
    serves to parameterize the templates: no dependency is added to the
-   project, whatever its language.
+   project, whatever its language. A command is pre-filled only when the repo
+   proves it — a declared script, a declared tool, or a built-in the marker
+   file guarantees. What detection cannot prove it does not guess: with
+   `--yes`, or when the question is left as it came, the row lands in
+   `AGENTS.md` as `_to fill in_` rather than as a command no one has run.
 3. **Choice of harnesses** (Claude Code, Codex, Cursor) and **of packs**
    (`core` mandatory; `creator` checked by default — assisted creation,
    see [creation-assistee.md](creation-assistee.md); `verification`,

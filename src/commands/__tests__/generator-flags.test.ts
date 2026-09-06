@@ -178,6 +178,16 @@ describe("35 - every generator question has a flag", () => {
       "no token here",
     ]);
 
+    // an empty flag is given, not absent: refused by name rather than quietly
+    // replaced by the template default, as `--hook` and `--description` are
+    const empty = await runCli(dir, [
+      "add",
+      "skill",
+      "bad-empty",
+      "--short-description",
+      "",
+    ]);
+
     expect(color.code).toBe(EXIT_CODES.environmentOrUsage);
     expect(color.stderr).toContain("--color");
     expect(icon.code).toBe(EXIT_CODES.environmentOrUsage);
@@ -186,5 +196,7 @@ describe("35 - every generator question has a flag", () => {
     expect(short.stderr).toContain("--short-description");
     expect(prompt.code).toBe(EXIT_CODES.environmentOrUsage);
     expect(prompt.stderr).toContain("--default-prompt");
+    expect(empty.code).toBe(EXIT_CODES.environmentOrUsage);
+    expect(empty.stderr).toContain("--short-description");
   });
 });
