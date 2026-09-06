@@ -591,14 +591,21 @@ produces today:
 | matches the lock | the installed version | nothing to do |
 | matches the lock | a new version | replaced, re-locked to this CLI version |
 | modified locally | the installed version | kept, reported as information |
+| modified locally | a version already refused | kept, no question asked again |
 | modified locally | a new version | kept, upstream diff shown, merge offered |
 
 The last row is never a silent overwrite. On a terminal each case is a
 question — keep mine, or take the agentsdir version. Answering "keep mine"
-records that answer in the lock, so the question is not asked again until
-upstream moves once more. Without a terminal — a script, `--json`,
-`--dry-run` — nothing is decided and nothing is written: the run prints the
-diff and exits `1`.
+records the **refused version** beside the entry (`declinedHash`), never the
+local bytes: `computedHash` stays the version agentsdir installed, so a
+declined merge can never be mistaken for a pristine install and upgraded away
+on the next run. The question comes back only when upstream moves further.
+
+Without a terminal — a script, `--json`, `--dry-run` — the conflicted entry is
+the only thing left undecided: it is not written, its diff is printed, and the
+run exits `1`. The schema migration and every other upgrade still apply, so a
+repository is never held hostage to one pending merge; exit `1` says a
+decision is owed, not that nothing happened.
 
 Only what the lock names is ever written. A file the install kept as the
 repository already had it is absent from the lock on purpose, and stays out of
@@ -620,7 +627,7 @@ leave `update` with nothing left to migrate.
 merge to settle, or a schema gap no declared step bridges) · `2` environment
 or usage.
 
-Abridged specification completed and delivered on 6 September 2026.
+Specification completed and delivered on 6 September 2026.
 
 ---
 

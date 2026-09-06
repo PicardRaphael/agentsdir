@@ -63,6 +63,10 @@ verte) est collée dans le message de commit qui l'introduit.
 | Le contenu vendorisé (`sourceType: "github"`) n'est jamais mis à niveau | `src/commands/__tests__/update.test.ts` | le filtre `sourceType === "agentsdir"` de `collectInstalled` |
 | Le contenu écrit par l'utilisateur n'est jamais réécrit | `src/commands/__tests__/update.test.ts` | la limitation des suppressions à `entry.onDisk` dans `applyUpgrade` |
 | Le plan de `--dry-run` est celui que le vrai passage exécute | `src/commands/__tests__/update.test.ts` | le `sourceOverlay` remis au `sync` du passage à blanc, puis la cohérence `planWrites`/`applyUpgrade` |
+| Un refus de fusion enregistre la version refusée, jamais les octets locaux | `src/commands/__tests__/update.test.ts` | l'écriture de `declinedHash` à côté d'un `computedHash` laissé intact dans `planLock` |
+| Une fusion refusée n'est pas reproposée jusqu'à ce que l'amont bouge encore | `src/commands/__tests__/update.test.ts` | la branche `entry.upstream === entry.declined` du classement |
+| Un refus ne fait pas taire les versions amont suivantes | `src/commands/__tests__/update.test.ts` | l'égalité de cette même branche, plutôt qu'un simple test de présence |
+| Un `update` qui échoue échoue sur un dépôt intact | `src/commands/__tests__/update.test.ts` | la `sync` planifiée à blanc avant la première écriture, et sa garde sur les violations |
 | Une marche de schéma non déclarée arrête la migration | `src/core/__tests__/migrations.test.ts` | le `throw` sur l'étape absente (`src/core/migrations.ts`) |
 | Sept règles de `check` : `skill-frontmatter`, `skill-md-missing`, `skill-md-unreadable`, `skill-name-spec`, `skill-unknown-icon`, `agents-md-missing`, `rules-index-missing` | `src/commands/__tests__/check-untested-rules.test.ts` | la branche qui pousse la violation |
 

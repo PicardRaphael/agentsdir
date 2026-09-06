@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -85,8 +85,14 @@ async function rewindSchema(dir: string): Promise<void> {
 }
 
 interface Lock {
-  skills: Record<string, { computedHash: string; installedVersion?: string }>;
-  files: Record<string, { computedHash: string; installedVersion?: string }>;
+  skills: Record<
+    string,
+    { computedHash: string; installedVersion?: string; declinedHash?: string }
+  >;
+  files: Record<
+    string,
+    { computedHash: string; installedVersion?: string; declinedHash?: string }
+  >;
 }
 
 async function readLock(dir: string): Promise<Lock> {
@@ -279,9 +285,11 @@ describe("31 - update command", () => {
     ).toBe(true);
   });
 
-  it("Given that conflict answered `keep mine`, When update runs, Then the file is untouched, the answer is recorded in the lock and the question is not asked again", async () => {
+  it("Given that conflict answered `keep mine`, When update runs, Then the file is untouched, the refusal is recorded in the lock and the question is not asked again", async () => {
     const dir = await installedRepo();
+    const upstream = hashFileContent(await readFile(abs(dir, RULE)));
     await pretendOlderInstall(dir);
+    const installed = (await readLock(dir)).files[RULE]?.computedHash;
     const mine = `${await read(dir, RULE)}\nMy own paragraph.\n`;
     await writeFile(abs(dir, RULE), mine, "utf8");
 
@@ -292,13 +300,63 @@ describe("31 - update command", () => {
 
     expect(result.exitCode).toBe(EXIT_CODES.ok);
     expect(await read(dir, RULE)).toBe(mine);
-    expect((await readLock(dir)).files[RULE]?.computedHash).toBe(
-      hashFileContent(mine),
-    );
+    // what is recorded is the refused version, never the local bytes:
+    // `computedHash` stays the version agentsdir installed, so a declined
+    // merge can never be mistaken for a pristine install
+    expect((await readLock(dir)).files[RULE]?.computedHash).toBe(installed);
+    expect((await readLock(dir)).files[RULE]?.declinedHash).toBe(upstream);
     // the way out of the dead end: an acknowledged version is not a conflict
     const again = await runUpdate(dir, { dryRun: false });
     expect(again.exitCode).toBe(EXIT_CODES.ok);
     expect(again.conflicts).toEqual([]);
+    expect(await read(dir, RULE)).toBe(mine);
+  });
+
+  it("Given a merge declined and a further upstream version since, When update runs, Then the merge is proposed again and the file stays untouched", async () => {
+    const dir = await installedRepo();
+    await pretendOlderInstall(dir);
+    const mine = `${await read(dir, RULE)}\nMy own paragraph.\n`;
+    await writeFile(abs(dir, RULE), mine, "utf8");
+    await runUpdate(dir, {
+      dryRun: false,
+      resolve: () => Promise.resolve("kept"),
+    });
+
+    // agentsdir moves on: what was refused is no longer what is shipped
+    const lock = await readLock(dir);
+    lock.files[RULE] = {
+      ...lock.files[RULE],
+      declinedHash: hashFileContent(Buffer.from("an intermediate version")),
+    } as Lock["files"][string];
+    await writeLock(dir, lock);
+
+    const result = await runUpdate(dir, { dryRun: false });
+
+    expect(result.exitCode).toBe(EXIT_CODES.driftOrInvariant);
+    expect(result.conflicts.map((entry) => entry.path)).toContain(RULE);
+    expect(await read(dir, RULE)).toBe(mine);
+  });
+
+  it("Given a source file the schema rejects, When update runs, Then it aborts on the invariant and the disk is untouched", async () => {
+    const dir = await installedRepo();
+    await pretendOlderInstall(dir);
+    await mkdir(abs(dir, ".agents/skills/broken"), { recursive: true });
+    await writeFile(
+      abs(dir, ".agents/skills/broken/SKILL.md"),
+      "no frontmatter at all, just prose\n",
+      "utf8",
+    );
+    const before = await snapshot(dir);
+
+    const result = await runUpdate(dir, { dryRun: false });
+
+    expect(result.exitCode).toBe(EXIT_CODES.driftOrInvariant);
+    expect(
+      result.violations.some((violation) => violation.severity === "error"),
+    ).toBe(true);
+    // the whole plan is computed before the first byte: an update that aborts
+    // aborts on an untouched repository, manifest and lock included
+    expect(await snapshot(dir)).toEqual(before);
   });
 
   it("Given that conflict answered `take the agentsdir version`, When update runs, Then the new rendering replaces the local one", async () => {

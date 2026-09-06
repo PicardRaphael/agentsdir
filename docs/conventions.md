@@ -177,7 +177,8 @@ Tracks the provenance of skills copied from an external repository ("vendored") 
       "source": "agentsdir",
       "sourceType": "agentsdir",
       "installedVersion": "1.0.0",
-      "computedHash": "<sha256 of the file content, never recomputed by sync>"
+      "computedHash": "<sha256 of the file content, never recomputed by sync>",
+      "declinedHash": "<sha256 of an upstream version the user refused; optional>"
     }
   }
 }
@@ -189,7 +190,9 @@ The optional **`files` table** covers the content the CLI installs outside any s
 
 Two `sourceType` values: `"github"` for a skill vendored from an external repository (`vendor` command), and `"agentsdir"` for content installed by the CLI itself — the meta-skills of the `creator` pack under `skills`, the generic rules and shared scripts of the packs under `files`. The `"agentsdir"` entries carry the installed version and serve the `update` protection: intact content → upgraded; locally modified content → preserved, reported (`lock-local-change`, information, never a failure), merge offered (see [creation-assistee.md](creation-assistee.md)). A locked file that has disappeared is an error (`lock-file-missing`): restore it, or drop its entry.
 
-These fingerprints are the only ones `sync` never recomputes: recomputing them would erase the very difference `update` reads. [`update`](commandes.md#update--v1) is what rewrites them — to the new rendering when it upgrades an intact file, and to the local content when the user answers "keep mine", which is how an acknowledged local version stops being offered a merge it has already declined.
+These fingerprints are the only ones `sync` never recomputes: recomputing them would erase the very difference `update` reads. [`update`](commandes.md#update--v1) is what rewrites them, and only when it upgrades an entry — `computedHash` then becomes the fingerprint of the new rendering.
+
+A declined merge is recorded separately, in an optional **`declinedHash`**: the fingerprint of the upstream version the user refused. `computedHash` is left alone, because it means the version agentsdir installed and nothing else — writing the local bytes there would make a refusal indistinguishable from a pristine install, and the next `update` would upgrade the entry as intact, overwriting exactly what the user asked to keep. With the two fields side by side, a locally modified entry whose upstream equals `declinedHash` is left alone in silence, and the merge is offered again as soon as upstream moves further. An upgrade rewrites the entry whole and drops the field.
 
 ## 8. State directories
 

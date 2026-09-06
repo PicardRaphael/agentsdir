@@ -73,8 +73,8 @@ resolved, on the first ordinary command.
   lock: it walks the declared manifest-schema transformations, replaces
   installed content that is still intact, and, for a file you edited that also
   moved upstream, shows the diff and offers the merge instead of overwriting
-  it. Without a terminal to ask, it decides nothing, writes nothing and exits
-  `1`. It ends with a full `sync`. `check` and `doctor` used to point at a
+  it. Without a terminal to ask, the conflicted file is left untouched, its diff
+  printed, and the run exits `1` — the rest of the update still applies. It ends with a full `sync`. `check` and `doctor` used to point at a
   command that did not exist; they now point at one that does.
 - **A coding agent can install agentsdir without a terminal.** Every interview
   question now has a flag — `--name`, `--description`, `--dev`, `--test`,

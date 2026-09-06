@@ -103,6 +103,11 @@ interface Installed {
   actual: string;
   /** Fingerprint of what this CLI renders today. */
   upstream: string;
+  /**
+   * Upstream version the user was offered and declined, if any. Recorded so a
+   * merge refused once is not proposed again until upstream moves further.
+   */
+  declined: string | undefined;
   /** The new rendering, keyed by repo-relative path. */
   render: Map<string, string>;
   /** What is on disk now, same keys — the left-hand side of the diff. */
@@ -134,6 +139,8 @@ export async function runUpdate(
 
   const changes: SyncChange[] = [];
   const preserved: string[] = [];
+  /** Why each preserved entry was left alone — the two reasons differ. */
+  const preservedWhy = new Map<string, string>();
   const conflicts: UpdateConflict[] = [];
   const upgrades: Installed[] = [];
   const acknowledged: Installed[] = [];
@@ -152,6 +159,21 @@ export async function runUpdate(
       // edited locally, and this CLI renders exactly what was installed: there
       // is nothing to propose, and `check` already reports it as information
       preserved.push(entry.path);
+      preservedWhy.set(
+        entry.path,
+        "agentsdir-installed content modified locally, and this CLI installs the same version — kept as is, nothing to merge.",
+      );
+      changes.push({ path: entry.path, action: "ok" });
+      continue;
+    }
+    if (entry.upstream === entry.declined) {
+      // this exact version was already shown and declined: asking again every
+      // run would pin the repository on exit 1 for a decision already taken
+      preserved.push(entry.path);
+      preservedWhy.set(
+        entry.path,
+        "agentsdir ships a new version of this content and the merge was declined — kept as is; the question comes back when upstream moves again.",
+      );
       changes.push({ path: entry.path, action: "ok" });
       continue;
     }
@@ -199,6 +221,29 @@ export async function runUpdate(
       overlay[path] = Buffer.from(content, "utf8");
     }
   }
+  // the closing sync: every managed block and every projection regenerated
+  // from the source of truth, which is what a migration step declares as its
+  // scope. It is planned **before** the first write, in a dry run and in a real
+  // one alike: `sync` validates the repository and refuses to write on a
+  // blocking violation — one that predates this run, a projection pointing
+  // outside the repo, a source file the schema rejects. Discovering it after
+  // the upgrades would print "nothing was written" over a disk holding new
+  // files. The disk still carries the old content at this point, so the
+  // upgraded renderings travel as an overlay; without it the plan would
+  // announce as "ok" every projection the run is about to rewrite.
+  const plan = await runSync(root, { dryRun: true, sourceOverlay: overlay });
+  if (plan.violations.length > 0) {
+    return {
+      changes: [],
+      migrations,
+      preserved,
+      conflicts,
+      violations: plan.violations,
+      exitCode: plan.exitCode,
+      mode,
+    };
+  }
+  let sync = plan;
   if (!options.dryRun) {
     for (const entry of upgrades) {
       await applyUpgrade(root, entry);
@@ -213,26 +258,19 @@ export async function runUpdate(
         "utf8",
       );
     }
-  }
-  // the closing sync: every managed block and every projection regenerated
-  // from the source of truth, which is what a migration step declares as its
-  // scope. In a dry run the disk still holds the old content, so the upgraded
-  // renderings are handed over as an overlay — otherwise the plan would
-  // announce as "ok" every projection the real run rewrites.
-  const sync = await runSync(root, {
-    dryRun: options.dryRun,
-    ...(options.dryRun ? { sourceOverlay: overlay } : {}),
-  });
-  if (sync.violations.length > 0) {
-    return {
-      changes: [],
-      migrations,
-      preserved,
-      conflicts,
-      violations: sync.violations,
-      exitCode: sync.exitCode,
-      mode,
-    };
+    sync = await runSync(root, { dryRun: false });
+    if (sync.violations.length > 0) {
+      // the writes did happen: the report must not pretend otherwise
+      return {
+        changes: mergeChanges(changes, sync.changes),
+        migrations,
+        preserved,
+        conflicts,
+        violations: sync.violations,
+        exitCode: sync.exitCode,
+        mode: sync.mode,
+      };
+    }
   }
   const undecided = conflicts.filter(
     (conflict) => conflict.resolution === "undecided",
@@ -252,8 +290,7 @@ export async function runUpdate(
       ...preserved.map((path): Violation => ({
         path,
         rule: "update-local-change",
-        message:
-          "agentsdir-installed content modified locally, and this CLI installs the same version — kept as is, nothing to merge.",
+        message: preservedWhy.get(path) ?? "",
         severity: "info",
       })),
     ],
@@ -311,7 +348,7 @@ async function collectInstalled(
     );
   }
   const installed: Installed[] = [];
-  for (const [name, entry] of agentsdirEntries(data, "skills")) {
+  for (const [name, entry, declined] of agentsdirEntries(data, "skills")) {
     // the key becomes a path segment; validateRepo refuses an invalid one and
     // so does this, before any disk access
     if (!NAME_SPEC.test(name)) {
@@ -351,13 +388,14 @@ async function collectInstalled(
       locked: entry,
       actual,
       upstream: packSkillHash(files, name),
+      declined,
       render: new Map(files.map((file) => [file.path, file.content])),
       local,
       onDisk,
       lock: { table: "skills", key: name },
     });
   }
-  for (const [path, entry] of agentsdirEntries(data, "files")) {
+  for (const [path, entry, declined] of agentsdirEntries(data, "files")) {
     const content = byFile.get(path);
     if (content === undefined) {
       continue; // installed by a pack this repo no longer declares
@@ -376,6 +414,7 @@ async function collectInstalled(
       locked: entry,
       actual: hashFileContent(current),
       upstream: hashFileContent(content),
+      declined,
       render: new Map([[path, content]]),
       local: new Map([[path, current.toString("utf8")]]),
       onDisk: [path],
@@ -387,21 +426,26 @@ async function collectInstalled(
   );
 }
 
-/** `[key, computedHash]` of the `sourceType: "agentsdir"` entries of a table. */
+/** `[key, computedHash, declinedHash]` of the `agentsdir` entries of a table. */
 function agentsdirEntries(
   data: unknown,
   table: "skills" | "files",
-): [string, string][] {
+): [string, string, string | undefined][] {
   const raw = (data as Record<string, unknown>)[table];
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return [];
   }
-  const entries: [string, string][] = [];
+  const entries: [string, string, string | undefined][] = [];
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const entry = (value ?? {}) as Record<string, unknown>;
     const hash = entry["computedHash"];
+    const declined = entry["declinedHash"];
     if (entry["sourceType"] === "agentsdir" && typeof hash === "string") {
-      entries.push([key, hash]);
+      entries.push([
+        key,
+        hash,
+        typeof declined === "string" ? declined : undefined,
+      ]);
     }
   }
   return entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -479,18 +523,24 @@ async function planLock(
   }
   const raw = await readFile(join(root, "skills-lock.json"), "utf8");
   const data = JSON.parse(raw) as Record<string, unknown>;
-  const repin = (entry: Installed, hash: string): void => {
+  for (const entry of upgrades) {
     const table = data[entry.lock.table] as Record<string, unknown>;
+    // a fresh entry, which also drops any `declinedHash` the refusal left
     table[entry.lock.key] =
       entry.lock.table === "skills"
-        ? agentsdirLockEntry(entry.lock.key, hash)
-        : agentsdirFileLockEntry(hash);
-  };
-  for (const entry of upgrades) {
-    repin(entry, entry.upstream);
+        ? agentsdirLockEntry(entry.lock.key, entry.upstream)
+        : agentsdirFileLockEntry(entry.upstream);
   }
   for (const entry of acknowledged) {
-    repin(entry, entry.actual);
+    // "keep mine" does not re-pin `computedHash`: that fingerprint is the
+    // version agentsdir installed and nothing else (docs/conventions.md §7).
+    // Blessing the local bytes there would make a declined merge look exactly
+    // like a pristine install, and the next run would upgrade the entry as
+    // intact — overwriting the very content the user asked to keep. What is
+    // recorded beside it is the version that was refused.
+    const table = data[entry.lock.table] as Record<string, unknown>;
+    const existing = (table[entry.lock.key] ?? {}) as Record<string, unknown>;
+    table[entry.lock.key] = { ...existing, declinedHash: entry.upstream };
   }
   const rendered = `${JSON.stringify(data, null, 2)}\n`;
   return rendered === raw ? undefined : rendered;
@@ -596,7 +646,7 @@ export function renderUpdateReport(
   }
   if (result.preserved.length > 0) {
     lines.push("");
-    lines.push("Kept (modified locally, this CLI installs the same version):");
+    lines.push("Kept (modified locally, no merge pending):");
     for (const path of result.preserved) {
       lines.push(`  ${path}`);
     }
