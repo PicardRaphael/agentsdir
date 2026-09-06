@@ -1,6 +1,9 @@
+import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { asUserFacingError, CliError } from "../core/errors.js";
+import { entryExists } from "../core/fs-utils.js";
 import {
+  readManifest,
   writeManifest,
   type Manifest,
   type ProjectionMode,
@@ -85,6 +88,35 @@ export async function resyncProjections(
   return changes.sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
+}
+
+/** What a generator is about to create, and why it would refuse to. */
+export interface GeneratorTarget {
+  /** Repo-relative path that must be free, always with forward slashes. */
+  path: string;
+  /** Message of the refusal when that path is taken. */
+  refusal: string;
+}
+
+/**
+ * The guard rails a generator owes *before* its first question: the manifest
+ * has to be readable and the name free. Asked in the CLI ahead of the
+ * interview, so someone who retypes a taken name — or runs a generator before
+ * `init` — learns it immediately instead of answering six questions to be told
+ * that nothing will be written. Called again from the generator body, which is
+ * the guard for direct callers of the API.
+ */
+export async function ensureWritable(
+  root: string,
+  target: GeneratorTarget,
+): Promise<Manifest> {
+  const manifest = await readManifest(root);
+  // lstat, not stat: a broken symlink reads as absent to stat, and the
+  // generator would then write its file through the link, outside the repo
+  if (await entryExists(join(root, ...target.path.split("/")))) {
+    throw new CliError(target.refusal);
+  }
+  return manifest;
 }
 
 /** Usage error (exit 2) when the name is not kebab-case per the Agent Skills spec. */

@@ -10,7 +10,11 @@ import { initCommand } from "./commands/init.js";
 import { packAddCommand, packRemoveCommand } from "./commands/pack.js";
 import { syncCommand } from "./commands/sync.js";
 import { updateCommand } from "./commands/update.js";
-import { unknownCommand, unknownOption } from "./command-tree.js";
+import {
+  missingArgument,
+  unknownCommand,
+  unknownOption,
+} from "./command-tree.js";
 import { EXIT_CODES } from "./exit-codes.js";
 import { CLI_VERSION } from "./version.js";
 
@@ -76,7 +80,10 @@ const main = defineCommand({
 });
 
 const argv = process.argv.slice(2);
-const usageError = unknownCommand(argv) ?? unknownOption(main, argv);
+const usageError =
+  unknownCommand(argv) ??
+  unknownOption(main, argv) ??
+  missingArgument(main, argv);
 if (usageError === undefined) {
   await runMain(main);
 } else {

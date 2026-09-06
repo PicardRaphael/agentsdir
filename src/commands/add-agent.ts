@@ -1,10 +1,8 @@
-import { entryExists } from "../core/fs-utils.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
-import { readManifest } from "../core/manifest.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import {
@@ -15,14 +13,34 @@ import {
 import {
   ensureAnswer,
   ensureValidName,
+  ensureWritable,
   isInteractive,
   renderGeneratorReport,
   resyncProjections,
   runGeneratorCli,
   type GeneratorResult,
+  type GeneratorTarget,
 } from "./add-common.js";
 
 export const DEFAULT_AGENT_MODEL = "inherit";
+
+/** What `add agent <name>` would create, and why it would refuse to. */
+export function agentTarget(name: string): GeneratorTarget {
+  const path = `.agents/agents/${name}.md`;
+  return {
+    path,
+    refusal: `Agent "${name}" already exists (${path}). Pick another name, or edit the existing file.`,
+  };
+}
+
+/** Usage error (exit 2) when `--description` carries what its prompt would have refused. */
+export function ensureValidAgentDescription(
+  description: string | undefined,
+): void {
+  if (description !== undefined && description.trim() === "") {
+    throw new CliError("--description: a description is required.");
+  }
+}
 
 /** Creates `.agents/agents/<name>.md` from the template; a taken name writes nothing. */
 export async function runAddAgent(
@@ -31,14 +49,9 @@ export async function runAddAgent(
   options: { dryRun: boolean },
 ): Promise<GeneratorResult> {
   ensureValidName("agent", answers.name);
-  const manifest = await readManifest(root);
+  const manifest = await ensureWritable(root, agentTarget(answers.name));
   const agentFile = `${answers.name}.md`;
   const agentPath = `.agents/agents/${agentFile}`;
-  if (await entryExists(join(root, ".agents", "agents", agentFile))) {
-    throw new CliError(
-      `Agent "${answers.name}" already exists (${agentPath}). Pick another name, or edit the existing file.`,
-    );
-  }
   const source = renderAgentTemplate(answers);
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "agents"), { recursive: true });
@@ -57,14 +70,24 @@ export async function runAddAgent(
   };
 }
 
-/** Asks when to delegate to the agent; scripts and CI get the defaults. */
+/**
+ * Asks when to delegate to the agent, unless `--description` already said so.
+ * Without a TTY and without the flag the generic default is used — the flag is
+ * what lets a script or an agent answer for real (`docs/commandes.md`).
+ */
 export async function collectAgentAnswers(
   name: string,
   model: string,
+  flags: { description?: string } = {},
 ): Promise<AgentAnswers> {
   const defaults = defaultAgentAnswers(name, model);
+  if (flags.description !== undefined) {
+    return { ...defaults, description: flags.description };
+  }
   if (!isInteractive()) {
-    console.error("stdin is not a TTY — using template defaults.");
+    console.error(
+      "stdin is not a TTY — using template defaults for --description.",
+    );
     return defaults;
   }
   prompts.intro(`agentsdir add agent ${name}`);
@@ -96,6 +119,10 @@ export const addAgentCommand = defineCommand({
       type: "string",
       description: `Model for the agent frontmatter (default: ${DEFAULT_AGENT_MODEL})`,
     },
+    description: {
+      type: "string",
+      description: "When work should be delegated to this agent (one sentence)",
+    },
     "dry-run": {
       type: "boolean",
       description: "Print the write plan without touching the disk",
@@ -118,7 +145,17 @@ export const addAgentCommand = defineCommand({
       if (model.includes("\n")) {
         throw new CliError("--model must be a single-line value.");
       }
-      const answers = await collectAgentAnswers(name, model);
+      const description =
+        typeof args.description === "string" ? args.description : undefined;
+      ensureValidAgentDescription(description);
+      // the refusal comes before the question: a taken name, or a repo without
+      // a manifest, must not cost an answer first
+      await ensureWritable(root, agentTarget(name));
+      const answers = await collectAgentAnswers(
+        name,
+        model,
+        description === undefined ? {} : { description },
+      );
       const result = await runAddAgent(root, answers, { dryRun });
       return { result, report: renderGeneratorReport(result, { dryRun }) };
     });
