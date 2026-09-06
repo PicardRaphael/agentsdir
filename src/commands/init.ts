@@ -196,20 +196,35 @@ export const initCommand = defineCommand({
       description:
         "Force the projection mode (symlink|copy) instead of detecting it",
     },
+    json: {
+      type: "boolean",
+      description: "Machine output: a single JSON object on stdout",
+    },
   },
   async run({ args }) {
+    const json = args.json === true;
     try {
       const root = await resolveRepoRoot(process.cwd());
       if (await pathExists(join(root, MANIFEST_FILE))) {
-        console.log(
-          "Already initialized — run `agentsdir sync` to regenerate.",
-        );
+        const already: InitResult = {
+          exitCode: EXIT_CODES.ok,
+          alreadyInitialized: true,
+          changes: [],
+        };
+        // no answers were collected, so there is no mode to report — the same
+        // null the other commands write when they have none
+        emitInit(json, already, null, {
+          human: "Already initialized — run `agentsdir sync` to regenerate.",
+        });
         return;
       }
       const text = (value: unknown): string | undefined =>
         typeof value === "string" && value !== "" ? value : undefined;
       const flags: InitFlags = {
-        yes: args.yes === true,
+        // --json asks for one object on stdout, and @clack writes its prompts
+        // there: the interview would split the object a script came to parse.
+        // Machine output means the defaults, exactly like --yes.
+        yes: args.yes === true || json,
         ...(text(args.name) === undefined ? {} : { name: text(args.name) }),
         ...(text(args.description) === undefined
           ? {}
@@ -224,12 +239,38 @@ export const initCommand = defineCommand({
       const dryRun = args["dry-run"] === true;
       const answers = await collectAnswers(root, flags);
       const result = await runInit(root, answers, { dryRun });
-      console.log(renderReport(result, answers, { dryRun }));
+      emitInit(json, result, answers.mode, {
+        human: renderReport(result, answers, { dryRun }),
+      });
       process.exitCode = result.exitCode;
     } catch (rawError) {
       const error = asUserFacingError(rawError);
       if (error !== undefined) {
-        console.error(error.message);
+        if (json) {
+          // stdout carries the object even on failure: a script parses stdout
+          // whole, and a human sentence there crashes the parser reading it
+          console.log(
+            JSON.stringify({
+              command: "init",
+              mode: null,
+              changes: [],
+              errors: [
+                {
+                  path: "",
+                  rule:
+                    error.exitCode === EXIT_CODES.environmentOrUsage
+                      ? "environment"
+                      : "invariant",
+                  message: error.message,
+                  severity: "error",
+                },
+              ],
+              exitCode: error.exitCode,
+            }),
+          );
+        } else {
+          console.error(error.message);
+        }
         process.exitCode = error.exitCode;
         return;
       }
@@ -237,6 +278,47 @@ export const initCommand = defineCommand({
     }
   },
 });
+
+/**
+ * `changes[]` of the machine report. `init` plans in its own vocabulary —
+ * directories, links, projections, managed blocks — and reports in the one the
+ * other nine commands share, so a script reads the ten the same way. The
+ * planned `content` is deliberately dropped: it holds every emitted file, and
+ * putting it on stdout would dump the whole installation into the pipe.
+ */
+export function initJsonChanges(
+  result: InitResult,
+): { path: string; action: "created" | "updated" | "ok" }[] {
+  return result.changes.map((change) => ({
+    path: change.path,
+    action:
+      change.action === "update-block"
+        ? "updated"
+        : change.action === "skip-exists"
+          ? "ok"
+          : "created",
+  }));
+}
+
+/** One object on stdout with `--json`, the human report without it. */
+function emitInit(
+  json: boolean,
+  result: InitResult,
+  mode: string | null,
+  human: { human: string },
+): void {
+  console.log(
+    json
+      ? JSON.stringify({
+          command: "init",
+          mode,
+          changes: initJsonChanges(result),
+          errors: [],
+          exitCode: result.exitCode,
+        })
+      : human.human,
+  );
+}
 
 const AGENT_DIRS = [
   ".agents/rules",
