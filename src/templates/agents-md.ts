@@ -4,7 +4,10 @@ export interface AgentsMdInput {
   productName: string;
   description: string;
   stacks: string[];
+  /** Commands the repository proves or somebody vouched for. */
   commands: { dev?: string; test?: string; lint?: string };
+  /** Commands nothing confirmed — listed to be completed, never asserted. */
+  unverified?: { dev?: string; test?: string; lint?: string };
 }
 
 export interface RuleIndexEntry {
@@ -91,16 +94,21 @@ export function renderAgentsMd(
     input.stacks.length > 0
       ? `Detected stacks: ${input.stacks.map((stack) => `\`${stack}\``).join(", ")}.`
       : "No stack detected yet — document it here.";
-  const rows: [string, string | undefined][] = [
-    ["dev", input.commands.dev],
-    ["test", input.commands.test],
-    ["lint", input.commands.lint],
-  ];
-  const commandRows = rows
-    .filter(
-      (row): row is [string, string] => row[1] !== undefined && row[1] !== "",
-    )
-    .map(([action, command]) => `| ${action} | \`${command}\` |`);
+  // A command is written down only where the repository proved it — an npm
+  // script it declares, a subcommand of the toolchain its marker file declares
+  // — or where someone answered for it. The rest is the stack's convention,
+  // and an AGENTS.md that states `npm test` in a repo without that script is
+  // worse than one that stays silent: the agent believes it.
+  const unverified = input.unverified ?? {};
+  const commandRows: string[] = [];
+  for (const action of ["dev", "test", "lint"] as const) {
+    const command = input.commands[action];
+    if (command !== undefined && command !== "") {
+      commandRows.push(`| ${action} | \`${command}\` |`);
+    } else if (unverified[action] !== undefined) {
+      commandRows.push(`| ${action} | _to fill in_ |`);
+    }
+  }
   const commandsSection =
     commandRows.length > 0
       ? ["| Action | Command |", "| --- | --- |", ...commandRows].join("\n")

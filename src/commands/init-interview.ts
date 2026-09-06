@@ -4,6 +4,8 @@ import {
   detectGitSymlinks,
   detectStack,
   detectSymlinkSupport,
+  type StackAction,
+  type StackCommands,
 } from "../core/detect.js";
 import { CliError } from "../core/errors.js";
 import { HARNESSES } from "../core/harnesses.js";
@@ -20,7 +22,14 @@ import { PACKS } from "../packs/index.js";
 export interface InitAnswers {
   productName: string;
   description: string;
-  commands: { dev?: string; test?: string; lint?: string };
+  /** Commands somebody or something vouched for: a flag, an answer, or the repo. */
+  commands: StackCommands;
+  /**
+   * Commands the stack usually runs that nothing here confirms. They reach
+   * `AGENTS.md` marked as to be completed, never as statements — the file's
+   * whole job is to tell agents the truth about this repository.
+   */
+  unverified: StackCommands;
   harnesses: string[];
   packs: string[];
   mode: ProjectionMode;
@@ -53,16 +62,31 @@ export async function collectAnswers(
 ): Promise<InitAnswers> {
   const stacks = await detectStack(root);
   const stackIds = stacks.map((stack) => stack.id);
-  const suggested = { ...(stacks[0]?.suggestions ?? {}) };
+  // a flag is an assertion by the caller, and what the repo declares is read
+  // from it: both count as verified. What is left is the stack's convention,
+  // which nothing here confirms.
+  const flagged: StackCommands = {
+    ...(flags.dev === undefined ? {} : { dev: flags.dev }),
+    ...(flags.test === undefined ? {} : { test: flags.test }),
+    ...(flags.lint === undefined ? {} : { lint: flags.lint }),
+  };
+  const commands: StackCommands = {
+    ...(stacks[0]?.commands ?? {}),
+    ...flagged,
+  };
+  const unverified: StackCommands = {};
+  for (const [action, convention] of Object.entries(
+    stacks[0]?.unverified ?? {},
+  ) as [StackAction, string][]) {
+    if (commands[action] === undefined) {
+      unverified[action] = convention;
+    }
+  }
   const defaults: InitAnswers = {
     productName: flags.name ?? basename(root),
     description: flags.description ?? "",
-    commands: {
-      ...suggested,
-      ...(flags.dev === undefined ? {} : { dev: flags.dev }),
-      ...(flags.test === undefined ? {} : { test: flags.test }),
-      ...(flags.lint === undefined ? {} : { lint: flags.lint }),
-    },
+    commands,
+    unverified,
     harnesses:
       flags.harness === undefined
         ? [...HARNESSES]
@@ -101,23 +125,25 @@ export async function collectAnswers(
         placeholder: "What this product does",
       }),
     );
+  // the prompt is exactly where an unconfirmed convention belongs: someone is
+  // there to accept or correct it, and whatever comes back is their answer
   const dev =
     flags.dev ??
     (await askCommand(
       "Dev command? (leave empty to skip)",
-      defaults.commands.dev,
+      defaults.commands.dev ?? defaults.unverified.dev,
     ));
   const test =
     flags.test ??
     (await askCommand(
       "Test command? (leave empty to skip)",
-      defaults.commands.test,
+      defaults.commands.test ?? defaults.unverified.test,
     ));
   const lint =
     flags.lint ??
     (await askCommand(
       "Lint command? (leave empty to skip)",
-      defaults.commands.lint,
+      defaults.commands.lint ?? defaults.unverified.lint,
     ));
   let harnesses = defaults.harnesses;
   if (flags.harness === undefined) {
@@ -153,6 +179,8 @@ export async function collectAnswers(
     productName,
     description,
     commands: { dev, test, lint },
+    // every command was asked or flagged: nothing is left unconfirmed
+    unverified: {},
     harnesses,
     packs,
     mode: defaults.mode,
