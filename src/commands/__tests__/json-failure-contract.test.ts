@@ -73,6 +73,13 @@ interface FailureCase {
 
 const FAILURE_CASES: FailureCase[] = [
   {
+    // a missing manifest is init's success case, so its failure is the root
+    command: "init",
+    argv: ["init", "--json"],
+    makeRepo: unresolvableRepo,
+    because: "the repository root cannot be resolved",
+  },
+  {
     command: "check",
     argv: ["check", "--json"],
     makeRepo: gitRepoWithoutManifest,

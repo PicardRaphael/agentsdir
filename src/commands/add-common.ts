@@ -1,11 +1,23 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
-import { asUserFacingError, CliError } from "../core/errors.js";
 import {
+  CLAUDE_SETTINGS_FILE,
+  planClaudePermissions,
+} from "../core/claude-permissions.js";
+import { asUserFacingError, CliError } from "../core/errors.js";
+import { entryExists } from "../core/fs-utils.js";
+import { packScriptPaths } from "../packs/index.js";
+import {
+  readManifest,
   writeManifest,
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { refreshProjections } from "../core/projections.js";
+import {
+  ensureNoLinkedParent,
+  refreshProjections,
+} from "../core/projections.js";
 import { NAME_SPEC } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 
@@ -85,6 +97,65 @@ export async function resyncProjections(
   return changes.sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
+}
+
+/**
+ * Keeps the `.claude/settings.json` permission allowlist in step after a pack
+ * changed which scripts the repo holds. Without it, `pack add verification`
+ * installed a skill whose procedure runs a script that nothing allowed — the
+ * cascading prompt the allowlist exists to prevent — and stayed that way until
+ * the next `sync`.
+ */
+export async function syncClaudePermissions(
+  root: string,
+  manifest: Manifest,
+  options: { dryRun: boolean },
+): Promise<GeneratorChange[]> {
+  const scripts = manifest.harness.enabled.includes("claude")
+    ? packScriptPaths(manifest.packs.installed)
+    : [];
+  const plan = await planClaudePermissions(root, scripts);
+  if (plan.action === "ok") {
+    return [];
+  }
+  if (!options.dryRun) {
+    // never through a link: a `.claude` symlink would carry this write into
+    // the user's global Claude Code settings
+    await ensureNoLinkedParent(root, CLAUDE_SETTINGS_FILE);
+    const abs = join(root, ...CLAUDE_SETTINGS_FILE.split("/"));
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, plan.content, "utf8");
+  }
+  return [{ path: CLAUDE_SETTINGS_FILE, action: plan.action }];
+}
+
+/** What a generator is about to create, and why it would refuse to. */
+export interface GeneratorTarget {
+  /** Repo-relative path that must be free, always with forward slashes. */
+  path: string;
+  /** Message of the refusal when that path is taken. */
+  refusal: string;
+}
+
+/**
+ * The guard rails a generator owes *before* its first question: the manifest
+ * has to be readable and the name free. Asked in the CLI ahead of the
+ * interview, so someone who retypes a taken name — or runs a generator before
+ * `init` — learns it immediately instead of answering six questions to be told
+ * that nothing will be written. Called again from the generator body, which is
+ * the guard for direct callers of the API.
+ */
+export async function ensureWritable(
+  root: string,
+  target: GeneratorTarget,
+): Promise<Manifest> {
+  const manifest = await readManifest(root);
+  // lstat, not stat: a broken symlink reads as absent to stat, and the
+  // generator would then write its file through the link, outside the repo
+  if (await entryExists(join(root, ...target.path.split("/")))) {
+    throw new CliError(target.refusal);
+  }
+  return manifest;
 }
 
 /** Usage error (exit 2) when the name is not kebab-case per the Agent Skills spec. */

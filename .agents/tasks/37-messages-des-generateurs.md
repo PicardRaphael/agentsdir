@@ -13,7 +13,7 @@ listent les fichiers créés et s'arrêtent là :
 
 ```
 $ npx agentsdir add skill demo-flow
-stdin is not a TTY — using template defaults.
+stdin is not a TTY — using template defaults for --description, --display-name, --short-description, --color, --icon, --default-prompt.
 Done:
   created  .agents/skills/demo-flow/SKILL.md
   created  .agents/skills/demo-flow/agents/openai.yaml
@@ -28,13 +28,11 @@ Ce qui manque, dans l'ordre de gravité rapporté par l'agent :
   partagés avec l'utilisateur (`.claude/settings.json`, `.codex/hooks.json`,
   `.cursor/hooks.json`) sont tous annoncés « created », sans distinguer une
   création d'une fusion dans un fichier préexistant, et sans dire que le corps
-  du hook est un `TODO` qui ne bloque rien tant qu'il n'est pas écrit ;
-- `stdin is not a TTY — using template defaults.` constate un repli sans nommer
-  le moyen d'y échapper : les options qui donnent de vraies réponses.
+  du hook est un `TODO` qui ne bloque rien tant qu'il n'est pas écrit.
 
-Le contrat « répondre sans terminal » de [docs/commandes.md](../../docs/commandes.md)
-dit que toute question d'interview a son option. Le message qui annonce le repli
-est justement l'endroit où le rappeler.
+Un troisième constat de la validation est déjà réglé : le message de repli sans
+terminal ne nommait aucune option. La tâche 35, livrée depuis, lui fait énumérer
+les drapeaux concernés — il reste tel quel.
 
 ## Fichiers
 
@@ -55,8 +53,6 @@ est justement l'endroit où le rappeler.
 - `add hook` distingue, par fichier touché, une création d'une mise à jour d'un
   fichier préexistant, et signale que le corps du hook est un squelette qui ne
   décide rien tant qu'il n'est pas complété.
-- Le message de repli sans terminal nomme au moins une option permettant de
-  répondre vraiment.
 - Les messages restent en anglais, et `--json` n'est pas modifié : ce qui change
   est la sortie humaine.
 - Un test par générateur vérifie la présence de l'étape suivante dans la sortie.

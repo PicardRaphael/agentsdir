@@ -142,7 +142,12 @@ gravité rapporté : l'étape suivante explicite, la liste des emplacements à
 compléter dans le fichier créé, et — pour `add hook` — la nature exacte de
 l'écriture dans trois fichiers de configuration partagés, tous annoncés
 « created ». Le message `stdin is not a TTY — using template defaults.` ne
-nomme aucun moyen de donner de vraies réponses.
+nommait aucun moyen de donner de vraies réponses.
+
+**Depuis** : la tâche 35, fusionnée le 12 septembre après cette observation, fait
+énumérer à ce message les drapeaux concernés (`stdin is not a TTY — using
+template defaults for --description, --display-name, …`). Ce tiers du constat est
+réglé ; les deux autres restent, et font la tâche 37.
 
 ### 9 — terrain réel
 

@@ -53,7 +53,7 @@ flowchart LR
 **Claude Code**
 - `CLAUDE.md` → projection of `AGENTS.md` — a symlink, or a copy with a header in copy mode (fallback);
 - `.claude/rules`, `.claude/skills`, `.claude/agents` → projections of `.agents/*`;
-- `.claude/settings.json`: a permission allowlist covering exactly the emitted scripts, and hook registrations where applicable.
+- `.claude/settings.json`: a permission allowlist covering the scripts the installed packs tell an agent to run (`Bash(node <script> *)` rules, merged in without touching anything else in the file), and hook registrations where applicable. Hook scripts get no rule: the harness runs those itself, outside the Bash tool.
 
 **Codex (OpenAI)**
 - `AGENTS.md` read as is (a real file, no projection needed);

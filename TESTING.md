@@ -71,6 +71,12 @@ verte) est collée dans le message de commit qui l'introduit.
 | Une marche de schéma non déclarée arrête la migration | `src/core/__tests__/migrations.test.ts` | le `throw` sur l'étape absente (`src/core/migrations.ts`) |
 | En-tête généré placé après le frontmatter d'une projection Markdown | `src/core/__tests__/projections.test.ts` | la consultation de `frontmatterBlockLength` dans `decorateMarkdown` (`src/core/projections.ts`), qui replace l'en-tête devant le bloc |
 | Sept règles de `check` : `skill-frontmatter`, `skill-md-missing`, `skill-md-unreadable`, `skill-name-spec`, `skill-unknown-icon`, `agents-md-missing`, `rules-index-missing` | `src/commands/__tests__/check-untested-rules.test.ts` | la branche qui pousse la violation |
+| Un positionnel requis manquant sort en `2` (usage), pas en `1` (dérive) | `src/__tests__/missing-argument.test.ts` | la garde `missingArgument` branchée dans `src/cli.ts` (`src/command-tree.ts`) |
+| Le refus d'un générateur (nom pris, manifeste absent) précède la première question | `src/commands/__tests__/generator-guards.test.ts` | l'appel à `ensureWritable` placé avant l'interview (`src/commands/add-common.ts`) |
+| Chaque question d'interview des générateurs a un drapeau, et un drapeau vide est refusé par son nom | `src/commands/__tests__/generator-flags.test.ts` | les drapeaux déclarés et la table `SKILL_RULES` partagée par la question et le drapeau (`src/commands/add-skill.ts`) |
+| `init --json` écrit un objet unique sur stdout, sans question mêlée au flux | `src/commands/__tests__/init-json.test.ts` | la déclaration du drapeau et la bascule `yes: args.yes === true || json` (`src/commands/init.ts`) |
+| Aucune commande écrite dans `AGENTS.md` sans preuve dans le dépôt | `src/core/__tests__/stack-evidence.test.ts` | la lecture des scripts et outils déclarés, qui redevient une suggestion codée en dur (`src/core/detect.ts`) |
+| Le bloc de permissions géré de `.claude/settings.json` couvre les scripts des packs installés | `src/commands/__tests__/claude-permissions.test.ts` | le calcul des règles attendues dans `applyPermissions` (`src/core/claude-permissions.ts`) |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve
@@ -114,6 +120,6 @@ constaté devient une tâche de `.agents/tasks/` ou un correctif.
 - **Les dépendances elles-mêmes** (citty) : on teste le comportement d'agentsdir, pas leurs internes.
 - **macOS en CI** : ubuntu couvre le mode symlink, windows couvre le mode copie (repli) ; macOS n'apporterait aucun cas supplémentaire.
 - **Aucun seuil de couverture** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage.
-- **L'interactivité `@clack/prompts`** : les tests passent par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
+- **L'interactivité `@clack/prompts`** : les tests passent par les drapeaux, par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
 - **Quatre règles de `check` restent sans test qui les nomme** : `agent-unreadable`, `lock-skill-missing`, `projection-missing` et `projection-header-removed`. Aucun test ne déclenche ces quatre-là en vérifiant leur message ; c'est un trou connu, pas une décision.
 - **Le doublon de garde de `planLock` (`src/commands/sync.ts`)** : le filtre `NAME_SPEC` y est une ceinture par-dessus les bretelles de `validateRepo`, qui refuse la clé avant que `sync` ne planifie quoi que ce soit. Le retirer ne peut faire échouer aucun test — la garde observable est celle de `src/core/validate.ts`, et c'est elle que la mutation prouve.

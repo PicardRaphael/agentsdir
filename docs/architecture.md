@@ -234,5 +234,5 @@ The analysis of the NowStack repo ([recherche/analyse-nowstack.md](recherche/ana
 | `.agents/memory/` versioned with a substitutable personal datum (email address). | `memory/` excluded from git; template versioned separately. |
 | Skill catalog hard-coded in a TypeScript script in the repo. | The extended frontmatter of each `SKILL.md` is the catalog; the CLI reads it, nothing to edit elsewhere. |
 | Unix-only scripts (bash, perl, `lsof`, `trash`). | All emitted scripts are portable Node. |
-| `.claude/settings.json` allowlist inconsistent with the repo's scripts (cascading permission prompts). | The generated allowlist covers exactly the commands the CLI emits. |
+| `.claude/settings.json` allowlist inconsistent with the repo's scripts (cascading permission prompts). | `init`, `sync` and `pack add`/`pack remove` maintain an allowlist covering the scripts the installed packs tell an agent to run. Ownership is structural — JSON has no comment markers, so a rule is agentsdir's iff it reads `Bash(node <path under .agents/> *)`; everything else in the file is preserved. |
 | Silent replacement of a symlink by a copy: undetectable. | `check` verifies git mode `120000` + on-disk state (symlink mode) or fingerprints (copy mode). |

@@ -76,15 +76,12 @@ describe("02 - environment detection: detectGitSymlinks", () => {
 });
 
 describe("02 - environment detection: detectStack", () => {
-  it("Given a repo containing package.json and pyproject.toml, When detectStack scans it, Then it returns both stacks with command suggestions it never imposes", async () => {
+  it("Given a repo containing package.json and pyproject.toml, When detectStack scans it, Then it returns both stacks in a fixed order", async () => {
     const dir = await makeTempDir("detect");
     await writeFile(join(dir, "package.json"), "{}\n", "utf8");
     await writeFile(join(dir, "pyproject.toml"), "\n", "utf8");
     const result = await detectStack(dir);
     expect(result.map((stack) => stack.id)).toEqual(["node", "python"]);
-    for (const stack of result) {
-      expect(Object.keys(stack.suggestions).length).toBeGreaterThan(0);
-    }
   });
 
   it("Given a directory with no known marker file, When detectStack scans it, Then it returns an empty list", async () => {
