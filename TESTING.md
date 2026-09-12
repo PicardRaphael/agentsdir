@@ -8,6 +8,7 @@ Les tiers de tests retenus, les conventions de nommage, comment lancer chaque ni
 | --- | --- | --- | --- |
 | Unitaire / smoke | Fonctions pures et traversée complète de la CLI compilée (`node dist/cli.js`) | Vitest | `src/**/__tests__/*.test.ts` |
 | Bout en bout (e2e) | Scénarios complets (`init --yes` → `add skill` → `check`, interop `npx skills`, création assistée scriptée) sur des repos de démonstration TypeScript et Python, dans les deux modes (symlink et copie) | Vitest (`vitest.e2e.config.ts`) | `e2e/` |
+| Validation par un agent réel (manuel) | Ce qu'un test ne peut pas observer : un harness charge-t-il vraiment ce que la CLI écrit — skill découvert, sous-agent délégable, hook déclenché, `AGENTS.md` lu | Une session réelle du harness, conduite par un scénario versionné | `e2e/validation-agent/` |
 
 Le smoke test « walking skeleton » garantit que la chaîne build + test existe avant toute feature : `node dist/cli.js --help` traverse parseur → sortie.
 
@@ -68,11 +69,44 @@ verte) est collée dans le message de commit qui l'introduit.
 | Un refus ne fait pas taire les versions amont suivantes | `src/commands/__tests__/update.test.ts` | l'égalité de cette même branche, plutôt qu'un simple test de présence |
 | Un `update` qui échoue échoue sur un dépôt intact | `src/commands/__tests__/update.test.ts` | la `sync` planifiée à blanc avant la première écriture, et sa garde sur les violations |
 | Une marche de schéma non déclarée arrête la migration | `src/core/__tests__/migrations.test.ts` | le `throw` sur l'étape absente (`src/core/migrations.ts`) |
+| En-tête généré placé après le frontmatter d'une projection Markdown | `src/core/__tests__/projections.test.ts` | la consultation de `frontmatterBlockLength` dans `decorateMarkdown` (`src/core/projections.ts`), qui replace l'en-tête devant le bloc |
 | Sept règles de `check` : `skill-frontmatter`, `skill-md-missing`, `skill-md-unreadable`, `skill-name-spec`, `skill-unknown-icon`, `agents-md-missing`, `rules-index-missing` | `src/commands/__tests__/check-untested-rules.test.ts` | la branche qui pousse la violation |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve
 de mutation est fausse.
+
+## Le tier manuel : la validation par un agent réel
+
+Les deux premiers tiers prouvent que les bons octets arrivent aux bons endroits.
+Ils ne prouvent pas qu'un harness **charge** ce que la CLI écrit. Un `check`
+vert dit que le fichier est conforme au rendu attendu ; il ne dit pas qu'un
+skill est découvert, qu'un sous-agent est proposé à la délégation, qu'un hook
+se déclenche, ni qu'`AGENTS.md` est lu. Personne ne comble cet écart avec un
+test automatisé classique : il faut une session réelle, sur un dépôt
+fraîchement installé.
+
+Ce n'est pas théorique. La première exécution, le 12 septembre 2026, a trouvé
+un défaut qu'aucun test de la suite automatisée ne voyait : en mode copie, l'en-tête généré
+passait devant le frontmatter, et Claude Code cessait alors de découvrir les
+sous-agents et de lire les métadonnées des skills — projections conformes,
+`check` vert, harness aveugle.
+
+- **Le scénario** : [e2e/validation-agent/prompt.md](e2e/validation-agent/prompt.md).
+  Versionné, reproductible, il énonce ce qui est observé, comment le consigner,
+  et les pièges de conduite d'une sous-session qui fausseraient les verdicts.
+- **Les comptes rendus** : [e2e/validation-agent/rapports/](e2e/validation-agent/rapports/),
+  un par exécution, nommés `AAAA-MM-JJ-<harness>.md`.
+- **Fréquence** : après une release, et après tout changement touchant les
+  projections, le frontmatter, les hooks ou les templates des générateurs.
+- **Coût** : une trentaine de minutes, deux terrains compris — un dépôt neuf
+  pour la reproductibilité, un clone de dépôt réel pour le cas qu'aucun test ne
+  couvre.
+
+Automatiser la conduite d'un agent réel en CI est hors de question : coûteux,
+fragile, dépendant de services tiers. Ce tier reste manuel et peu fréquent,
+assumé comme tel. Son résultat, en revanche, n'est pas facultatif : tout écart
+constaté devient une tâche de `.agents/tasks/` ou un correctif.
 
 ## Ce qu'on ne teste pas (décisions explicites)
 

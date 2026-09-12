@@ -12,7 +12,7 @@ CLI open source (MIT) qui installe dans un repo existant une architecture de con
 
 **Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : être la référence de l'`init` **et** gouverner ce qui a été installé — ce que personne ne fait. Vérifier que la configuration ne dérive pas (`check`/`sync`), faire que l'`init` produise une proposition argumentée au lieu d'un squelette (tâche 24), mesurer si elle **sert** (collecte : tâche 25, analyse : tâche 30), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
 
-**Ordre de construction et porte de publication.** L'ordre arrêté est 26 → 24 → 25 → 28 → 30 → 27, détaillé et argumenté dans [docs/positionnement.md](docs/positionnement.md) ; les tâches 17 à 23 et 35 se traitent en parallèle. La v1.0 ne sort pas avant que l'`init` produise du contenu (tâche 24) et que le critère « un inconnu installe en moins de cinq minutes en lisant le seul README » ait été vérifié pour de vrai.
+**Ordre de construction et porte de publication.** L'ordre arrêté est 26 → 24 → 25 → 28 → 30 → 27, détaillé et argumenté dans [docs/positionnement.md](docs/positionnement.md) ; les tâches 17 à 23, 35, 37 et 38 se traitent en parallèle. **La 26 est livrée** (12 septembre 2026) : la première validation par un agent réel a prouvé la découverte des skills, la délégation des sous-agents, le déclenchement des hooks et la lecture d'`AGENTS.md`, et corrigé au passage un défaut que la suite automatisée ne voyait pas (l'en-tête généré devant le frontmatter en mode copie). Le scénario est versionné dans [e2e/validation-agent/](e2e/validation-agent/) et se rejoue après chaque release. La v1.0 ne sort pas avant que l'`init` produise du contenu (tâche 24) et que le critère « un inconnu installe en moins de cinq minutes en lisant le seul README » ait été vérifié pour de vrai.
 
 ## Index des règles
 
@@ -49,11 +49,11 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `docs/positionnement.md` — la direction produit : le cycle installer → vérifier → mesurer → décider → prouver.
 - `docs/roadmap.md` — jalons et critères d'acceptation.
 - `docs/recherche/` — analyse du modèle source (NowStack) et paysage concurrentiel.
-- `e2e/` — scénarios de bout en bout sur repos de démonstration (voir `TESTING.md`).
+- `e2e/` — scénarios de bout en bout sur repos de démonstration, et `e2e/validation-agent/` — le tier manuel : scénario de validation par un agent réel et ses comptes rendus (voir `TESTING.md`).
 - `.agents.toml` — manifeste écrit par `agentsdir init` (mode de projection, packs, empreintes).
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue du premier audit), 24 à 30 (produit), 35 (issue de l'audit du 30 août 2026 : contrat de la CLI). L'ordre de prise est celui de `docs/positionnement.md`, pas l'ordre des numéros.
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue du premier audit), 24, 25, 27, 28, 29 et 30 (produit), 35 (issue de l'audit du 30 août 2026 : contrat de la CLI), 37 et 38 (issues de la validation par un agent réel du 12 septembre 2026). L'ordre de prise est celui de `docs/positionnement.md`, pas l'ordre des numéros.
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.

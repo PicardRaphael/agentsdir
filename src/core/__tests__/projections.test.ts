@@ -328,3 +328,36 @@ describe("05 - projections engine (symlink mode)", () => {
     },
   );
 });
+
+describe("26 - a real agent must load what the copy projects", () => {
+  it("Given a source whose Markdown opens with a frontmatter block, When project runs in copy mode, Then the copy still opens with that block and the generated header follows it", async () => {
+    const dir = await makeTempDir("proj");
+    await makeSources(dir);
+    await writeFile(
+      join(dir, ".agents", "agents", "demo-reviewer.md"),
+      '---\nname: demo-reviewer\ndescription: "Reviews the demo."\n---\n\nYou are Demo Reviewer.\n',
+      "utf8",
+    );
+    await project(dir, { mode: "copy" });
+    const copy = await readFile(
+      join(dir, ".claude", "agents", "demo-reviewer.md"),
+      "utf8",
+    );
+    expect(copy.startsWith("---\nname: demo-reviewer\n")).toBe(true);
+    expect(copy).toContain(`---\n\n<!-- ${GENERATED_HEADER} -->\n`);
+    expect(copy).toContain("You are Demo Reviewer.");
+  });
+
+  it("Given a source whose Markdown has no frontmatter block, When project runs in copy mode, Then the generated header still comes first", async () => {
+    const dir = await makeTempDir("proj");
+    await makeSources(dir);
+    await project(dir, { mode: "copy" });
+    const copy = await readFile(
+      join(dir, ".claude", "rules", "tasks.md"),
+      "utf8",
+    );
+    expect(copy.startsWith(`<!-- ${GENERATED_HEADER} -->\n\n# Task rule`)).toBe(
+      true,
+    );
+  });
+});
