@@ -7,8 +7,8 @@ adheres to [semantic versioning](https://semver.org/spec/v2.0.0.html).
 ## 1.0.0 — unreleased
 
 First release, built and verified but not published to npm yet: publication is
-held until `init` proposes content fit for the repository rather than an empty
-skeleton. This entry gets its date on the day it ships.
+held until an unfamiliar user can install agentsdir in under five minutes with
+the README alone. This entry gets its date on the day it ships.
 
 ### Security
 
@@ -66,6 +66,21 @@ resolved, on the first ordinary command.
 
 ### Added
 
+- **`init` no longer leaves the user in front of an empty structure.** The
+  architecture landed installed and blank: `.agents/rules/` held the generic
+  rules only, `.agents/hooks/` and `.agents/agents/` held nothing, and nothing
+  said what would make sense for *this* repository. The new `$propose-setup`
+  meta-skill of the `creator` pack reads the repo — stack markers and the
+  commands they prove, `package.json` scripts, CI workflows, linter configs,
+  what is already configured — and puts up one table: the hooks, rules and
+  sub-agents that earn their place here, each with its reason and its
+  evidence, every fact marked as read from a file or assumed from a
+  convention. Each line is accepted, refused or amended on its own, nothing is
+  written before every line has a verdict, and what a linter, the CI or an
+  existing hook already enforces is excluded rather than proposed. The
+  accepted lines are then created through `$create-hook`, `$create-rule` and
+  `$create-agent`, so no creation protocol is replayed. The last lines of
+  `init` point at it, and only when the `creator` pack was installed.
 - **`agentsdir update` exists.** The lock has always separated the content the
   CLI installed (`sourceType: "agentsdir"`) from the content vendored from
   elsewhere, so that an upgrade could replace the first without touching the

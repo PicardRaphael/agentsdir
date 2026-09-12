@@ -36,6 +36,21 @@ Derived from the best practices observed (the new `/init` flow, Anthropic's `ski
 5. **Mechanical validation.** `agentsdir check` on the created artifact; a deviation = back to the draft.
 6. **Reviewable proposal.** The user sees the result before the final write (stage 1's `--dry-run` mode).
 
+## The whole-repo proposal
+
+The protocol above creates **one** artifact, on demand. What `init` leaves behind is a different problem: the structure is installed and empty — `.agents/rules/` holds only the generic rules, `.agents/hooks/` and `.agents/agents/` hold nothing, and nothing tells the user what would make sense for *their* repo. `$propose-setup` is that missing step, between "the architecture is installed" and "the user knows what to put in it".
+
+It runs the same six steps, applied to a **set** instead of a single artifact:
+
+1. **Inventory.** The facts the repo carries — stack marker files and the commands they prove, `package.json` scripts, CI workflows, linter and formatter configs, test layout, AGENTS.md, recent commit subjects — and the artifacts already configured (`.agents/rules/`, `.agents/hooks/`, `.agents/agents/`, `.agents/skills/`, harness permissions). Every fact is marked **read** (naming the file) or **assumed** (an inference from the stack conventions). The same distinction `detect.ts` already draws between a command a repository *proves* and one it merely suggests: an element resting on assumed facts alone is never proposed, it becomes a question.
+2. **Interview.** Two or three questions, asked before the table exists — an interview run afterwards only decorates a decision already taken.
+3. **Routing.** Hooks first, rules second, sub-agents last: a portable hook registered on every harness is what a repo cannot obtain any other way, while a rule or a sub-agent is a markdown file anyone can write by hand. Skills stay out of scope (`$create-skill` on demand). Anything a linter, a formatter, a type checker, a CI step, an existing hook or a harness deny rule already enforces is **excluded**, not proposed.
+4. **Draft, then critique.** One table, one line per element: kind, name, why it earns its place in *this* repo, the evidence with each fact marked read or assumed, and what it does not cover. The filter question cuts, then the list is cut again — five founded elements beat fifteen generic ones, because a list too long to read is accepted wholesale and then ignored. Each line gets its own verdict: accept, refuse or amend. Nothing is written before every line has one.
+5. **Generate.** The accepted lines only, each through its own meta-skill (`$create-hook`, `$create-rule`, `$create-agent`), which runs its own inventory, interview and critique and calls the matching generator. The protocol is delegated, never replayed.
+6. **Mechanical validation.** `agentsdir check`, then a closing report of what was *not* created: the refused lines with their reason, and what a repo tool already covers — so the omissions read as deliberate.
+
+On a repo that already carries rules or hooks the job is to **complete** that set: a duplicate is never proposed, it is named as already covered. The end of `init` points at the skill, and only when the `creator` pack was installed.
+
 ## Quality rubrics per artifact
 
 Each meta-skill bundles its rubric in `references/`; the criteria marked ▣ are checked mechanically by `check`, the others by the critique pass.
@@ -79,6 +94,16 @@ Each meta-skill bundles its rubric in `references/`; the criteria marked ▣ are
 - House template: H1, imperative tone, GOOD/BAD, tables; `paths:` if scoped; ▣ index line in AGENTS.md.
 - ▣ Never a normative reference to a file that does not exist.
 
+### Whole-repo proposal ($propose-setup)
+
+- Every element states why it is needed in **this** repo, not in repos of this kind.
+- Every element cites its evidence, each fact marked read (with the file) or assumed; none rests on assumed facts alone.
+- Nothing a linter, a formatter, a type checker, a CI step, an existing hook or a harness deny rule already enforces.
+- Nothing that duplicates an existing rule, hook or sub-agent: the proposal completes what is installed.
+- Hooks first, then rules, then sub-agents; few and founded rather than exhaustive.
+- One verdict per line — accept, refuse or amend — and nothing written before every line has one.
+- ▣ Every created element passes `check`, each through the rubric of its own creator.
+
 ## The interview question banks
 
 Each meta-skill bundles its bank in `references/interview.md`. The five most discriminating questions per artifact (each derived from a sourced anti-pattern):
@@ -90,6 +115,7 @@ Each meta-skill bundles its bank in `references/interview.md`. The five most dis
 | Hook | Prevent or react? · Script failure: pass or block? · Hard security (→ permissions, not a hook)? · Which tools/commands exactly? · Worst-case duration, blocking or async? |
 | Sub-agent | Which single task, finished when? · Modify or only read? · Spontaneous delegation or on demand? · Which context, given that it starts blank? · Deep reasoning or bulky mechanical work? |
 | Rule | Which observed failure justifies it? · Scoped to which files? · Mechanically verifiable (→ hook/CI instead)? · When must an agent read it? · Which real GOOD/BAD example? |
+| Whole-repo proposal | What did the agents get wrong here recently? · What is already enforced mechanically? · Which command must never run? · Which step do you repeat by hand? · Which paths are off limits, generated or vendored? |
 
 ## The `creator` pack
 
@@ -97,6 +123,7 @@ Installed by `init` (checked by default), it contains:
 
 - `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` — one meta-skill per artifact, applying the protocol above and calling the stage 1 generators.
 - `$setup-context` — the assisted creation of AGENTS.md: repo inventory by the agent (real commands, conventions, key files, competing configs to import), pre-drafting of the stack/product sections, validation interview, line-by-line critique, writing through the managed blocks. This is `/init`, multi-harness and with mechanical validation.
+- `$propose-setup` — the whole-repo proposal that fills the structure `init` installs: repo analysis, then a table of the hooks, rules and sub-agents that earn their place *here*, each accepted, refused or amended on its own line. See [The whole-repo proposal](#the-whole-repo-proposal) below.
 
 Constraints: these meta-skills themselves follow all the conventions ([conventions.md](conventions.md)) — `disable-model-invocation: true` (they write), body < 500 lines, rubrics and question banks in `references/`.
 

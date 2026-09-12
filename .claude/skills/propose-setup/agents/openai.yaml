@@ -1,0 +1,10 @@
+interface:
+  display_name: "Propose Setup"
+  short_description: "Repo-wide proposal of what to configure"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#4338CA"
+  default_prompt: "Use $propose-setup to get a reasoned proposal of what to configure in this repo."
+
+policy:
+  allow_implicit_invocation: false

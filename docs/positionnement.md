@@ -48,9 +48,11 @@ flowchart LR
 **1. Installer.** Une source de vérité, des projections par harness, un repli en
 copie quand les symlinks manquent. La mécanique est faite, et le repli répond à
 un problème documenté par quatre bugs distincts chez les concurrents. Ce qui
-manque encore est le **contenu** : aujourd'hui l'`init` laisse un squelette vide,
-et c'est la tâche 24 qui doit en faire une proposition argumentée. C'est la porte
-de publication, décrite plus bas.
+manque encore est le **contenu** : la tâche 24, livrée le 12 septembre 2026, en
+fait une proposition argumentée — le méta-skill `$propose-setup` analyse le dépôt
+et met sur la table les hooks, les règles et les sous-agents qui y gagnent leur
+place, chacun avec sa raison et ses preuves. Reste la porte de publication,
+décrite plus bas.
 
 **2. Vérifier.** `check` détecte la dérive et `sync` la répare — y compris
 l'élagage de ce qui n'a plus de source, que rulesync ne sait pas faire. C'est
@@ -129,9 +131,10 @@ ce document : la preuve passe devant, et la mesure d'usage se scinde.
    tout invalider passe en premier. C'est en outre la moins chère du lot — un
    prompt versionné et une session réelle — et elle garde pour cette raison sa
    première passe sur Claude Code seul.
-2. **Proposer** — tâche 24. Après `init`, un dépôt repart avec une structure
-   vide ; c'est ce que corrige cette tâche, et c'est la condition de la porte de
-   publication ci-dessous.
+2. **Proposer** — tâche 24, **livrée le 12 septembre 2026**. Après `init`, un
+   dépôt repartait avec une structure vide ; `$propose-setup` en fait une
+   proposition d'ensemble, acceptable ou refusable ligne à ligne, qui exclut ce
+   qu'un linter, la CI ou un hook existant applique déjà.
 3. **Observer** — tâche 25, la collecte seule. Un rapport d'usage est vide le
    jour de sa livraison : il faut des semaines de sessions observées. Installer
    la collecte tôt fait mûrir les données pendant que le reste se construit.
@@ -150,17 +153,18 @@ en parallèle, par petites touches, sans jamais bloquer cette ligne. La commande
 
 ## La porte de publication
 
-La v1.0 est prête et volontairement retenue. Elle sort quand **`init` produit
-autre chose qu'un squelette** : une proposition argumentée de règles, de hooks
-et de sous-agents adaptés au dépôt. Publier un installateur qui laisse
-l'utilisateur devant une page blanche, c'est arriver deuxième sur le terrain
+La v1.0 est prête et volontairement retenue. La première condition est tenue
+depuis le 12 septembre 2026 : **`init` produit autre chose qu'un squelette**,
+puisqu'il oriente vers `$propose-setup`, une proposition argumentée de règles,
+de hooks et de sous-agents adaptés au dépôt. Publier un installateur qui laisse
+l'utilisateur devant une page blanche, c'était arriver deuxième sur le terrain
 déjà occupé de l'installation.
 
-Le critère de sortie v1.0 de [roadmap.md](roadmap.md) — « un inconnu installe
-l'architecture en moins de cinq minutes en lisant le seul README » — devient
-cette porte. Il était écrit comme acquis sans avoir jamais été vérifié ; il doit
-l'être avant publication, par quelqu'un ou quelque chose qui n'a pas écrit le
-produit.
+Reste le critère de sortie v1.0 de [roadmap.md](roadmap.md) — « un inconnu
+installe l'architecture en moins de cinq minutes en lisant le seul README » —
+qui devient la porte restante. Il était écrit comme acquis sans avoir jamais été
+vérifié ; il doit l'être avant publication, par quelqu'un ou quelque chose qui
+n'a pas écrit le produit.
 
 ## Une phrase
 

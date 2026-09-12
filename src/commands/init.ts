@@ -160,6 +160,13 @@ export function renderReport(
   lines.push(`Packs: ${answers.packs.join(", ")}`);
   lines.push("");
   lines.push("Next steps:");
+  if (answers.packs.includes("creator")) {
+    // the structure is installed and empty: the first useful move is the
+    // proposal that fills it, not a generator the user has to aim by hand
+    lines.push(
+      "  $propose-setup                   — ask your agent what this repo should configure",
+    );
+  }
   lines.push("  npx agentsdir add skill <name>   — create your first skill");
   lines.push(
     "  npx agentsdir check              — verify the installation (CI runs this)",

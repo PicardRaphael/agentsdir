@@ -29,6 +29,13 @@
       "skillPath": ".agents/skills/create-skill/SKILL.md",
       "computedHash": "c2e5129bf331a70c22b12639cc59440c03e1205d9331ab7f6f0e201c0ec98bb8"
     },
+    "propose-setup": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/propose-setup/SKILL.md",
+      "computedHash": "664b01cdcd7cd1ffa895ed6132519766431c9333ccab12ad5150602d58b3a18b"
+    },
     "setup-context": {
       "source": "agentsdir",
       "sourceType": "agentsdir",

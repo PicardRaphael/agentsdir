@@ -7,7 +7,7 @@ Les tiers de tests retenus, les conventions de nommage, comment lancer chaque ni
 | Tier | Portée | Outil | Emplacement |
 | --- | --- | --- | --- |
 | Unitaire / smoke | Fonctions pures et traversée complète de la CLI compilée (`node dist/cli.js`) | Vitest | `src/**/__tests__/*.test.ts` |
-| Bout en bout (e2e) | Scénarios complets (`init --yes` → `add skill` → `check`, interop `npx skills`, création assistée scriptée) sur des repos de démonstration TypeScript et Python, dans les deux modes (symlink et copie) | Vitest (`vitest.e2e.config.ts`) | `e2e/` |
+| Bout en bout (e2e) | Scénarios complets (`init --yes` → `add skill` → `check`, interop `npx skills`, création assistée scriptée, proposition d'ensemble déroulée en réponses scriptées) sur des repos de démonstration TypeScript et Python, dans les deux modes (symlink et copie) | Vitest (`vitest.e2e.config.ts`) | `e2e/` |
 | Validation par un agent réel (manuel) | Ce qu'un test ne peut pas observer : un harness charge-t-il vraiment ce que la CLI écrit — skill découvert, sous-agent délégable, hook déclenché, `AGENTS.md` lu | Une session réelle du harness, conduite par un scénario versionné | `e2e/validation-agent/` |
 
 Le smoke test « walking skeleton » garantit que la chaîne build + test existe avant toute feature : `node dist/cli.js --help` traverse parseur → sortie.

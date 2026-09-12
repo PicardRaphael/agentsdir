@@ -577,11 +577,11 @@ Mechanics common to all packs:
   installed (a note is emitted); on uninstall, a changelog that has lived
   differs from the seed and falls under the exit `1` refusal — `--force`
   deletes it knowingly.
-- The `creator` pack installs the five assisted-creation meta-skills
+- The `creator` pack installs the six assisted-creation meta-skills
   (`$create-skill`, `$create-hook`, `$create-rule`, `$create-agent`,
-  `$setup-context` — see [creation-assistee.md](creation-assistee.md)),
-  each locked with `sourceType: "agentsdir"` for `update`
-  protection.
+  `$setup-context`, `$propose-setup` — see
+  [creation-assistee.md](creation-assistee.md)), each locked with
+  `sourceType: "agentsdir"` for `update` protection.
 - The `worktrees` pack seeds an empty `[worktrees]` section in the manifest
   (`setup`, `cleanup` — the extension points of the lifecycle scripts);
   `pack remove` removes it only if it has stayed empty, the commands declared

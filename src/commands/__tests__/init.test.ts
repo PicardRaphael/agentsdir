@@ -141,11 +141,17 @@ describe("04 - init command", () => {
     expect(stderr).toContain("git repository");
   });
 
-  it("Given --yes in a git repo with a package.json, When the CLI runs init, Then defaults are applied and the next steps mention add skill and check", async () => {
+  it("Given --yes in a git repo with a package.json, When the CLI runs init, Then defaults are applied and the next steps mention propose-setup, add skill and check", async () => {
     const dir = await makeGitRepo();
     await writeFile(join(dir, "package.json"), "{}\n", "utf8");
     const { code, stdout } = await runCli(dir, ["init", "--yes"]);
     expect(code).toBe(0);
+    // the structure lands empty: the first move offered is the proposal that
+    // fills it, ahead of the generators the user would have to aim by hand
+    expect(stdout).toContain("$propose-setup");
+    expect(stdout.indexOf("$propose-setup")).toBeLessThan(
+      stdout.indexOf("add skill"),
+    );
     expect(stdout).toContain("add skill");
     expect(stdout).toContain("check");
     const manifest = await readManifest(dir);
@@ -161,9 +167,9 @@ describe("04 - init command", () => {
     ).resolves.toContain("name: create-skill");
   });
 
-  it("Given --harness claude and --packs core, When the CLI runs init, Then the questions are bypassed and the manifest records exactly those", async () => {
+  it("Given --harness claude and --packs core, When the CLI runs init, Then the questions are bypassed, the manifest records exactly those, and the next steps offer no skill that was not installed", async () => {
     const dir = await makeGitRepo();
-    const { code } = await runCli(dir, [
+    const { code, stdout } = await runCli(dir, [
       "init",
       "--yes",
       "--harness",
@@ -175,6 +181,10 @@ describe("04 - init command", () => {
     const manifest = await readManifest(dir);
     expect(manifest.harness.enabled).toEqual(["claude"]);
     expect(manifest.packs.installed).toEqual(["core"]);
+    // without the creator pack there is no $propose-setup to invoke: offering
+    // it would send the user after a skill this install never wrote
+    expect(stdout).not.toContain("$propose-setup");
+    expect(stdout).toContain("add skill");
   });
 
   // Two full CLI inits in subprocesses (default packs include creator):
