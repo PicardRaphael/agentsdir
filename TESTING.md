@@ -77,6 +77,13 @@ verte) est collée dans le message de commit qui l'introduit.
 | `init --json` écrit un objet unique sur stdout, sans question mêlée au flux | `src/commands/__tests__/init-json.test.ts` | la déclaration du drapeau et la bascule `yes: args.yes === true || json` (`src/commands/init.ts`) |
 | Aucune commande écrite dans `AGENTS.md` sans preuve dans le dépôt | `src/core/__tests__/stack-evidence.test.ts` | la lecture des scripts et outils déclarés, qui redevient une suggestion codée en dur (`src/core/detect.ts`) |
 | Le bloc de permissions géré de `.claude/settings.json` couvre les scripts des packs installés | `src/commands/__tests__/claude-permissions.test.ts` | le calcul des règles attendues dans `applyPermissions` (`src/core/claude-permissions.ts`) |
+| Une règle sans `paths:` est payée à **chaque** session, une règle scopée seulement quand elle est pertinente | `src/core/__tests__/context-budget.test.ts` | le ternaire `hasScope(source)` de `measureRules` (`src/core/context-budget.ts`) |
+| Le coût de démarrage d'un skill est `name` + `description`, jamais le frontmatter entier | `src/core/__tests__/context-budget.test.ts` | la chaîne mesurée dans `measureSkills` |
+| Seule la source de vérité est comptée : les projections `.claude/**` ne doublent aucun chiffre | `src/core/__tests__/context-budget.test.ts` | les racines énumérées par `measureContextBudget` |
+| Un corps de `SKILL.md` trop lourd en tokens est signalé même sous 500 lignes | `src/core/__tests__/context-budget.test.ts`, `src/commands/__tests__/doctor.test.ts` | la borne `bodyItem.tokens > MAX_BODY_TOKENS` |
+| Un dépassement de budget informe : `doctor` sort en `0` et `check` ne bronche pas | `src/commands/__tests__/doctor.test.ts` | l'`exitCode: EXIT_CODES.ok` de `runDoctor`, et l'absence de règle de budget dans `validateRepo` |
+| Le total payé à chaque session est distingué du total général, jusque dans la ligne de synthèse | `src/commands/__tests__/doctor.test.ts` | `contextBudgetFinding` (`src/commands/doctor.ts`) |
+| Le terminal montre les éléments les plus lourds d'abord, `--json` les porte tous | `src/commands/__tests__/doctor.test.ts` | le tri de `renderContextBudget` et le champ `items` de `machineContext` |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

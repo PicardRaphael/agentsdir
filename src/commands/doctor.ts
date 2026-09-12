@@ -11,6 +11,15 @@ import {
   type GitSymlinksInfo,
   type SymlinkSupport,
 } from "../core/detect.js";
+import {
+  CHARS_PER_TOKEN,
+  MAX_BODY_TOKENS,
+  MAX_DESCRIPTION_CHARS,
+  measureContextBudget,
+  type BudgetItem,
+  type ContextBudget,
+  type WhenPaid,
+} from "../core/context-budget.js";
 import { asUserFacingError } from "../core/errors.js";
 import {
   MANIFEST_SCHEMA,
@@ -49,6 +58,11 @@ export interface DoctorProbes {
 export interface DoctorResult {
   findings: DoctorFinding[];
   mode: ProjectionMode | null;
+  /**
+   * What the installed configuration costs in context, or `null` when there is
+   * nothing installed to measure.
+   */
+  context: ContextBudget | null;
   /** Always 0: doctor diagnoses, `check` carries the CI failure. */
   exitCode: ExitCode;
 }
@@ -137,7 +151,30 @@ export async function runDoctor(
     findings.push(symlinkHealthFinding(git));
   }
   findings.push(await gitattributesFinding(root));
-  return { findings, mode, exitCode: EXIT_CODES.ok };
+  const budget = await measureContextBudget(root);
+  const context = budget.items.length === 0 ? null : budget;
+  if (context !== null) {
+    findings.push(contextBudgetFinding(context));
+  }
+  return { findings, mode, context, exitCode: EXIT_CODES.ok };
+}
+
+/**
+ * The budget in one doctor line, for the readers of `errors[]` alone. It says
+ * what is paid at every session before what is paid in total, and never fails:
+ * a budget overrun is information, `check` stays the guardian of drift.
+ */
+function contextBudgetFinding(budget: ContextBudget): DoctorFinding {
+  const { always, all } = budget.totals;
+  const head = `~${always.tokens} estimated tokens paid at every session (${always.items} of ${all.items} items), ~${all.tokens} across every moment of payment.`;
+  return {
+    rule: "context-budget",
+    severity: budget.bounds.length === 0 ? "ok" : "info",
+    message:
+      budget.bounds.length === 0
+        ? `${head} No Agent Skills bound exceeded.`
+        : `${head} ${budget.bounds.length} Agent Skills bound(s) exceeded — listed in the context budget below; informational, \`check\` does not fail on them.`,
+  };
 }
 
 /**
@@ -316,7 +353,162 @@ export function renderDoctorReport(result: DoctorResult): string {
   lines.push(
     `Summary: ${count("ok")} ok, ${count("info")} info, ${count("warn")} warning(s), ${count("error")} error(s) — every non-ok line names its fix.`,
   );
+  if (result.context !== null) {
+    lines.push("");
+    lines.push(renderContextBudget(result.context));
+  }
   return lines.join("\n");
+}
+
+/** Heading of each bucket, in payment order: always first, it is the one that compounds. */
+const BUCKETS: { when: WhenPaid; title: string; explanation: string }[] = [
+  {
+    when: "always",
+    title: "Paid at every session",
+    explanation: "AGENTS.md, skill and sub-agent metadata, unscoped rules",
+  },
+  {
+    when: "on-invocation",
+    title: "Paid on invocation",
+    explanation: "a skill or sub-agent body, and the references it reads",
+  },
+  {
+    when: "when-relevant",
+    title: "Paid when relevant",
+    explanation: "a scoped rule, when the session touches a file it covers",
+  },
+];
+
+/** How many items of one bucket the terminal shows; `--json` always carries them all. */
+const SHOWN_PER_BUCKET = 12;
+
+/**
+ * The budget as a human reads it: one block per moment of payment, heaviest
+ * first inside each, and the nature of every number stated once at the top —
+ * a figure whose unit is unknown is worse than no figure.
+ */
+export function renderContextBudget(budget: ContextBudget): string {
+  const lines: string[] = [
+    "Context budget — what this configuration costs in context.",
+    `Bytes and lines are exact; tokens are an estimate (~), one per ${CHARS_PER_TOKEN} characters, calibrated once — see docs/conventions.md §10.`,
+  ];
+  for (const bucket of BUCKETS) {
+    const items = budget.items
+      .filter((item) => item.when === bucket.when)
+      .sort((a, b) => b.tokens - a.tokens || compareLabel(a, b));
+    const totals = sumOf(items);
+    lines.push("");
+    lines.push(
+      `  ${bucket.title} — ~${totals.tokens} tokens, ${totals.bytes} bytes, ${items.length} item(s) (${bucket.explanation})`,
+    );
+    if (items.length === 0) {
+      lines.push("    none");
+      continue;
+    }
+    lines.push(...renderItemTable(items.slice(0, SHOWN_PER_BUCKET)));
+    if (items.length > SHOWN_PER_BUCKET) {
+      lines.push(
+        `    ... and ${items.length - SHOWN_PER_BUCKET} lighter item(s); \`agentsdir doctor --json\` lists every one.`,
+      );
+    }
+  }
+  lines.push("");
+  lines.push(
+    `  Total — ~${budget.totals.all.tokens} tokens, ${budget.totals.all.bytes} bytes, ${budget.totals.all.items} item(s); a session pays the "every session" block above, never this total.`,
+  );
+  lines.push("");
+  if (budget.bounds.length === 0) {
+    lines.push(
+      `  Agent Skills bounds — none exceeded (description up to ${MAX_DESCRIPTION_CHARS} characters, body up to ~${MAX_BODY_TOKENS} tokens).`,
+    );
+  } else {
+    lines.push(
+      "  Agent Skills bounds exceeded — informational; `agentsdir check` does not fail on a budget.",
+    );
+    for (const bound of budget.bounds) {
+      lines.push(`    ${bound.path} · ${bound.message}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function renderItemTable(items: BudgetItem[]): string[] {
+  const rows = items.map((item) => ({
+    tokens: `~${item.tokens}`,
+    bytes: String(item.bytes),
+    lines: String(item.lines),
+    element: labelOf(item),
+  }));
+  const width = (pick: (row: (typeof rows)[number]) => string, head: string) =>
+    Math.max(head.length, ...rows.map((row) => pick(row).length));
+  const tokensWidth = width((row) => row.tokens, "tokens");
+  const bytesWidth = width((row) => row.bytes, "bytes");
+  const linesWidth = width((row) => row.lines, "lines");
+  const header = `    ${"tokens".padStart(tokensWidth)}  ${"bytes".padStart(bytesWidth)}  ${"lines".padStart(linesWidth)}  element`;
+  return [
+    header,
+    ...rows.map(
+      (row) =>
+        `    ${row.tokens.padStart(tokensWidth)}  ${row.bytes.padStart(bytesWidth)}  ${row.lines.padStart(linesWidth)}  ${row.element}`,
+    ),
+  ];
+}
+
+/** The path, plus what part of it this item is when a file is paid in two moments. */
+function labelOf(item: BudgetItem): string {
+  switch (item.kind) {
+    case "skill-metadata":
+    case "agent-metadata":
+      return `${item.path} (metadata)`;
+    case "skill-body":
+    case "agent-body":
+      return `${item.path} (body)`;
+    default:
+      return item.path;
+  }
+}
+
+function compareLabel(a: BudgetItem, b: BudgetItem): number {
+  const left = labelOf(a);
+  const right = labelOf(b);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
+ * The budget for a script. It carries the nature of each number beside the
+ * numbers: a consumer tracking the budget over time must never have to guess
+ * whether `tokens` was counted or estimated, nor with which divisor.
+ */
+function machineContext(budget: ContextBudget | null): unknown {
+  if (budget === null) {
+    return null;
+  }
+  return {
+    units: {
+      bytes: "exact, UTF-8",
+      lines: "exact",
+      tokens: "estimate",
+    },
+    tokenEstimate: {
+      charsPerToken: CHARS_PER_TOKEN,
+      calibration:
+        "2026-09-12, o200k_base BPE over 33 Markdown files: 4.03 characters per token observed; see docs/conventions.md §10",
+    },
+    bounds: {
+      maxDescriptionChars: MAX_DESCRIPTION_CHARS,
+      maxBodyTokens: MAX_BODY_TOKENS,
+      exceeded: budget.bounds,
+    },
+    totals: budget.totals,
+    items: budget.items,
+  };
+}
+
+function sumOf(items: BudgetItem[]): { bytes: number; tokens: number } {
+  return {
+    bytes: items.reduce((total, item) => total + item.bytes, 0),
+    tokens: items.reduce((total, item) => total + item.tokens, 0),
+  };
 }
 
 export const doctorCommand = defineCommand({
@@ -343,6 +535,7 @@ export const doctorCommand = defineCommand({
             mode: result.mode,
             changes: [],
             errors: result.findings,
+            context: machineContext(result.context),
             exitCode: result.exitCode,
           }),
         );
@@ -366,6 +559,9 @@ export const doctorCommand = defineCommand({
                   severity: "error",
                 },
               ],
+              // the key is always there, so a script that tracks the budget
+              // over time reads one shape whether the run succeeded or not
+              context: null,
               exitCode: error.exitCode,
             }),
           );

@@ -1,14 +1,27 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import type { GitSymlinksInfo, SymlinkSupport } from "../../core/detect.js";
 import { readManifest } from "../../core/manifest.js";
-import { cliPath, initAnswers, makeTempDir } from "../../test-support/index.js";
-import { runDoctor, type DoctorFinding } from "../doctor.js";
+import { defaultSkillAnswers } from "../../templates/skill.js";
+import {
+  cliPath,
+  initAnswers,
+  makeTempDir,
+  runCli,
+} from "../../test-support/index.js";
+import { runAddSkill } from "../add-skill.js";
+import { runCheck } from "../check.js";
+import {
+  renderDoctorReport,
+  runDoctor,
+  type DoctorFinding,
+} from "../doctor.js";
 import { runInit } from "../init.js";
+import { runSync } from "../sync.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -248,6 +261,188 @@ describe("13 - doctor command", () => {
     );
     expect(result.exitCode).toBe(0);
     expect(await snapshotTree(dir)).toEqual(before);
+  });
+
+  it("Given an initialized repo, When doctor runs, Then the context budget separates what every session pays from the general total", async () => {
+    const dir = await initializedRepo();
+    await runAddSkill(dir, defaultSkillAnswers("demo-skill", false), {
+      dryRun: false,
+    });
+
+    const result = await runDoctor(dir, probes({}));
+
+    const budget = result.context;
+    expect(budget).not.toBeNull();
+    const always = budget?.totals.always;
+    expect(always?.tokens).toBeGreaterThan(0);
+    // AGENTS.md and the skill metadata, never the body of that skill
+    expect(always?.tokens).toBeLessThan(budget?.totals.all.tokens ?? 0);
+    expect(
+      budget?.items.filter((entry) => entry.when === "on-invocation").length,
+    ).toBeGreaterThan(0);
+    const line = finding(result.findings, "context-budget");
+    expect(line.severity).toBe("ok");
+    // the two figures, each attached to what it counts: the summary line is
+    // read on its own by whoever consumes `errors[]` and never sees the table
+    expect(line.message).toContain(
+      `~${always?.tokens} estimated tokens paid at every session`,
+    );
+    expect(line.message).toContain(
+      `~${budget?.totals.all.tokens} across every moment of payment`,
+    );
+    expect(result.exitCode).toBe(0);
+
+    const report = renderDoctorReport(result);
+    // the nature of every figure, stated where the figures are read
+    expect(report).toContain(
+      "Bytes and lines are exact; tokens are an estimate",
+    );
+    expect(report).toContain("Paid at every session");
+    expect(report).toContain("Paid on invocation");
+    expect(report).toContain("Paid when relevant");
+    expect(report).toContain("Total —");
+  });
+
+  it("Given more items than the terminal shows, When doctor runs, Then the heaviest are ranked first and --json still carries every one", async () => {
+    const dir = await initializedRepo();
+    // 14 skills of deliberately different sizes: more than one screenful, so
+    // the ranking has to be right for the report to answer "what weighs most"
+    for (let index = 0; index < 14; index += 1) {
+      const name = `skill-${String(index).padStart(2, "0")}`;
+      await mkdir(join(dir, ".agents", "skills", name), { recursive: true });
+      await writeFile(
+        join(dir, ".agents", "skills", name, "SKILL.md"),
+        `---\nname: ${name}\ndescription: Does ${name}.\n---\n\n# ${name}\n\n${"body ".repeat(20 * (index + 1))}\n`,
+        "utf8",
+      );
+    }
+
+    const result = await runDoctor(dir, probes({}));
+    const bodies = (result.context?.items ?? []).filter(
+      (entry) => entry.kind === "skill-body",
+    );
+    expect(bodies).toHaveLength(14);
+
+    const report = renderDoctorReport(result);
+    const shown = report
+      .slice(report.indexOf("Paid on invocation"))
+      .split("\n")
+      .map((line) => /^\s+~(\d+)\s+\d+\s+\d+\s{2}(\S.*)$/.exec(line))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => ({ tokens: Number(match[1]), element: match[2] }));
+
+    // heaviest first, and the table stops before the lighter ones
+    expect(shown).toHaveLength(12);
+    expect([...shown].sort((a, b) => b.tokens - a.tokens)).toEqual(shown);
+    expect(shown[0]?.element).toBe(".agents/skills/skill-13/SKILL.md (body)");
+    expect(shown.map((row) => row.element)).not.toContain(
+      ".agents/skills/skill-00/SKILL.md (body)",
+    );
+    expect(report).toContain("lighter item(s)");
+
+    // truncated on screen, complete for a machine
+    await execFileAsync("git", ["-C", dir, "init"]);
+    const { stdout } = await runCli(dir, ["doctor", "--json"]);
+    const machine = JSON.parse(stdout) as {
+      context: { items: unknown[]; totals: { all: { items: number } } };
+    };
+    expect(machine.context.items).toHaveLength(
+      machine.context.totals.all.items,
+    );
+    expect(machine.context.items.length).toBeGreaterThan(12);
+  });
+
+  it("Given a SKILL.md over the spec body budget, When doctor and check run, Then doctor signals it and check does not fail on it", async () => {
+    const dir = await initializedRepo();
+    await runAddSkill(dir, defaultSkillAnswers("heavy-skill", false), {
+      dryRun: false,
+    });
+    const skill = join(dir, ".agents", "skills", "heavy-skill", "SKILL.md");
+    // long lines, few of them: over ~5000 tokens while invariant 7, which
+    // counts lines, sees nothing wrong
+    await writeFile(
+      skill,
+      `${await readFile(skill, "utf8")}\n${`${"budget ".repeat(60)}\n`.repeat(60)}`,
+      "utf8",
+    );
+    // the repository is otherwise in order: the projections follow the source
+    await runSync(dir, { dryRun: false });
+
+    const result = await runDoctor(dir, probes({}));
+
+    const bounds = result.context?.bounds ?? [];
+    expect(bounds.map((bound) => bound.rule)).toEqual(["skill-body-tokens"]);
+    expect(bounds[0]?.path).toBe(".agents/skills/heavy-skill/SKILL.md");
+    expect(finding(result.findings, "context-budget").severity).toBe("info");
+    expect(result.exitCode).toBe(0);
+    expect(renderDoctorReport(result)).toContain(
+      "Agent Skills bounds exceeded",
+    );
+
+    // the budget informs; the drift guard is unmoved by it
+    const check = await runCheck(dir);
+    expect(check.exitCode).toBe(0);
+    expect(
+      check.violations.filter((violation) => violation.severity === "error"),
+    ).toEqual([]);
+    expect(
+      check.violations.some((violation) => violation.rule.includes("budget")),
+    ).toBe(false);
+  });
+
+  it("Given a repo that is not initialized, When doctor runs, Then there is no budget to report rather than an empty one", async () => {
+    const dir = await makeTempDir("doctor");
+
+    const result = await runDoctor(dir, probes({}));
+
+    expect(result.context).toBeNull();
+    expect(
+      result.findings.some((entry) => entry.rule === "context-budget"),
+    ).toBe(false);
+    expect(renderDoctorReport(result)).not.toContain("Context budget");
+  });
+
+  it("Given the CLI, When doctor --json runs, Then the budget travels with the nature of its figures", async () => {
+    const dir = await initializedRepo();
+    await execFileAsync("git", ["-C", dir, "init"]);
+
+    const { stdout, code } = await runCli(dir, ["doctor", "--json"]);
+
+    expect(code).toBe(0);
+    const report = JSON.parse(stdout) as {
+      context: {
+        units: { bytes: string; lines: string; tokens: string };
+        tokenEstimate: { charsPerToken: number; calibration: string };
+        bounds: {
+          maxDescriptionChars: number;
+          maxBodyTokens: number;
+          exceeded: unknown[];
+        };
+        totals: {
+          always: { tokens: number };
+          all: { items: number; tokens: number };
+        };
+        items: { path: string; kind: string; when: string; tokens: number }[];
+      };
+    };
+    expect(report.context.units).toEqual({
+      bytes: "exact, UTF-8",
+      lines: "exact",
+      tokens: "estimate",
+    });
+    expect(report.context.tokenEstimate.charsPerToken).toBe(4);
+    expect(report.context.tokenEstimate.calibration).toContain("o200k_base");
+    expect(report.context.bounds.maxDescriptionChars).toBe(1024);
+    expect(report.context.bounds.maxBodyTokens).toBe(5000);
+    expect(report.context.bounds.exceeded).toEqual([]);
+    // every item travels, whatever the terminal chose to show of them
+    expect(report.context.items.length).toBe(report.context.totals.all.items);
+    expect(report.context.items.map((entry) => entry.path)).toContain(
+      "AGENTS.md",
+    );
+    expect(report.context.totals.always.tokens).toBeLessThanOrEqual(
+      report.context.totals.all.tokens,
+    );
   });
 
   it("Given the CLI, When doctor --json runs on a git repo, Then stdout is one machine object with every finding and exitCode 0", async () => {

@@ -266,4 +266,63 @@ Measured on 2026-09-12, Windows 11, Node 22, median of 40 invocations: **41.8 ms
 
 It produces no report and passes no judgement — that is the analysis stage. And **rules are not observable**: a rule is injected into the context, and no hook can say whether an agent read it. What the journal supports is *relevance*, not reading: a rule declares its scope (`--paths "src/api/**"`), the journal records that the session touched `src/api/x.ts`, and the analysis draws the conclusion.
 
+## 10. The context budget
+
+Everything installed here is paid, at every session, in the context window. `doctor` reports what each element weighs and **when** it is paid; nothing about it can fail a build. It is the counterpart of the usage journal (§9): usage says *whether* an element serves, the budget says *what it costs*, and the two together answer the only question a team asks — is this skill worth what it costs?
+
+### The nature of the figures
+
+| Figure | Nature | How it is obtained |
+| --- | --- | --- |
+| `bytes` | **exact** | UTF-8 byte length of the measured text |
+| `lines` | **exact** | line count; a trailing newline does not open one more |
+| `tokens` | **estimate**, always printed with a `~` | Unicode code points divided by **4**, rounded up |
+
+The decision is explicit: the report **estimates** tokens rather than counting them, and says so everywhere it shows one. An exact count needs the tokenizer of the target model, therefore a heavy dependency — and this CLI limits itself to four runtime dependencies, each justified in writing. An assumed approximation is more useful than a byte count the reader has to convert, provided it never passes for a measurement.
+
+**Calibration**, done once, on 2026-09-12: the o200k_base BPE (`gpt-tokenizer` 4.0.0, installed outside the repository for the occasion, left in no manifest) over 33 real Markdown files of this repository — `AGENTS.md`, `README.md`, `.agents/rules/`, `.agents/skills/`, `docs/`, `e2e/`. Result: **183 285 characters for 45 435 tokens, i.e. 4.03 characters per token**, with a per-file spread of 3.69 to 4.52. The divisor is kept at a round **4**, which over-estimates the whole corpus by 0.9% — the safe direction for a budget, and within 8% over to 13% under on a single file.
+
+Claude's tokenizer is not public, and o200k is a proxy, not the target: **no figure derived from this divisor is exact**, which is why the report carries the divisor and the calibration next to the numbers, in the terminal and in `--json` alike.
+
+**What the estimate is good for, checked on 2026-09-12.** Comparing every pair of items of a report against the real o200k count: on this repository's own content, 208 pairs, **0 inversions** — the ranking is the real one. On a generated repository padded with repetitive filler, which is the worst case for a characters-per-token ratio because such text compresses far better than prose, 309 pairs gave 3 inversions (1.0%), each between two items within 6.1% of one another. The ranking is therefore trustworthy for what the report is read for — which element weighs most — and only ever uncertain between near-ties. Absolute figures on such filler drifted up to 53% above the real count; on real prose the corpus error stays under 1%.
+
+### The three moments of payment
+
+A total that adds everything up is impressive and false. Each element is billed to exactly one moment:
+
+| Moment | What is paid | Elements |
+| --- | --- | --- |
+| **always** | every session, before anything happens | `AGENTS.md` whole, the `name` + `description` of each skill, the `name` + `description` of each sub-agent, every rule **without** a `paths:` scope |
+| **on invocation** | when the element is activated | a skill body (frontmatter excluded), the files of its `references/`, a sub-agent body |
+| **when relevant** | when the session touches a file the scope covers | a rule **with** a `paths:` scope |
+
+Three consequences worth stating, because each one is a way to get the count wrong:
+
+- The rules index is inside `AGENTS.md` and is not a line of its own — counting the block again would bill it twice.
+- Only the **source of truth** is measured. The `.claude/**` projections are the same bytes under another name; counting both would double every figure.
+- A rule with no `paths:` has no scope to miss, so it is paid at **every** session. Reading every rule as "when relevant" under-reports the always-paid total exactly as badly as adding everything up over-reports it.
+
+`scripts/`, `steps/`, `templates/` and `assets/` are not counted: they are executed, rendered or shipped, never read into the window.
+
+### The Agent Skills bounds
+
+The spec states bounds that nothing used to verify. `doctor` checks two of them and **informs**:
+
+| Bound | Source | Reported as |
+| --- | --- | --- |
+| `description` up to 1024 characters | spec, hard limit | `skill-description-length` |
+| body under ~5000 tokens | spec, recommendation | `skill-body-tokens` |
+
+The third — `SKILL.md` under 500 lines — is already invariant 7 of `check` (§4), and is not repeated here. The token bound is the one that discriminates: a 400-line body made of long lines blows ~5000 tokens without the line invariant seeing anything.
+
+An overrun is **information, never a failure**: `check` stays the guardian of drift, `doctor` diagnoses sobriety. `doctor` exits 0 whatever the budget says.
+
+### Reading the report
+
+`agentsdir doctor` prints one block per moment of payment, heaviest first, capped at 12 lines per block so the diagnosis stays readable on a repository with sixty skills; the every-session total and the general total are two separate lines. `agentsdir doctor --json` carries the whole thing under the `context` key — every item without exception, the totals, the bounds, and the nature of each figure — which is what makes a budget followable over time.
+
+### Cost of the measure
+
+Measured on 2026-09-12, Windows 11, Node 22, on a generated repository of **60 skills, 6 rules and 60 reference files** (187 measured items), median of 20 runs: **16.3 ms** for the whole measure (14.2 ms min, 29.2 ms max). It is one pass over `.agents/` and `AGENTS.md`, with no fingerprint and no process started — the measure is negligible against the `doctor` probes that surround it.
+
 See also: [architecture.md](architecture.md) (engine and projections), [commandes.md](commandes.md) (command specification), [roadmap.md](roadmap.md) (milestones).

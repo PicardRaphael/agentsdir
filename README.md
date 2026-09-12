@@ -44,7 +44,7 @@ npx agentsdir add hook PreToolUse
 npx agentsdir pack add verification
 npx agentsdir sync          # regenerates the projections
 npx agentsdir check         # verifies invariants and drift (CI)
-npx agentsdir doctor        # environment diagnostic
+npx agentsdir doctor        # environment diagnostic + context budget
 ```
 
 ## Let a coding agent install it

@@ -65,8 +65,9 @@ fait, et c'est déjà une différence.
   touchés — localement, en métadonnées seulement (collecte : tâche 25 ; analyse :
   tâche 30).
 - *Combien ça coûte ?* Ce qui est payé à chaque session — `AGENTS.md`, les
-  métadonnées de tous les skills, l'index des règles — est distingué de ce qui
-  n'est payé qu'à l'invocation (tâche 28).
+  métadonnées de tous les skills, l'index des règles, les règles sans périmètre
+  — est distingué de ce qui n'est payé qu'à l'invocation (tâche 28, livrée le
+  12 septembre 2026).
 
 Croisées, elles donnent la seule question qui compte pour une équipe : *ce skill
 vaut-il ce qu'il coûte ?* Un skill jamais invoqué qui pèse lourd au démarrage se
@@ -142,8 +143,11 @@ ce document : la preuve passe devant, et la mesure d'usage se scinde.
    d'usage est vide le jour de sa livraison : il faut des semaines de sessions
    observées, et les données mûrissent maintenant pendant que le reste se
    construit.
-4. **Chiffrer** — tâche 28, le coût en contexte. Purement statique, livrable en
-   une passe, et visible immédiatement.
+4. **Chiffrer** — tâche 28, le coût en contexte, **livrée le 12 septembre
+   2026**. `doctor` donne, par élément installé, ce qu'il pèse et à quel moment
+   il est payé ; les octets et les lignes sont exacts, les tokens sont une
+   estimation assumée et calibrée. Purement statique, livrable en une passe, et
+   visible immédiatement — ce qu'elle a été.
 5. **Conclure** — tâche 30, l'analyse du journal, quand il y a enfin quelque
    chose à analyser, croisée avec le coût de l'étape 4.
 6. **Brancher** — tâche 27 (MCP), le quatrième objet qui manque à la structure.

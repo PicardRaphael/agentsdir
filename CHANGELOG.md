@@ -66,6 +66,35 @@ resolved, on the first ordinary command.
 
 ### Added
 
+- **A repository can now find out what its configuration costs in context.**
+  Everything this CLI installs is paid, at every session, in the context
+  window — and nothing measured it. `doctor` now reports what each installed
+  element weighs and, more importantly, **when** it is paid: `AGENTS.md`, the
+  metadata of every skill and sub-agent and the unscoped rules are paid at
+  every session; a skill body and its `references/` only on invocation; a
+  scoped rule only when the session touches a file it covers. The distinction
+  is the whole point — a report that adds the three together produces an
+  impressive, false number, and a report that treats every rule as conditional
+  under-reports the session cost just as badly.
+
+  The nature of every figure is stated where the figure is read. Bytes and
+  lines are exact; **tokens are an estimate**, one per 4 characters, printed
+  with a `~` — an exact count would need the target model's tokenizer, hence a
+  heavy dependency this project refuses. The divisor was calibrated once
+  against a real BPE over 33 Markdown files (4.03 characters per token
+  observed, 0.9% over-estimate at 4), and the report carries the divisor and
+  the calibration next to the numbers, in the terminal and in `--json` alike.
+
+  It also checks two Agent Skills bounds nothing verified before: a
+  `description` over 1024 characters, and a body over ~5000 tokens — the one
+  that catches a `SKILL.md` made of few but very long lines, which the existing
+  500-line invariant cannot see. An overrun **informs**: `doctor` exits 0
+  whatever the budget says, and `check` stays the guardian of drift, not of
+  sobriety. The terminal shows the heaviest twelve items per block so a
+  sixty-skill repository stays readable; `doctor --json` carries every item
+  under a `context` key, which is what makes the budget followable over time.
+  Measured cost of the measure itself: 16.3 ms on a 60-skill repository.
+
 - **A repository can now find out whether its configuration is of any use.**
   `check` always answered "has this drifted from its source?"; nothing answered
   "does anyone use this?" — a skill nobody invokes, a sub-agent never delegated

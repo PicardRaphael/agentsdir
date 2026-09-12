@@ -81,7 +81,9 @@ replaced; everything else in the file is preserved byte for byte.
 
 **Machine output.** Every command accepts `--json` and then writes a single
 object `{command, mode, changes[], errors[], exitCode}` to stdout, intended for
-scripts and CI.
+scripts and CI. `doctor` adds one key of its own, `context`, carrying the
+context budget — `null` when there is nothing installed to measure, and `null`
+too when the command failed, so a consumer always reads one shape.
 
 ---
 
@@ -528,7 +530,9 @@ Read-only. Diagnoses the machine and the clone, not the content:
   checkout without support — the classic trap);
 - harnesses detected on the machine and in the repo;
 - manifest schema version vs CLI version (points to `update`);
-- `.gitattributes` consistency (`eol=lf` on hashed files).
+- `.gitattributes` consistency (`eol=lf` on hashed files);
+- the **context budget**: what the installed configuration costs in context and
+  when it is paid.
 
 Each finding comes with the exact fix (command or setting).
 Diagnosis, not verification: CI failure belongs to `check`.
@@ -536,6 +540,23 @@ Diagnosis, not verification: CI failure belongs to `check`.
 The `--json` output carries each finding in `errors[]` with its severity
 (`ok`, `info`, `warn`, `error`); `exitCode` stays `0` — a machine
 consumer must not read a non-empty `errors[]` as a failure.
+
+### The context budget
+
+Printed after the findings, and carried whole under the `context` key of
+`--json`. Per element: what it weighs and **when** it is paid — at every
+session (`AGENTS.md`, skill and sub-agent metadata, unscoped rules), on
+invocation (a body, its `references/`), or when relevant (a rule with a
+`paths:` scope). The every-session total is stated apart from the general
+total: a session pays the first, never the last.
+
+Bytes and lines are exact; **tokens are an estimate**, one per 4 characters,
+calibrated once and printed with a `~`. The terminal shows the heaviest twelve
+items per block, `--json` carries every one. The Agent Skills bounds
+(`description` up to 1024 characters, body under ~5000 tokens) are checked and
+reported — as information: `doctor` exits `0` whatever the budget says, and
+`check` never fails on it. Full contract, calibration and cost of the measure:
+[conventions.md](conventions.md) §10.
 
 ### Exit codes
 
