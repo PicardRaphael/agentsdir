@@ -20,6 +20,8 @@ import {
   agentsdirLockEntry,
   getPackContent,
   INSTALLABLE_PACKS,
+  lockTable,
+  renderLock,
   packFileLockEntries,
   packInstallFiles,
   packSkillHash,
@@ -478,13 +480,7 @@ async function planLockWith(
     }
     data = parsed as Record<string, unknown>;
   }
-  const skillsRaw = data["skills"];
-  const skills =
-    typeof skillsRaw === "object" &&
-    skillsRaw !== null &&
-    !Array.isArray(skillsRaw)
-      ? (skillsRaw as Record<string, unknown>)
-      : {};
+  const skills = lockTable(data, "skills");
   data["skills"] = skills;
   for (const entry of delta.add) {
     skills[entry.skill] = agentsdirLockEntry(entry.skill, entry.hash);
@@ -492,30 +488,19 @@ async function planLockWith(
   for (const skill of delta.remove) {
     delete skills[skill];
   }
-  const filesRaw = data["files"];
-  const files =
-    typeof filesRaw === "object" &&
-    filesRaw !== null &&
-    !Array.isArray(filesRaw)
-      ? (filesRaw as Record<string, unknown>)
-      : {};
+  const files = lockTable(data, "files");
   for (const entry of addFiles) {
     files[entry.path] = agentsdirFileLockEntry(entry.hash);
   }
   for (const path of removeFiles) {
     delete files[path];
   }
-  // an empty `files` table is dropped rather than written as `{}`: the absent
-  // table is the documented "nothing tracked outside the skills"
-  if (Object.keys(files).length === 0) {
-    delete data["files"];
-  } else {
-    data["files"] = sortedByKey(files);
-  }
-  if (Object.keys(skills).length === 0 && data["files"] === undefined) {
+  data["files"] = files;
+  if (Object.keys(skills).length === 0 && Object.keys(files).length === 0) {
     return raw === undefined ? undefined : { action: "removed" };
   }
-  const rendered = `${JSON.stringify(data, null, 2)}\n`;
+  // renderLock sorts both tables and drops an empty `files`
+  const rendered = renderLock(data);
   if (rendered === raw) {
     return undefined;
   }
@@ -523,15 +508,6 @@ async function planLockWith(
     action: raw === undefined ? "created" : "updated",
     content: rendered,
   };
-}
-
-/** Deterministic key order: the lock is a versioned file, diffed by humans. */
-function sortedByKey(table: Record<string, unknown>): Record<string, unknown> {
-  const sorted: Record<string, unknown> = {};
-  for (const key of Object.keys(table).sort()) {
-    sorted[key] = table[key];
-  }
-  return sorted;
 }
 
 function contentOf(files: PackFile[], path: string): string {

@@ -312,14 +312,10 @@ describe.each<Stack>(["typescript", "python"])(
         (candidate) => !refused.includes(candidate),
       );
       expect(accepted.length).toBeGreaterThan(0);
-      // step 5: hooks first, then rules, then sub-agents
-      const order: Kind[] = ["hook", "rule", "agent"];
-      for (const kind of order) {
-        for (const candidate of accepted.filter(
-          (entry) => entry.kind === kind,
-        )) {
-          await create(dir, candidate);
-        }
+      // step 5: the accepted lines, one at a time, in the order they were
+      // accepted — no kind outranks another
+      for (const candidate of accepted) {
+        await create(dir, candidate);
       }
 
       // step 6: mechanical validation, green on the first try

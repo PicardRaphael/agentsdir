@@ -211,19 +211,22 @@ describe("24 - meta-skill propose-setup", () => {
     expect(body).toContain("BEFORE the proposal is drafted");
   });
 
-  it("Given the routing step, When inspected, Then hooks come first because a repo cannot obtain them any other way, and skills are routed out", async () => {
+  it("Given the routing step, When inspected, Then no artifact kind outranks another and the mix follows this repo and the request, with skills routed out", async () => {
     const dir = await repoWithCreator();
     const body = await skillBody(dir);
-    expect(body).toContain(
-      "Propose hooks first, rules second, sub-agents last",
-    );
-    expect(body).toContain("cannot obtain any other way");
-    expect(body).toContain("anyone can write by hand");
-    expect(body).toContain("skills");
+    // a hook, a rule and a sub-agent each cover what the other two cannot:
+    // ranking them by kind proposes an artifact instead of answering a need
+    expect(body).toContain("No kind outranks another");
+    expect(body).toContain("each cover what");
+    expect(body).toContain("the three together, one of them, or none at");
+    expect(body).toContain("never by the");
+    expect(body).toContain("kind of artifact");
+    expect(body).toContain("strength of the evidence");
     expect(body).toContain("out of scope here");
     expect(body).toContain("$create-skill");
     const rubric = await reference(dir, "rubrique.md");
-    expect(rubric).toContain("Hooks first, then rules, then sub-agents");
+    expect(rubric).toContain("No kind ranked above another");
+    expect(rubric).toContain("what the other two kinds would");
   });
 
   it("Given the critique step, When inspected, Then every line faces the verbatim filter question and an over-long list is cut", async () => {

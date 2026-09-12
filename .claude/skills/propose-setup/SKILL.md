@@ -38,6 +38,21 @@ line has an answer. Six steps, in order.
   when it is an inference from the stack conventions rather than something
   this repo states. Never propose an element resting on `assumed` facts
   alone: turn it into a question for step 2 instead.
+- Check the current guidance before settling the proposal. Read the
+  official documentation of the harnesses this repo enables (they are
+  listed in `.agents.toml`) and of the model that will run it: what this
+  kind of artifact is good for, and the fields it supports, move with
+  them.
+- PRIMARY sources only, whatever the medium: what the people who build
+  that harness or that model publish themselves — their documentation,
+  their talks and recorded sessions, their papers and slide decks. Never
+  a third party's paraphrase of one.
+- Note what you consulted and the date you consulted it, and say which of
+  your choices it changed. An undated claim is an opinion, and the repo
+  has enough of those already.
+- No network access, or nothing found? Say so plainly and proceed on what
+  the repo proves. A silent guess dressed as current practice is the one
+  outcome worse than not looking.
 
 ## 2. Targeted interview
 
@@ -54,9 +69,11 @@ line has an answer. Six steps, in order.
   hook; advisory knowledge that must be read in context → rule; bulky
   isolable work → sub-agent. An on-demand workflow is a skill, and skills
   are out of scope here — mention $create-skill and move on.
-- Propose hooks first, rules second, sub-agents last. A portable hook
-  registered on every harness is what a repo cannot obtain any other way;
-  a rule or a sub-agent is a markdown file anyone can write by hand.
+- No kind outranks another. A hook, a rule and a sub-agent each cover what
+  the other two cannot, so the right mix is the one THIS repo and the
+  user's request call for — the three together, one of them, or none at
+  all. Rank the proposal by the strength of the evidence, never by the
+  kind of artifact.
 - EXCLUDE what a tool of this repo already enforces: a linter, a formatter,
   a type checker, a CI step, an existing hook, or a harness deny rule.
   A proposal never sends an agent to do a linter's job, and never writes a

@@ -81,6 +81,17 @@ resolved, on the first ordinary command.
   accepted lines are then created through `$create-hook`, `$create-rule` and
   `$create-agent`, so no creation protocol is replayed. The last lines of
   `init` point at it, and only when the `creator` pack was installed.
+- **The meta-skills check the current guidance before settling an artifact.**
+  What a skill, a hook or a sub-agent is good for — and the fields it supports
+  — moves with the harnesses and the models that run them, and a pack shipped
+  by npm cannot move at that rate. `$create-skill`, `$create-hook`,
+  `$create-agent` and `$propose-setup` now have the agent consult the primary
+  sources first, whatever the medium: what the people who build that harness or
+  that model publish themselves — documentation, talks and recorded sessions,
+  papers and slide decks — never a third party's paraphrase of one. What was
+  consulted is recorded with its date, and an offline run says so instead of
+  guessing. The CLI itself still opens no connection: `check` and `doctor` stay
+  offline by design and by test.
 - **`agentsdir update` exists.** The lock has always separated the content the
   CLI installed (`sourceType: "agentsdir"`) from the content vendored from
   elsewhere, so that an upgrade could replace the first without touching the
@@ -120,6 +131,21 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **`update` now installs content a pack gained after you installed it.** It
+  walked `skills-lock.json` and nothing else, so an artifact the pack did not
+  carry at install time was named by no entry and was never installed: a
+  repository stayed on the meta-skills of the version it first ran `pack add`
+  with, upgrade after upgrade, with no command able to bring it the new ones.
+  Content a declared pack gained is now created and locked like any other
+  upgrade, in the same plan — and a folder of that name the repository already
+  owns is left untouched, exactly as `pack add` refuses to collide with one.
+- **`skills-lock.json` has one rendering again.** `init` seeded a sorted lock
+  while `pack add` appended to the `skills` table in install order (it already
+  sorted `files`, which is what made the asymmetry easy to miss). Two
+  repositories in the same declared state therefore held different bytes, in a
+  generated file the fingerprints and `check` rest on. Every writer now goes
+  through one renderer, and a lock an older CLI left in insertion order is
+  normalised by the next `sync`.
 - **Copy mode no longer hides a skill's or a sub-agent's frontmatter.** The
   generated header was written ahead of the file, so a projected `SKILL.md` or
   sub-agent no longer opened on its YAML frontmatter — and a harness only parses

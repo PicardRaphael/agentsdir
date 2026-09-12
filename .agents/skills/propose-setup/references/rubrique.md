@@ -21,8 +21,9 @@ others belong to the critique pass (step 4).
   hook or a harness deny rule already enforces.
 - Nothing that duplicates an existing rule, hook or sub-agent: the
   proposal completes what is installed and names what is already covered.
-- Hooks first, then rules, then sub-agents — the hook is the part a repo
-  cannot obtain otherwise.
+- No kind ranked above another: the mix follows what this repo and the
+  request call for, and each element says what the other two kinds would
+  not have covered.
 - Few and founded: a proposal accepted without being read is a proposal
   that will be ignored.
 - One verdict per line — accept, refuse or amend — and nothing written

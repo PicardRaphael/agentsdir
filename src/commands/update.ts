@@ -4,7 +4,7 @@ import { defineCommand } from "citty";
 import * as prompts from "@clack/prompts";
 import { unifiedDiff } from "../core/diff.js";
 import { asUserFacingError, CliError } from "../core/errors.js";
-import { writeFileAtomic } from "../core/fs-utils.js";
+import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
@@ -30,8 +30,11 @@ import {
   agentsdirFileLockEntry,
   agentsdirLockEntry,
   getPackContent,
+  isLockableFile,
+  lockTable,
   packInstallFiles,
   packSkillHash,
+  renderLock,
   type PackFile,
 } from "../packs/index.js";
 import { isInteractive } from "./add-common.js";
@@ -332,20 +335,25 @@ async function collectInstalled(
       }
     }
   }
-  let raw: string;
+  let raw: string | undefined;
   try {
     raw = await readFile(join(root, "skills-lock.json"), "utf8");
   } catch {
-    return []; // no lock: nothing was ever installed under our name
+    // no lock: nothing was ever installed under our name — but a pack this
+    // repository declares may still have gained content since, and that is
+    // collected below from the renders, not from the lock
+    raw = undefined;
   }
-  let data: unknown;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new CliError(
-      "skills-lock.json is not valid JSON — restore it from git history.",
-      EXIT_CODES.driftOrInvariant,
-    );
+  let data: unknown = {};
+  if (raw !== undefined) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new CliError(
+        "skills-lock.json is not valid JSON — restore it from git history.",
+        EXIT_CODES.driftOrInvariant,
+      );
+    }
   }
   const installed: Installed[] = [];
   for (const [name, entry, declined] of agentsdirEntries(data, "skills")) {
@@ -421,9 +429,70 @@ async function collectInstalled(
       lock: { table: "files", key: path },
     });
   }
+  // Content a declared pack gained since this repository installed it. The
+  // loops above read the lock to know what may be replaced, so an artifact the
+  // pack did not carry at install time was named by nothing and was never
+  // installed: a repository stayed on the meta-skills of the version it first
+  // ran `pack add` with, and no command ever brought it the new ones.
+  //
+  // An addition is modelled as an entry with nothing locked and nothing on
+  // disk. It then takes the intact path above — created, then locked — in the
+  // same plan as every other upgrade, with no second write path to keep true.
+  for (const [name, files] of [...bySkill].sort(byKey)) {
+    if (!NAME_SPEC.test(name) || name in lockTable(data, "skills")) {
+      continue;
+    }
+    if (await entryExists(join(root, ".agents", "skills", name))) {
+      // a folder we never installed sits there: `pack add` refuses to collide
+      // with one, and an upgrade has even less business overwriting it
+      continue;
+    }
+    installed.push({
+      path: `.agents/skills/${name}`,
+      locked: NOTHING_INSTALLED,
+      actual: NOTHING_INSTALLED,
+      upstream: packSkillHash(files, name),
+      declined: undefined,
+      render: new Map(files.map((file) => [file.path, file.content])),
+      local: new Map(),
+      onDisk: [],
+      lock: { table: "skills", key: name },
+    });
+  }
+  for (const [path, content] of [...byFile].sort(byKey)) {
+    if (!isLockableFile(path) || path in lockTable(data, "files")) {
+      continue;
+    }
+    if (await entryExists(join(root, ...path.split("/")))) {
+      continue; // kept as the repo had it at install (`keepExisting`), or the
+      // user's own file — either way none of ours to fingerprint
+    }
+    installed.push({
+      path,
+      locked: NOTHING_INSTALLED,
+      actual: NOTHING_INSTALLED,
+      upstream: hashFileContent(Buffer.from(content, "utf8")),
+      declined: undefined,
+      render: new Map([[path, content]]),
+      local: new Map(),
+      onDisk: [],
+      lock: { table: "files", key: path },
+    });
+  }
   return installed.sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
+}
+
+/**
+ * The fingerprint of content that is neither locked nor on disk. It equals
+ * `actual`, so an addition takes the intact branch, and it can never equal a
+ * real sha256, so the branch always sees something to install.
+ */
+const NOTHING_INSTALLED = "";
+
+function byKey(a: [string, unknown], b: [string, unknown]): number {
+  return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
 }
 
 /** `[key, computedHash, declinedHash]` of the `agentsdir` entries of a table. */
@@ -521,10 +590,21 @@ async function planLock(
   if (upgrades.length === 0 && acknowledged.length === 0) {
     return undefined;
   }
-  const raw = await readFile(join(root, "skills-lock.json"), "utf8");
-  const data = JSON.parse(raw) as Record<string, unknown>;
+  let raw: string | undefined;
+  try {
+    raw = await readFile(join(root, "skills-lock.json"), "utf8");
+  } catch {
+    raw = undefined; // first content this CLI installs here gets a fresh lock
+  }
+  const data =
+    raw === undefined
+      ? ({ version: 1, skills: {} } as Record<string, unknown>)
+      : (JSON.parse(raw) as Record<string, unknown>);
   for (const entry of upgrades) {
-    const table = data[entry.lock.table] as Record<string, unknown>;
+    // the table may be absent when the entry is an addition: a repo that
+    // tracked no file outside the skills has no `files` table at all
+    const table = lockTable(data, entry.lock.table);
+    data[entry.lock.table] = table;
     // a fresh entry, which also drops any `declinedHash` the refusal left
     table[entry.lock.key] =
       entry.lock.table === "skills"
@@ -542,7 +622,9 @@ async function planLock(
     const existing = (table[entry.lock.key] ?? {}) as Record<string, unknown>;
     table[entry.lock.key] = { ...existing, declinedHash: entry.upstream };
   }
-  const rendered = `${JSON.stringify(data, null, 2)}\n`;
+  // through renderLock like every other writer, so the bytes do not depend on
+  // whether this lock was seeded by `init` or grown by `pack add`
+  const rendered = renderLock(data);
   return rendered === raw ? undefined : rendered;
 }
 

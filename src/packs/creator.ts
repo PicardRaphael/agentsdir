@@ -55,6 +55,37 @@ export function creatorPack(): PackContent {
 export const FILTER_QUESTION =
   "if this line is deleted, will the agent make a mistake?";
 
+/**
+ * What a hook, a skill or a sub-agent is good for moves with the harnesses and
+ * the models that run them, and a pack shipped by npm cannot move at that rate.
+ * So the check happens at creation time, by the agent — never by the CLI, which
+ * stays offline by design (`doctor` opens no connection, and a test proves it).
+ *
+ * The discipline is the one this repo settled for itself: PRIMARY sources only,
+ * each recorded with what was consulted and when. The rejected path was active
+ * watch on second-hand opinion — a verification run on 2026-08-30 found the
+ * motivating claim half wrong once traced back to the vendor's own pages.
+ */
+function currentPracticeBullets(artifact: string): string[] {
+  return [
+    `- Check the current guidance before settling the ${artifact}. Read the`,
+    "  official documentation of the harnesses this repo enables (they are",
+    "  listed in `.agents.toml`) and of the model that will run it: what this",
+    "  kind of artifact is good for, and the fields it supports, move with",
+    "  them.",
+    "- PRIMARY sources only, whatever the medium: what the people who build",
+    "  that harness or that model publish themselves — their documentation,",
+    "  their talks and recorded sessions, their papers and slide decks. Never",
+    "  a third party's paraphrase of one.",
+    "- Note what you consulted and the date you consulted it, and say which of",
+    "  your choices it changed. An undated claim is an opinion, and the repo",
+    "  has enough of those already.",
+    "- No network access, or nothing found? Say so plainly and proceed on what",
+    "  the repo proves. A silent guess dressed as current practice is the one",
+    "  outcome worse than not looking.",
+  ];
+}
+
 interface MetaSkill {
   name: string;
   skillMd: string;
@@ -113,6 +144,7 @@ function createSkillMeta(): MetaSkill {
     "  similar skill exists, propose improving it instead of duplicating it.",
     "- Note the project's terminology and commands — the new skill must reuse",
     "  them, not invent parallel vocabulary.",
+    ...currentPracticeBullets("skill"),
     "",
     "## 2. Targeted interview",
     "",
@@ -240,6 +272,7 @@ function createHookMeta(): MetaSkill {
     "- Read the existing scripts in `.agents/hooks/` and the registrations in",
     "  .claude/settings.json, .codex/hooks.json and .cursor/hooks.json — never",
     "  duplicate an existing hook; extend or replace it consciously.",
+    ...currentPracticeBullets("hook"),
     "",
     "## 2. Targeted interview — routing questions first",
     "",
@@ -472,6 +505,7 @@ function createAgentMeta(): MetaSkill {
     "- Read `.agents/agents/` first: an overlapping agent is improved, never",
     "  duplicated. Keep the cumulated descriptions short — they share one",
     "  context budget in the parent.",
+    ...currentPracticeBullets("sub-agent"),
     "",
     "## 2. Targeted interview",
     "",
@@ -596,6 +630,7 @@ function proposeSetupMeta(): MetaSkill {
     "  when it is an inference from the stack conventions rather than something",
     "  this repo states. Never propose an element resting on `assumed` facts",
     "  alone: turn it into a question for step 2 instead.",
+    ...currentPracticeBullets("proposal"),
     "",
     "## 2. Targeted interview",
     "",
@@ -612,9 +647,11 @@ function proposeSetupMeta(): MetaSkill {
     "  hook; advisory knowledge that must be read in context → rule; bulky",
     "  isolable work → sub-agent. An on-demand workflow is a skill, and skills",
     "  are out of scope here — mention $create-skill and move on.",
-    "- Propose hooks first, rules second, sub-agents last. A portable hook",
-    "  registered on every harness is what a repo cannot obtain any other way;",
-    "  a rule or a sub-agent is a markdown file anyone can write by hand.",
+    "- No kind outranks another. A hook, a rule and a sub-agent each cover what",
+    "  the other two cannot, so the right mix is the one THIS repo and the",
+    "  user's request call for — the three together, one of them, or none at",
+    "  all. Rank the proposal by the strength of the evidence, never by the",
+    "  kind of artifact.",
     "- EXCLUDE what a tool of this repo already enforces: a linter, a formatter,",
     "  a type checker, a CI step, an existing hook, or a harness deny rule.",
     "  A proposal never sends an agent to do a linter's job, and never writes a",
@@ -683,8 +720,9 @@ function proposeSetupMeta(): MetaSkill {
     "  hook or a harness deny rule already enforces.",
     "- Nothing that duplicates an existing rule, hook or sub-agent: the",
     "  proposal completes what is installed and names what is already covered.",
-    "- Hooks first, then rules, then sub-agents — the hook is the part a repo",
-    "  cannot obtain otherwise.",
+    "- No kind ranked above another: the mix follows what this repo and the",
+    "  request call for, and each element says what the other two kinds would",
+    "  not have covered.",
     "- Few and founded: a proposal accepted without being read is a proposal",
     "  that will be ignored.",
     "- One verdict per line — accept, refuse or amend — and nothing written",

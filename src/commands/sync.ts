@@ -16,7 +16,7 @@ import {
   CLAUDE_SETTINGS_FILE,
   readSettings,
 } from "../core/claude-permissions.js";
-import { packScriptPaths } from "../packs/index.js";
+import { packScriptPaths, renderLock } from "../packs/index.js";
 import {
   MANIFEST_FILE,
   parseMode,
@@ -527,7 +527,10 @@ async function planLock(
       skillOverlay,
     );
   }
-  const rendered = `${JSON.stringify(data, null, 2)}\n`;
+  // through renderLock like every other writer: a lock whose tables were left
+  // in insertion order by an older CLI is normalised here rather than kept as
+  // a second rendering of one state
+  const rendered = renderLock(data as Record<string, unknown>);
   if (rendered === raw) {
     return { path: "skills-lock.json", action: "ok" };
   }

@@ -25,6 +25,21 @@ the right tool. Follow the six steps in order.
 - Read the existing scripts in `.agents/hooks/` and the registrations in
   .claude/settings.json, .codex/hooks.json and .cursor/hooks.json — never
   duplicate an existing hook; extend or replace it consciously.
+- Check the current guidance before settling the hook. Read the
+  official documentation of the harnesses this repo enables (they are
+  listed in `.agents.toml`) and of the model that will run it: what this
+  kind of artifact is good for, and the fields it supports, move with
+  them.
+- PRIMARY sources only, whatever the medium: what the people who build
+  that harness or that model publish themselves — their documentation,
+  their talks and recorded sessions, their papers and slide decks. Never
+  a third party's paraphrase of one.
+- Note what you consulted and the date you consulted it, and say which of
+  your choices it changed. An undated claim is an opinion, and the repo
+  has enough of those already.
+- No network access, or nothing found? Say so plainly and proceed on what
+  the repo proves. A silent guess dressed as current practice is the one
+  outcome worse than not looking.
 
 ## 2. Targeted interview — routing questions first
 

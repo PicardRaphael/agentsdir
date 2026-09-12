@@ -106,6 +106,43 @@ describe("15 - pack creator", () => {
     }
   });
 
+  it("Given the meta-skills that shape a vendor-defined artifact, When inspected, Then each has the agent check the primary sources, dated, before settling it", async () => {
+    const dir = await repoWithCreator();
+    // what a hook, a skill or a sub-agent is good for moves with the harnesses
+    // and models that run them; a pack shipped by npm cannot move at that rate
+    for (const name of [
+      "create-skill",
+      "create-hook",
+      "create-agent",
+      "propose-setup",
+    ]) {
+      const body = await metaSkillBody(dir, name);
+      expect(body, `${name}: no current-guidance check`).toContain(
+        "Check the current guidance before settling the",
+      );
+      expect(body).toContain("official documentation of the harnesses");
+      expect(body).toContain("PRIMARY sources only");
+      // a talk or a slide deck published by the people who build the thing is
+      // a primary source too — the medium is not what makes it one
+      expect(body).toContain("whatever the medium");
+      expect(body).toContain("their talks and recorded sessions");
+      expect(body).toContain("papers and slide decks");
+      expect(body).toContain("Never");
+      expect(body).toContain("a third party's paraphrase");
+      expect(body).toContain("the date you consulted");
+      // and the honest fallback: an offline run says so instead of guessing
+      expect(body).toContain("No network access");
+      expect(body).toContain("proceed on what");
+    }
+    // the CLI itself stays offline: the check belongs to the agent, never to
+    // a command (task 29 settled that, and doctor is tested for it)
+    const creatorSource = await readFile(
+      new URL("../../packs/creator.ts", import.meta.url),
+      "utf8",
+    );
+    expect(creatorSource).not.toMatch(/fetch\(|node:https?|undici/);
+  });
+
   it("Given each rubric, When inspected, Then mechanical ▣ criteria are distinguished from critique criteria", async () => {
     const dir = await repoWithCreator();
     for (const name of META_SKILLS) {

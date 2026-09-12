@@ -123,30 +123,69 @@ export function isLockableFile(path: string): boolean {
   );
 }
 
+/**
+ * The single way a `skills-lock.json` is rendered. Every writer goes through
+ * it, so two repositories in the same declared state hold the same bytes.
+ *
+ * They did not: `init` seeded a sorted lock while `pack add` appended to the
+ * `skills` table in pack order (it already sorted `files`, which is what made
+ * the asymmetry easy to miss). A repository that installed `creator` at `init`
+ * and one that added it afterwards therefore differed by key order alone —
+ * a generated file with two renderings, against the byte-for-byte determinism
+ * the fingerprints and `check` are built on.
+ */
+export function renderLock(data: Record<string, unknown>): string {
+  const rendered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key !== "skills" && key !== "files") {
+      rendered[key] = value;
+    }
+  }
+  rendered["skills"] = sortedByKey(lockTable(data, "skills"));
+  const files = lockTable(data, "files");
+  // an absent `files` table is valid and means "nothing tracked outside the
+  // skills" — writing it as `{}` would be a second rendering of one state
+  if (Object.keys(files).length > 0) {
+    rendered["files"] = sortedByKey(files);
+  }
+  return `${JSON.stringify(rendered, null, 2)}\n`;
+}
+
+/** One table of a parsed lock, or an empty one when it is absent or malformed. */
+export function lockTable(
+  data: unknown,
+  table: "skills" | "files",
+): Record<string, unknown> {
+  const raw = (data as Record<string, unknown> | null)?.[table];
+  return typeof raw === "object" && raw !== null && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+}
+
+function sortedByKey(table: Record<string, unknown>): Record<string, unknown> {
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(table).sort()) {
+    sorted[key] = table[key];
+  }
+  return sorted;
+}
+
 /** Fresh skills-lock.json holding only the given agentsdir entries (init). */
 export function renderLockSeed(
   entries: { skill: string; hash: string }[],
   fileEntries: { path: string; hash: string }[] = [],
 ): string {
   const skills: Record<string, unknown> = {};
-  for (const entry of [...entries].sort((a, b) =>
-    a.skill < b.skill ? -1 : a.skill > b.skill ? 1 : 0,
-  )) {
+  for (const entry of entries) {
     skills[entry.skill] = agentsdirLockEntry(entry.skill, entry.hash);
   }
   const files: Record<string, unknown> = {};
-  for (const entry of [...fileEntries].sort((a, b) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-  )) {
+  for (const entry of fileEntries) {
     files[entry.path] = agentsdirFileLockEntry(entry.hash);
   }
-  // an absent `files` table is valid and means "nothing tracked outside the
-  // skills": a repo installing no pack rule keeps the lock it always had
-  const data =
-    Object.keys(files).length === 0
-      ? { version: 1, skills }
-      : { version: 1, skills, files };
-  return `${JSON.stringify(data, null, 2)}\n`;
+  // renderLock sorts both tables and drops an empty `files` — the absent table
+  // is the documented "nothing tracked outside the skills"
+  return renderLock({ version: 1, skills, files });
 }
 
 /** Authored files plus the derived Codex artifacts of the pack's skills. */
