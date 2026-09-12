@@ -66,6 +66,31 @@ resolved, on the first ordinary command.
 
 ### Added
 
+- **A repository can now find out whether its configuration is of any use.**
+  `check` always answered "has this drifted from its source?"; nothing answered
+  "does anyone use this?" — a skill nobody invokes, a sub-agent never delegated
+  to, a rule whose scope never meets the files a session touches. The new
+  `usage` pack (optional, never installed by default) registers collectors on
+  Claude Code, Codex and Cursor at once, which no comparable tool can do
+  because no other tool installs multi-harness hooks, and writes a local
+  journal of what actually happened: skills invoked, sub-agents delegated to,
+  tools used, repo-relative paths touched.
+
+  Privacy is the constraint that shaped it, because this installs into
+  somebody else's repository. No prompt, no file content and no command line
+  ever reaches the journal — the collector reads an allow-list of payload keys
+  rather than the payload. A path that resolves outside the repository is
+  dropped, and `[usage].exclude` keeps whole subtrees out with the globs of
+  `add rule --paths`, because `src/clients/acme/contract.ts` names a client all
+  by itself. The journal lives under `.agents/output/`, which git ignores, and
+  `check` now **fails** if git tracks it anyway: the real danger was never the
+  journal, it was the journal committed by mistake. Collection suspends with
+  `[usage].enabled = false` without uninstalling anything, files rotate daily
+  and are pruned after 30 days at session boundaries, and `pack remove usage`
+  takes the scripts, the registrations and the journal with it. Measured cost:
+  7.6 ms per tool call on top of the Node process the harness starts anyway.
+  The format is the contract of the analysis stage to come, specified in
+  `docs/conventions.md` §9.
 - **`init` no longer leaves the user in front of an empty structure.** The
   architecture landed installed and blank: `.agents/rules/` held the generic
   rules only, `.agents/hooks/` and `.agents/agents/` held nothing, and nothing
@@ -139,6 +164,15 @@ resolved, on the first ordinary command.
   Content a declared pack gained is now created and locked like any other
   upgrade, in the same plan — and a folder of that name the repository already
   owns is left untouched, exactly as `pack add` refuses to collide with one.
+- **`pack add` registers the hooks a pack ships.** It planned no registration
+  at all — true only because no pack had ever shipped one. The `usage` pack
+  does, and its collectors would have sat on disk, installed and running on no
+  harness, until the next `sync`. Registration and deregistration now happen
+  in the same plan as the install and the removal, dry run included. In the
+  same pass, pack hook scripts became lockable (`update` upgrades them,
+  `check` reports a local edit) and stopped being announced in the Claude Code
+  Bash allowlist — the harness runs them itself, outside the Bash tool, which
+  is what the code comment had claimed all along.
 - **`skills-lock.json` has one rendering again.** `init` seeded a sorted lock
   while `pack add` appended to the `skills` table in install order (it already
   sorted `files`, which is what made the asymmetry easy to miss). Two

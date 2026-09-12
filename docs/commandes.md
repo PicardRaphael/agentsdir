@@ -582,6 +582,12 @@ Mechanics common to all packs:
   `$setup-context`, `$propose-setup` — see
   [creation-assistee.md](creation-assistee.md)), each locked with
   `sourceType: "agentsdir"` for `update` protection.
+- The `usage` pack ships hook scripts, so `pack add` registers them on every
+  enabled harness in the same run — no `sync` in between — and `pack remove`
+  deregisters them and deletes the journal under `.agents/output/usage/`, which
+  the install never wrote and `check` never fingerprints. It seeds `[usage]` in
+  the manifest (`enabled`, `exclude`); the journal format is specified in
+  [conventions.md](conventions.md#9-the-usage-journal).
 - The `worktrees` pack seeds an empty `[worktrees]` section in the manifest
   (`setup`, `cleanup` — the extension points of the lifecycle scripts);
   `pack remove` removes it only if it has stayed empty, the commands declared

@@ -4,6 +4,7 @@ import { hashFileContent, hashSkillFiles } from "../core/skill-hash.js";
 import { CLI_VERSION } from "../version.js";
 import { changelogPack } from "./changelog.js";
 import { creatorPack } from "./creator.js";
+import { usagePack } from "./usage.js";
 import { verificationPack } from "./verification.js";
 import { worktreesPack } from "./worktrees.js";
 
@@ -29,6 +30,14 @@ export interface PackContent {
   rules: string[];
   /** Paths kept as-is when they already exist in the target repo (never a collision). */
   keepExisting: string[];
+  /**
+   * Directories the pack's own scripts fill at run time — a journal, a cache.
+   * They are not installed files: the install never writes them, `check` never
+   * fingerprints them, and their presence is not a "local modification". They
+   * are deleted by `pack remove`, which would otherwise leave behind exactly
+   * the data the user uninstalled the pack to be rid of.
+   */
+  runtimeState?: string[];
 }
 
 /**
@@ -40,6 +49,7 @@ const PACK_REGISTRY = {
   verification: verificationPack,
   changelog: changelogPack,
   worktrees: worktreesPack,
+  usage: usagePack,
 } as const satisfies Record<string, () => PackContent>;
 
 /** Packs with installable content in this version. */
@@ -119,7 +129,13 @@ export function packFileLockEntries(
  */
 export function isLockableFile(path: string): boolean {
   return (
-    path.startsWith(".agents/rules/") || path.startsWith(".agents/scripts/")
+    path.startsWith(".agents/rules/") ||
+    path.startsWith(".agents/scripts/") ||
+    // hook scripts a pack installs. Without this they were written and never
+    // locked: `update` would not upgrade them, and `check` would not report a
+    // local edit — the two promises the lock exists to keep. A hook the user
+    // created with `add hook` belongs to nobody here and is never a pack file.
+    path.startsWith(".agents/hooks/")
   );
 }
 
@@ -205,7 +221,15 @@ export function packScriptPaths(packs: readonly string[]): string[] {
       continue;
     }
     for (const file of pack.files) {
-      if (file.path.endsWith(".mjs")) {
+      // `.agents/hooks/` is excluded on purpose: the harness runs those itself,
+      // outside the Bash tool, so no permission rule applies to them. The
+      // comment above said so back when no pack shipped a hook; the `usage`
+      // pack does, and without this filter its collectors would be announced
+      // to the user as commands the agent may run.
+      if (
+        file.path.endsWith(".mjs") &&
+        !file.path.startsWith(".agents/hooks/")
+      ) {
         paths.push(file.path);
       }
     }

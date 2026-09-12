@@ -13,6 +13,12 @@ import {
   renderManifest,
   type Manifest,
 } from "../core/manifest.js";
+import {
+  HOOKS_DIR,
+  planHookRegistrations,
+  type HookRegistryPlan,
+} from "../core/hook-registries.js";
+import { ensureNoLinkedParent } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import {
@@ -125,6 +131,27 @@ export async function runPackAdd(
   if (lock !== undefined) {
     changes.push({ path: "skills-lock.json", action: lock.action });
   }
+  // A pack that ships hooks must have them registered by the install itself.
+  // Until one did, `pack add` planned no registration at all, and the scripts
+  // would have sat on disk until the next `sync` — installed, and running on
+  // no harness. The overlay carries the scripts so a dry run plans exactly
+  // what the real run writes.
+  const registries = await planHookRegistrations(
+    root,
+    manifest.harness.enabled,
+    Object.fromEntries(
+      toWrite
+        .filter((file) => file.path.startsWith(`${HOOKS_DIR}/`))
+        .map((file) => [file.path, file.content]),
+    ),
+  );
+  for (const plan of registries) {
+    if (plan.action !== "ok") {
+      // the plan's own action: a registry created from scratch must not be
+      // reported as updated, the way `add hook` already reports it
+      changes.push({ path: plan.path, action: plan.action });
+    }
+  }
   const nextManifest: Manifest = {
     ...manifest,
     packs: { installed: [...manifest.packs.installed, name] },
@@ -147,6 +174,10 @@ export async function runPackAdd(
     if (lock !== undefined && lock.content !== undefined) {
       await writeFile(join(root, "skills-lock.json"), lock.content, "utf8");
     }
+    // before syncClaudePermissions below, which reads .claude/settings.json
+    // back from disk: the registrations land first, the allowlist merges onto
+    // them, and neither write clobbers the other
+    await applyRegistries(root, registries);
     await writeFile(
       join(root, MANIFEST_FILE),
       renderManifest(nextManifest),
@@ -243,6 +274,34 @@ export async function runPackRemove(
   if (lock !== undefined) {
     changes.push({ path: "skills-lock.json", action: lock.action });
   }
+  // deregister the pack's hooks in the same plan as their removal: `omit`
+  // hides the scripts that are about to disappear, so a dry run reports the
+  // registries a real run will rewrite
+  const registries = await planHookRegistrations(
+    root,
+    manifest.harness.enabled,
+    {},
+    files
+      .map((file) => file.path)
+      .filter((path) => path.startsWith(`${HOOKS_DIR}/`)),
+  );
+  for (const plan of registries) {
+    if (plan.action !== "ok") {
+      // the plan's own action: a registry created from scratch must not be
+      // reported as updated, the way `add hook` already reports it
+      changes.push({ path: plan.path, action: plan.action });
+    }
+  }
+  // run-time state the pack's own scripts wrote. It was never installed, so it
+  // is not a "local modification" and never triggers the refusal above — but
+  // leaving a journal behind after an uninstall would keep exactly the data
+  // the user removed the pack to be rid of.
+  const runtimeState = (pack.runtimeState ?? []).filter(() => true);
+  for (const path of runtimeState) {
+    if (await entryExists(join(root, ...path.split("/")))) {
+      changes.push({ path, action: "removed" });
+    }
+  }
   // copy mode: the fingerprints of the manifest prove which .claude copies
   // are ours — delete them and drop their entries in the same write
   const hashes = { ...manifest.projections.hashes };
@@ -297,6 +356,14 @@ export async function runPackRemove(
     for (const skill of pack.skills) {
       await removeIfNoFilesLeft(join(root, ".claude", "skills", skill));
     }
+    for (const path of runtimeState) {
+      await rm(resolveInsideRepo(root, path), { recursive: true, force: true });
+    }
+    // the hooks are gone from disk now, so the registries can be rewritten
+    await applyRegistries(root, registries);
+    // and the lib/ folder the collectors imported, once nothing is left in it
+    await removeIfNoFilesLeft(join(root, ".agents", "hooks", "lib"));
+    await removeIfNoFilesLeft(join(root, ".agents", "hooks"));
     if (agentsMd !== undefined) {
       await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");
     }
@@ -558,5 +625,26 @@ async function removeIfNoFilesLeft(dir: string): Promise<void> {
     }
   } catch {
     // absent or not a directory: nothing to clean
+  }
+}
+
+/**
+ * Writes the registry files a plan changed. Same shape as `add hook`'s write
+ * loop: a plan marked `ok` has nothing to say, and `.claude/settings.json` is
+ * never reached through a link — a `.claude` symlink would carry the write
+ * into the user's global Claude Code settings.
+ */
+async function applyRegistries(
+  root: string,
+  registries: HookRegistryPlan[],
+): Promise<void> {
+  for (const plan of registries) {
+    if (plan.action === "ok" || plan.content === undefined) {
+      continue;
+    }
+    await ensureNoLinkedParent(root, plan.path);
+    const abs = join(root, ...plan.path.split("/"));
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, plan.content, "utf8");
   }
 }

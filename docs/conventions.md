@@ -208,4 +208,62 @@ Task conventions (`tasks/`): name `NN-kebab-title.md` (two-digit number); sectio
 
 Excluding `.agents/memory/` corrects a flaw observed in NowStack, where the memory file was versioned with a placeholder value meant to be replaced by personal data — which the next commit published into the history.
 
+## 9. The usage journal
+
+The `usage` pack observes what the configuration is actually used for. This section is its **contract**: the collection stage writes exactly what follows, and the analysis stage reads exactly that and nothing more.
+
+### Location and rotation
+
+`.agents/output/usage/usage-YYYY-MM-DD.jsonl` — one JSON object per line, one file per day. Files older than 30 days are deleted when a session starts or ends; nothing is pruned on the tool path, which stays a single append.
+
+The directory sits under `.agents/output/`, which the managed `.gitignore` block excludes (§8). `check` **fails** with `usage-journal-tracked` if git tracks it anyway: an ignore rule is a convention, and the journal names the paths a session touched.
+
+### Line format
+
+| Field | Type | Content |
+| --- | --- | --- |
+| `ts` | string | ISO 8601 timestamp, UTC |
+| `event` | string | `PreToolUse`, `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop` |
+| `tool` | string \| null | Tool name as the harness spells it (Cursor uses its own vocabulary) |
+| `path` | string \| null | Repo-relative POSIX path, or null |
+| `skill` | string \| null | Skill invoked, or null |
+| `agent` | string \| null | Sub-agent invoked, or null |
+| `session` | string \| null | Opaque session key: first 12 hex of sha256 of the harness session id |
+
+Every field is always present; an unknown value is `null`, never an omitted key.
+
+`ts` is UTC, and so is the day in the file name: a session running at 01:00 in Paris writes into the previous day's file. The two agree, so a reader never has to reconcile them.
+
+**Not yet confirmed against a live harness**: the payload keys the `SubagentStart` and `SubagentStop` events carry. The collector accepts `subagent_type`, `agent_type`, `agent_name` and `agentName`, at the root of the payload or inside `tool_input` — the shapes observed on 2026-09-12. A real session is what settles it, which is what the manual tier exists for (`e2e/validation-agent/`).
+
+```json
+{"ts":"2026-09-12T10:11:12.000Z","event":"PreToolUse","tool":"Read","path":"src/api/handler.ts","skill":null,"agent":null,"session":"9f2c1ab40d77"}
+```
+
+### What never reaches the journal
+
+Prompts, file contents, command lines, diffs, absolute paths, and the raw session identifier. The collector reads an **allow-list** of keys out of `tool_input` (`file_path`, `path`, `notebook_path`, `filePath`, `skill`, `skill_name`, `skillName`, `subagent_type`, `agent_type`, `agent_name`, `agentName`) and never the object as a whole — reading it whole is what would leak `command`, `content` and `old_string`.
+
+A path that resolves outside the repository, or matches a glob of `[usage].exclude`, is recorded as `null`: the event still counts, the path does not.
+
+### Configuration
+
+`[usage]` in `.agents.toml`, read by the collectors themselves with a minimal reader (a hook parses no TOML, so both values stay on one line each):
+
+```toml
+[usage]
+enabled = true
+exclude = ["src/clients/**", "private/**"]
+```
+
+`enabled = false` suspends the collection without uninstalling anything. An absent section means collection is on — installing the pack is what asked for it. `exclude` takes the globs of `agentsdir add rule --paths`.
+
+### Cost
+
+Measured on 2026-09-12, Windows 11, Node 22, median of 40 invocations: **41.8 ms** per tool call for the collector against **34.1 ms** for an empty Node process — a **net overhead of 7.6 ms**. The dominant cost is the process start, which the harness pays for any hook; the collector itself is one manifest read and one line appended.
+
+### What the collection does *not* do
+
+It produces no report and passes no judgement — that is the analysis stage. And **rules are not observable**: a rule is injected into the context, and no hook can say whether an agent read it. What the journal supports is *relevance*, not reading: a rule declares its scope (`--paths "src/api/**"`), the journal records that the session touched `src/api/x.ts`, and the analysis draws the conclusion.
+
 See also: [architecture.md](architecture.md) (engine and projections), [commandes.md](commandes.md) (command specification), [roadmap.md](roadmap.md) (milestones).

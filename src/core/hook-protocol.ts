@@ -27,6 +27,17 @@ import {
 export const HOOK_PROBE_TIMEOUT_MS = 5000;
 
 /**
+ * The `session_id` every probe payload carries. `check` invokes each hook
+ * script for real, so a script with a side effect — the usage pack writes a
+ * journal line — would act on every check, in CI included. The probe adds no
+ * environment variable on purpose (see the note above `invoke`), so the signal
+ * travels in the payload instead: a script that must stay inert under `check`
+ * tests this value and exits. Exported so the scripts that filter on it and
+ * the payload that carries it cannot drift apart.
+ */
+export const HOOK_PROBE_SESSION_ID = "agentsdir-check";
+
+/**
  * Beyond this, the answer is already a protocol violation (the contract is an
  * empty stdout or one JSON object) — reading further would only grow the cost.
  */
@@ -103,7 +114,7 @@ export async function probeHookScripts(
  */
 export function sampleHookPayload(event: HookEventSpec): string {
   const payload: Record<string, unknown> = {
-    session_id: "agentsdir-check",
+    session_id: HOOK_PROBE_SESSION_ID,
     transcript_path: "",
     cwd: ".",
     hook_event_name: event.name,

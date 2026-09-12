@@ -397,3 +397,29 @@ function errorCode(error: unknown): string {
   }
   return "unknown";
 }
+
+/**
+ * Paths git tracks under `prefix`, repo-relative. Used by `check` to catch the
+ * one leak a convention cannot prevent: the usage journal committed by
+ * mistake. Outside a git repository there is nothing to track, and an empty
+ * list is the honest answer.
+ */
+export async function listTrackedUnder(
+  dir: string,
+  prefix: string,
+): Promise<string[]> {
+  if (!(await isGitRepo(dir))) {
+    return [];
+  }
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", dir, "ls-files", "-z", "--", prefix],
+      { maxBuffer: GIT_LS_FILES_MAX_BUFFER },
+    );
+    return stdout.split(" ").filter((entry) => entry !== "");
+  } catch {
+    // a git that refuses to answer proves nothing was committed either
+    return [];
+  }
+}

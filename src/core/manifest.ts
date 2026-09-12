@@ -30,6 +30,13 @@ export interface Manifest {
    * worktree-setup/-cleanup. Optional — seeded empty by `pack add worktrees`.
    */
   worktrees?: { setup: string[]; cleanup: string[] };
+  /**
+   * Extension points of the usage pack: the collection switch and the paths
+   * kept out of the journal. Optional — seeded by `pack add usage`, and read
+   * by the hook scripts themselves, which is why both values stay on one line
+   * each (the scripts carry a minimal reader, not a TOML parser).
+   */
+  usage?: { enabled: boolean; exclude: string[] };
   projections: { mode: ProjectionMode; hashes: Record<string, string> };
 }
 
@@ -103,6 +110,14 @@ export function renderManifest(manifest: Manifest): string {
           },
         }
       : {}),
+    ...(manifest.usage !== undefined
+      ? {
+          usage: {
+            enabled: manifest.usage.enabled,
+            exclude: manifest.usage.exclude,
+          },
+        }
+      : {}),
     projections,
   });
   return `${MANIFEST_HEADER}\n\n${body}`;
@@ -138,6 +153,22 @@ function validateManifest(data: unknown): Manifest {
       cleanup: optionalStringArray(table, "cleanup", "`[worktrees].cleanup`"),
     };
   }
+  let usage: { enabled: boolean; exclude: string[] } | undefined;
+  if (root["usage"] !== undefined) {
+    const table = asTable(root["usage"], "[usage]");
+    const enabled = table["enabled"];
+    if (enabled !== undefined && typeof enabled !== "boolean") {
+      throw new ManifestError(
+        "Manifest field `[usage].enabled` must be true or false.",
+      );
+    }
+    usage = {
+      // absent means on: a repo that installed the pack asked for collection,
+      // and only an explicit `false` suspends it
+      enabled: enabled ?? true,
+      exclude: optionalStringArray(table, "exclude", "`[usage].exclude`"),
+    };
+  }
   const mode = projections["mode"];
   if (mode !== "symlink" && mode !== "copy") {
     throw new ManifestError(
@@ -158,6 +189,7 @@ function validateManifest(data: unknown): Manifest {
       installed: requireStringArray(packs, "installed", "`[packs].installed`"),
     },
     ...(worktrees !== undefined ? { worktrees } : {}),
+    ...(usage !== undefined ? { usage } : {}),
     projections: {
       mode,
       hashes: readHashes(projections["hashes"]),

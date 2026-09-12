@@ -164,6 +164,13 @@ installed = ["core", "creator", "verification", "changelog", "worktrees"]
 setup = ["npm ci"]
 cleanup = []
 
+# Optional section, seeded by the usage pack: the collection switch and the
+# paths kept out of the journal. Read by the hook scripts themselves, with a
+# minimal reader — which is why both values stay on a single line each.
+[usage]
+enabled = true
+exclude = ["src/clients/**"]
+
 [projections]
 # Global mode, decided at init after a real test of the environment.
 # "symlink": relative links, git mode 120000.

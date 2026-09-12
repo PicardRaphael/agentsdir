@@ -2,7 +2,7 @@ import { pathExists } from "./fs-utils.js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
-import { detectGitSymlinks } from "./detect.js";
+import { detectGitSymlinks, listTrackedUnder } from "./detect.js";
 import { probeHookScripts, type HookProbeOptions } from "./hook-protocol.js";
 import {
   parseOpenSkillMarkdown,
@@ -25,6 +25,7 @@ import {
   hashSkillFiles,
 } from "./skill-hash.js";
 import type { Manifest } from "./manifest.js";
+import { USAGE_JOURNAL_DIR } from "./usage-journal.js";
 import { isProjectionPath, unproject, verify } from "./projections.js";
 
 export interface Violation {
@@ -66,7 +67,43 @@ export async function validateRepo(
   violations.push(...(await validateLock(root)));
   violations.push(...(await validateHookRegistries(root, manifest)));
   violations.push(...(await validateHookProtocol(root, options.hooks)));
+  violations.push(...(await validateUsageJournal(root, manifest)));
   return violations;
+}
+
+/**
+ * The usage journal must never reach git. It lives under `.agents/output/`,
+ * which the managed `.gitignore` block excludes — but a convention is not a
+ * guarantee: `git add -f`, a `.gitignore` edited by hand, or a repository that
+ * installed the pack before the block existed, and the journal is committed.
+ *
+ * That is the leak the collection design fears most. The journal holds no
+ * prompt and no file content by construction, but it does hold paths, and a
+ * path names a client. So `check` fails, like any other invariant, rather than
+ * trusting the ignore file.
+ *
+ * Only for a repository that declares the pack: reading git costs a process,
+ * and a repo without the pack has no journal to track.
+ */
+async function validateUsageJournal(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  if (!manifest.packs.installed.includes("usage")) {
+    return [];
+  }
+  const tracked = await listTrackedUnder(root, USAGE_JOURNAL_DIR);
+  if (tracked.length === 0) {
+    return [];
+  }
+  return [
+    {
+      path: USAGE_JOURNAL_DIR,
+      rule: "usage-journal-tracked",
+      message: `git tracks ${tracked.length} usage journal file(s) (${tracked.slice(0, 3).join(", ")}${tracked.length > 3 ? ", …" : ""}) — the journal records the paths a session touched and must never be committed. Run \`git rm -r --cached ${USAGE_JOURNAL_DIR}\` and commit that removal.`,
+      severity: "error",
+    },
+  ];
 }
 
 /**

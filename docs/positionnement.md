@@ -135,9 +135,13 @@ ce document : la preuve passe devant, et la mesure d'usage se scinde.
    dépôt repartait avec une structure vide ; `$propose-setup` en fait une
    proposition d'ensemble, acceptable ou refusable ligne à ligne, qui exclut ce
    qu'un linter, la CI ou un hook existant applique déjà.
-3. **Observer** — tâche 25, la collecte seule. Un rapport d'usage est vide le
-   jour de sa livraison : il faut des semaines de sessions observées. Installer
-   la collecte tôt fait mûrir les données pendant que le reste se construit.
+3. **Observer** — tâche 25, la collecte seule, **livrée le 12 septembre 2026**.
+   Le pack `usage` enregistre des hooks sur les trois harness et journalise
+   localement ce qui sert : skills invoqués, sous-agents délégués, outils et
+   chemins touchés — jamais un prompt, jamais un contenu de fichier. Un rapport
+   d'usage est vide le jour de sa livraison : il faut des semaines de sessions
+   observées, et les données mûrissent maintenant pendant que le reste se
+   construit.
 4. **Chiffrer** — tâche 28, le coût en contexte. Purement statique, livrable en
    une passe, et visible immédiatement.
 5. **Conclure** — tâche 30, l'analyse du journal, quand il y a enfin quelque

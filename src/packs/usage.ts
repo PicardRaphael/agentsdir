@@ -1,0 +1,504 @@
+import { HOOK_PROBE_SESSION_ID } from "../core/hook-protocol.js";
+import { hookMetadataLine } from "../core/hook-registries.js";
+import { USAGE_JOURNAL_DIR } from "../core/usage-journal.js";
+import type { PackContent, PackFile } from "./index.js";
+
+/**
+ * Pack `usage`, stage 1: observation, and nothing else.
+ *
+ * `check` answers "has this configuration drifted from its source?". Nothing
+ * answered "is this configuration of any use?" — a skill nobody invokes, a
+ * sub-agent never delegated to, a rule whose scope never meets the files a
+ * session touches. The hooks agentsdir already registers on three harnesses
+ * make that observable, and no comparable tool can, because no other tool
+ * installs multi-harness hooks.
+ *
+ * This pack writes a journal and stops there. It produces no report and
+ * passes no judgement: that is task 30, which consumes the format specified
+ * in `docs/conventions.md` §9.
+ *
+ * Privacy shapes every line below. This installs into somebody else's
+ * repository — private, a client's, under NDA — so the journal carries
+ * metadata only: no prompt, no file content, no command line. Paths are
+ * relative and filterable, because `src/clients/acme/contract.ts` names a
+ * client all by itself. And the journal never reaches git: the managed
+ * `.gitignore` block covers `.agents/output/`, and `check` fails if git tracks
+ * it anyway — a convention is not a guarantee.
+ */
+export function usagePack(): PackContent {
+  const files: PackFile[] = [
+    { path: `${LIB_DIR}/usage-log.mjs`, content: renderLogModule() },
+    { path: ".agents/rules/usage-journal.md", content: renderRule() },
+  ];
+  for (const hook of HOOKS) {
+    files.push({
+      path: `.agents/hooks/${hookFile(hook.event)}`,
+      content: renderHook(hook),
+    });
+  }
+  return {
+    name: "usage",
+    files,
+    skills: [],
+    rules: ["usage-journal.md"],
+    keepExisting: [],
+    runtimeState: [USAGE_JOURNAL_DIR],
+  };
+}
+
+/**
+ * The shared module lives under `.agents/hooks/lib/`, not beside the scripts:
+ * `listHookScripts` reads files at the top level of `.agents/hooks/` only, so
+ * a subdirectory is never mistaken for a hook to register or to probe.
+ */
+const LIB_DIR = ".agents/hooks/lib";
+
+/** Days a journal file survives; older ones are pruned at session boundaries. */
+const RETENTION_DAYS = 30;
+
+interface UsageHook {
+  event: string;
+  /** What this hook contributes, for its header comment. */
+  purpose: string;
+  /** Body lines, run with `payload` in scope. */
+  body: string[];
+}
+
+/**
+ * Five events, chosen for what they add rather than for what they could carry.
+ *
+ * `PostToolUse` is deliberately absent: it would double every `PreToolUse`
+ * line for one more node process per tool call, and add nothing the analysis
+ * needs. `UserPromptSubmit` is absent too — a prompt is the one payload field
+ * that always carries user content, and a skill invocation is already visible
+ * as a `PreToolUse` on the Skill tool.
+ */
+const HOOKS: readonly UsageHook[] = [
+  {
+    event: "PreToolUse",
+    purpose:
+      "the tool in use, the repo-relative path it touches, and the skill or sub-agent it invokes",
+    body: [
+      "log(payload, {",
+      '  event: "PreToolUse",',
+      "  tool: readTool(payload),",
+      "  path: readPath(payload),",
+      "  skill: readSkill(payload),",
+      "  agent: readAgent(payload),",
+      "});",
+    ],
+  },
+  {
+    event: "SubagentStart",
+    purpose: "a sub-agent actually being delegated to",
+    body: [
+      'log(payload, { event: "SubagentStart", agent: readAgent(payload) });',
+    ],
+  },
+  {
+    event: "SubagentStop",
+    purpose: "the sub-agent finishing, which bounds its span",
+    body: [
+      'log(payload, { event: "SubagentStop", agent: readAgent(payload) });',
+    ],
+  },
+  {
+    event: "SessionStart",
+    purpose: "the session opening — and the moment stale journals are pruned",
+    body: [
+      'log(payload, { event: "SessionStart" });',
+      "// rotation happens at session boundaries, never on the tool path",
+      "prune();",
+    ],
+  },
+  {
+    event: "SessionEnd",
+    purpose: "the session closing, which bounds every line between the two",
+    body: ['log(payload, { event: "SessionEnd" });', "prune();"],
+  },
+];
+
+function hookFile(event: string): string {
+  return `${event.toLowerCase()}-usage.mjs`;
+}
+
+function renderHook(hook: UsageHook): string {
+  return [
+    hookMetadataLine(hook.event, undefined),
+    "//",
+    "// Usage collection hook installed by `agentsdir pack add usage`.",
+    `// Records ${hook.purpose}.`,
+    "//",
+    "// It records metadata and nothing else: no prompt, no file content and no",
+    "// command line ever reaches the journal. See .agents/rules/usage-journal.md.",
+    "//",
+    "// Fail-open, deliberately: observation must never block the agent. Every",
+    "// path below ends on exit 0, and a failed write is swallowed.",
+    "",
+    "import {",
+    "  log,",
+    "  prune,",
+    "  readAgent,",
+    "  readPath,",
+    "  readSkill,",
+    "  readTool,",
+    '} from "./lib/usage-log.mjs";',
+    "",
+    "const payload = await readPayload();",
+    "",
+    "try {",
+    ...hook.body.map((line) => `  ${line}`),
+    "} catch {",
+    "  // never let observation break a session",
+    "}",
+    "",
+    "process.exit(0);",
+    "",
+    "async function readPayload() {",
+    '  let raw = "";',
+    "  for await (const chunk of process.stdin) {",
+    "    raw += chunk;",
+    "  }",
+    "  try {",
+    '    return raw.trim() === "" ? {} : JSON.parse(raw);',
+    "  } catch {",
+    "    return {};",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+}
+
+/**
+ * The whole logging logic, in the one module the five hooks import. Rendered
+ * as a string like every other pack file, so two runs install the same bytes
+ * and `check` can fingerprint it.
+ */
+function renderLogModule(): string {
+  const journalSegments = USAGE_JOURNAL_DIR.split("/")
+    .map((segment) => JSON.stringify(segment))
+    .join(", ");
+  return [
+    "// Usage journal — installed by `agentsdir pack add usage`.",
+    "//",
+    "// Zero dependency, Node only. Imported by the hook scripts one level up;",
+    "// it is NOT a hook itself, which is why it lives in this subdirectory:",
+    "// agentsdir registers and probes the top level of .agents/hooks/ only.",
+    "//",
+    "// WHAT IS RECORDED, exhaustively: a timestamp, the event name, a tool",
+    "// name, a repo-relative path, a skill name, a sub-agent name, and an",
+    "// opaque session key. Nothing else is read from the payload — the key",
+    "// lists below are allow-lists, never filters over a wider object.",
+    "//",
+    "// The format is the contract of the analysis stage: docs/conventions.md §9.",
+    "",
+    'import { createHash } from "node:crypto";',
+    "import {",
+    "  appendFileSync,",
+    "  mkdirSync,",
+    "  readdirSync,",
+    "  readFileSync,",
+    "  rmSync,",
+    '} from "node:fs";',
+    'import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";',
+    'import { fileURLToPath } from "node:url";',
+    "",
+    "// .agents/hooks/lib/ sits three levels below the repository root.",
+    'const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");',
+    `const JOURNAL_DIR = join(ROOT, ${journalSegments});`,
+    `const RETENTION_DAYS = ${RETENTION_DAYS};`,
+    "",
+    "// `check` invokes every hook script for real, with a payload carrying this",
+    "// exact session id. A collector writing a line there would make `check`",
+    "// touch the disk — in CI too — so the probe is recognised and ignored.",
+    `const PROBE_SESSION = ${JSON.stringify(HOOK_PROBE_SESSION_ID)};`,
+    "",
+    "// The only keys ever read out of tool_input. Reading that object whole is",
+    "// what leaks: it also carries `command`, `content`, `old_string`, `prompt`.",
+    'const PATH_KEYS = ["file_path", "path", "notebook_path", "filePath"];',
+    'const SKILL_KEYS = ["skill", "skill_name", "skillName"];',
+    'const AGENT_KEYS = ["subagent_type", "agent_type", "agent_name", "agentName"];',
+    "",
+    'const NEWLINE = "\\n";',
+    "const JOURNAL_NAME = /^usage-(\\d{4})-(\\d{2})-(\\d{2})\\.jsonl$/;",
+    "const ASSIGNMENT = /^([A-Za-z-]+)\\s*=\\s*(.+)$/;",
+    'const QUOTED = /"([^"]*)"/g;',
+    "",
+    "// Read once per process: a hook runs on every tool call, and re-reading the",
+    "// manifest for each path lookup would put a file read on the hot path.",
+    "const CONFIG = readConfig();",
+    "",
+    "export function readTool(payload) {",
+    "  // Cursor uses its own tool vocabulary and its own casing; both spellings",
+    "  // are accepted, and an unknown shape yields null rather than a guess",
+    "  return str(payload.tool_name ?? payload.toolName) ?? null;",
+    "}",
+    "",
+    "/** The repo-relative path a tool touches, or null — never a raw path. */",
+    "export function readPath(payload) {",
+    "  const input = obj(payload.tool_input ?? payload.toolInput);",
+    "  for (const key of PATH_KEYS) {",
+    "    const candidate = str(input[key]);",
+    "    if (candidate === undefined) continue;",
+    "    const rel = toRepoRelative(candidate);",
+    "    // excluded, or escaping the repo: the event still deserves a line, the",
+    "    // path does not — so the entry keeps null rather than being dropped",
+    "    return rel !== null && !isExcluded(rel) ? rel : null;",
+    "  }",
+    "  return null;",
+    "}",
+    "",
+    "export function readSkill(payload) {",
+    "  const input = obj(payload.tool_input ?? payload.toolInput);",
+    "  for (const key of SKILL_KEYS) {",
+    "    const name = str(input[key]);",
+    "    if (name !== undefined) return name;",
+    "  }",
+    "  return null;",
+    "}",
+    "",
+    "export function readAgent(payload) {",
+    "  const input = obj(payload.tool_input ?? payload.toolInput);",
+    "  for (const key of AGENT_KEYS) {",
+    "    const name = str(input[key]) ?? str(payload[key]);",
+    "    if (name !== undefined) return name;",
+    "  }",
+    "  return null;",
+    "}",
+    "",
+    "/**",
+    " * Appends one line. Everything that can go wrong here is swallowed: a",
+    " * read-only checkout, a full disk, two sessions racing — none of them is a",
+    " * reason to disturb the agent.",
+    " */",
+    "export function log(payload, entry) {",
+    "  try {",
+    "    if (!CONFIG.enabled) return;",
+    "    const id = sessionId(payload);",
+    "    if (id === PROBE_SESSION) return;",
+    "    const line = {",
+    "      ts: new Date().toISOString(),",
+    "      event: entry.event,",
+    "      tool: entry.tool ?? null,",
+    "      path: entry.path ?? null,",
+    "      skill: entry.skill ?? null,",
+    "      agent: entry.agent ?? null,",
+    "      session: sessionKey(id),",
+    "    };",
+    "    mkdirSync(JOURNAL_DIR, { recursive: true });",
+    "    appendFileSync(journalFile(), JSON.stringify(line) + NEWLINE);",
+    "  } catch {",
+    "    // observation is never worth an interruption",
+    "  }",
+    "}",
+    "",
+    "/** Drops journal files past the retention window. Session events only. */",
+    "export function prune() {",
+    "  try {",
+    "    if (!CONFIG.enabled) return;",
+    "    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;",
+    "    for (const name of readdirSync(JOURNAL_DIR)) {",
+    "      const match = JOURNAL_NAME.exec(name);",
+    "      if (match === null) continue;",
+    "      const day = Date.UTC(",
+    "        Number(match[1]),",
+    "        Number(match[2]) - 1,",
+    "        Number(match[3]),",
+    "      );",
+    "      if (day < cutoff) rmSync(join(JOURNAL_DIR, name), { force: true });",
+    "    }",
+    "  } catch {",
+    "    // no journal yet, or unreadable: nothing to prune",
+    "  }",
+    "}",
+    "",
+    "function journalFile() {",
+    "  const day = new Date().toISOString().slice(0, 10);",
+    "  return join(JOURNAL_DIR, `usage-${day}.jsonl`);",
+    "}",
+    "",
+    "function sessionId(payload) {",
+    "  return str(payload.session_id ?? payload.sessionId) ?? null;",
+    "}",
+    "",
+    "/**",
+    " * The session identifier is hashed, never stored raw: the journal can group",
+    " * a session's lines without carrying the harness identifier around.",
+    " * Truncated, because collision resistance is not what this needs.",
+    " */",
+    "function sessionKey(id) {",
+    "  if (id === null) return null;",
+    '  return createHash("sha256").update(id).digest("hex").slice(0, 12);',
+    "}",
+    "",
+    "/**",
+    " * `[usage]` of .agents.toml: the switch and the excluded globs. Minimal",
+    " * reader, like the worktrees scripts — a hook parses no TOML. An absent",
+    " * section means collection is on, which is what installing the pack asked",
+    " * for; only an explicit `enabled = false` suspends it.",
+    " */",
+    "function readConfig() {",
+    "  const config = { enabled: true, exclude: [] };",
+    "  let raw;",
+    "  try {",
+    '    raw = readFileSync(join(ROOT, ".agents.toml"), "utf8");',
+    "  } catch {",
+    "    return config;",
+    "  }",
+    '  let section = "";',
+    "  for (const line of raw.split(NEWLINE)) {",
+    "    const trimmed = line.trim();",
+    '    if (trimmed.startsWith("[")) {',
+    "      section = trimmed;",
+    "      continue;",
+    "    }",
+    '    if (section !== "[usage]") continue;',
+    "    const match = ASSIGNMENT.exec(trimmed);",
+    "    if (match === null) continue;",
+    '    if (match[1] === "enabled") config.enabled = match[2].trim() === "true";',
+    '    if (match[1] === "exclude") config.exclude = parseStrings(match[2]);',
+    "  }",
+    "  return config;",
+    "}",
+    "",
+    "function parseStrings(value) {",
+    "  const found = [];",
+    "  for (const match of value.matchAll(QUOTED)) {",
+    "    found.push(match[1]);",
+    "  }",
+    "  return found;",
+    "}",
+    "",
+    "/**",
+    " * A path becomes a repo-relative POSIX path, or nothing at all. Anything",
+    " * escaping the repository is dropped rather than trimmed: an absolute path",
+    " * names the machine, and a `..` path names what sits beside the repo.",
+    " */",
+    "function toRepoRelative(candidate) {",
+    "  try {",
+    "    const abs = isAbsolute(candidate) ? candidate : resolve(ROOT, candidate);",
+    "    const rel = relative(ROOT, abs);",
+    '    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return null;',
+    '    return rel.split(sep).join("/");',
+    "  } catch {",
+    "    return null;",
+    "  }",
+    "}",
+    "",
+    "/** The globs of `[usage].exclude`, with the semantics of `add rule --paths`. */",
+    "function isExcluded(rel) {",
+    "  for (const glob of CONFIG.exclude) {",
+    "    if (matchGlob(glob, rel)) return true;",
+    "  }",
+    "  return false;",
+    "}",
+    "",
+    "function matchGlob(glob, value) {",
+    "  // `**/` crosses directories, `**` matches anything, `*` and `?` stay",
+    "  // inside one segment — the semantics of `add rule --paths`. The two",
+    "  // placeholders keep the multi-segment forms from being eaten by the",
+    "  // single-segment replacements that follow.",
+    "  const pattern = glob",
+    '    .replace(/[.+^${}()|[\\]\\\\]/g, "\\\\$&")',
+    '    .replace(/\\*\\*\\//g, "\\u0000")',
+    '    .replace(/\\*\\*/g, "\\u0001")',
+    '    .replace(/\\*/g, "[^/]*")',
+    '    .replace(/\\?/g, "[^/]")',
+    '    .replace(/\\u0000/g, "(?:.*/)?")',
+    '    .replace(/\\u0001/g, ".*");',
+    '  return new RegExp("^" + pattern + "$").test(value);',
+    "}",
+    "",
+    "function obj(value) {",
+    '  return typeof value === "object" && value !== null && !Array.isArray(value)',
+    "    ? value",
+    "    : {};",
+    "}",
+    "",
+    "function str(value) {",
+    '  return typeof value === "string" && value !== "" ? value : undefined;',
+    "}",
+    "",
+  ].join("\n");
+}
+
+function renderRule(): string {
+  return [
+    "# Usage journal",
+    "",
+    "Read before touching `.agents/hooks/*-usage.mjs`, `.agents/hooks/lib/` or",
+    "anything under `.agents/output/usage/`.",
+    "",
+    "## Rules",
+    "",
+    "- NEVER commit the journal. It lives under `.agents/output/`, which the",
+    "  managed `.gitignore` block excludes, and `agentsdir check` fails if git",
+    "  tracks it anyway. If it is already tracked, run",
+    "  `git rm -r --cached .agents/output/usage` and commit that removal.",
+    "- NEVER add a payload field to the journal without asking first. The",
+    "  collector reads an allow-list of keys; widening it is how a prompt, a",
+    "  command line or a file excerpt ends up on disk in somebody's private",
+    "  repository.",
+    "- ALWAYS keep the hooks fail-open: observation must not be able to block a",
+    "  session. Every path ends on exit 0 and swallows its own errors.",
+    "",
+    "## Examples",
+    "",
+    "GOOD:",
+    "",
+    "```",
+    '{"ts":"2026-09-12T10:11:12.000Z","event":"PreToolUse","tool":"Read",',
+    ' "path":"src/api/handler.ts","skill":null,"agent":null,"session":"9f2c1ab40d77"}',
+    "```",
+    "",
+    "BAD:",
+    "",
+    "```",
+    '{"event":"PreToolUse","tool":"Bash","command":"psql -h prod ...",',
+    ' "path":"/home/alice/clients/acme/contract.ts"}',
+    "```",
+    "",
+    "A command line, an absolute path naming a machine and a client: three",
+    "leaks in one line, in a repository that may be under NDA.",
+    "",
+    "## Suspending the collection",
+    "",
+    "Set `enabled = false` under `[usage]` in `.agents.toml`. The hooks stay",
+    "registered and stop writing; nothing is uninstalled. Set it back to `true`",
+    "to resume.",
+    "",
+    "## Keeping paths out of the journal",
+    "",
+    "List globs under `[usage].exclude` in `.agents.toml`, with the same",
+    "semantics as `agentsdir add rule --paths`. A path matching one of them is",
+    "recorded as `null`, so the event still counts and the path never lands.",
+    "",
+    "```toml",
+    "[usage]",
+    "enabled = true",
+    'exclude = ["src/clients/**", "private/**"]',
+    "```",
+    "",
+    "## Rotation",
+    "",
+    "One file per day, `usage-YYYY-MM-DD.jsonl`. Files older than",
+    `${RETENTION_DAYS} days are deleted when a session starts or ends — never on the`,
+    "tool path, which must stay a single append.",
+    "",
+    "## What the journal holds",
+    "",
+    "| Field | Content |",
+    "| --- | --- |",
+    "| `ts` | ISO 8601 timestamp |",
+    "| `event` | Hook event name |",
+    "| `tool` | Tool name, or null |",
+    "| `path` | Repo-relative path, or null |",
+    "| `skill` | Skill invoked, or null |",
+    "| `agent` | Sub-agent invoked, or null |",
+    "| `session` | Opaque session key (hashed, truncated) |",
+    "",
+    "No prompt, no file content, no command line, no absolute path. The format",
+    "is specified in `docs/conventions.md` §9.",
+    "",
+  ].join("\n");
+}

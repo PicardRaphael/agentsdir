@@ -179,8 +179,9 @@ export async function planHookRegistrations(
   root: string,
   enabledHarnesses: string[],
   overlay: Record<string, string> = {},
+  omit: readonly string[] = [],
 ): Promise<HookRegistryPlan[]> {
-  const scripts = await listHookScripts(root, overlay);
+  const scripts = await listHookScripts(root, overlay, omit);
   const scriptFiles = new Set(scripts.map((script) => script.file));
   const registrations: HookRegistration[] = [];
   for (const script of scripts) {
@@ -249,6 +250,7 @@ interface HookScriptSource {
 async function listHookScripts(
   root: string,
   overlay: Record<string, string>,
+  omit: readonly string[] = [],
 ): Promise<HookScriptSource[]> {
   const sources = new Map<string, string>();
   const hooksDir = join(root, ".agents", "hooks");
@@ -279,6 +281,12 @@ async function listHookScripts(
     if (key.startsWith(`${HOOKS_DIR}/`) && isRegistrableScript(name)) {
       sources.set(name, content);
     }
+  }
+  // scripts a caller is about to delete: `pack remove` must plan the
+  // deregistration in the same breath as the removal, and a dry run has to
+  // report it without the disk having changed yet
+  for (const key of omit) {
+    sources.delete(key.slice(HOOKS_DIR.length + 1));
   }
   return [...sources.keys()]
     .sort()
