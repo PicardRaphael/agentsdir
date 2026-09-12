@@ -150,6 +150,30 @@ export function renderLockSeed(
 }
 
 /** Authored files plus the derived Codex artifacts of the pack's skills. */
+/**
+ * Scripts the installed packs put in the repo for an *agent* to run — the
+ * commands their skills spell out in a procedure. These are what the
+ * `.claude/settings.json` allowlist covers: without a rule, Claude Code asks
+ * before every run, which is the cascading-prompt flaw `docs/architecture.md`
+ * lists among the ones this CLI fixes. Hook scripts are deliberately absent:
+ * the harness runs those itself, outside the Bash tool, so no rule applies.
+ */
+export function packScriptPaths(packs: readonly string[]): string[] {
+  const paths: string[] = [];
+  for (const name of packs) {
+    const pack = getPackContent(name);
+    if (pack === undefined) {
+      continue;
+    }
+    for (const file of pack.files) {
+      if (file.path.endsWith(".mjs")) {
+        paths.push(file.path);
+      }
+    }
+  }
+  return paths.sort();
+}
+
 export function packInstallFiles(pack: PackContent): PackFile[] {
   const files = [...pack.files];
   for (const skill of pack.skills) {

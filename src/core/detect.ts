@@ -1,9 +1,10 @@
 import { isDirectory, isFile } from "./fs-utils.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat, rm, symlink } from "node:fs/promises";
+import { lstat, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { parse as parseToml } from "smol-toml";
 
 const execFileAsync = promisify(execFile);
 
@@ -81,58 +82,231 @@ export async function detectGitSymlinks(dir: string): Promise<GitSymlinksInfo> {
 
 export type StackId = "node" | "python" | "go" | "rust" | "ruby" | "php";
 
+export type StackAction = "dev" | "test" | "lint";
+export type StackCommands = Partial<Record<StackAction, string>>;
+
+const STACK_ACTIONS: readonly StackAction[] = ["dev", "test", "lint"];
+
 export interface StackInfo {
   id: StackId;
   markerFile: string;
-  /** Suggested commands only — agentsdir never imposes them. */
-  suggestions: { dev?: string; test?: string; lint?: string };
+  /**
+   * Commands the repository proves: read from a declaration it carries, or
+   * guaranteed by the toolchain its marker file declares. These may be written
+   * down as facts.
+   */
+  commands: StackCommands;
+  /**
+   * The stack's usual commands that this repository does *not* confirm. They
+   * are suggestions to check, never statements — an `AGENTS.md` claiming
+   * `npm test` in a repo without that script is worse than one saying nothing,
+   * because the agent believes it.
+   */
+  unverified: StackCommands;
 }
 
-const STACK_MARKERS: readonly StackInfo[] = [
+interface StackMarker {
+  id: StackId;
+  markerFile: string;
+  /** What this stack usually runs — asserted only where `read` confirms it. */
+  conventions: StackCommands;
+  /** The commands this repository actually proves. Never throws: an unreadable
+   * or malformed marker file proves nothing, which is the honest answer. */
+  read: (dir: string, markerFile: string) => Promise<StackCommands>;
+}
+
+const STACK_MARKERS: readonly StackMarker[] = [
   {
     id: "node",
     markerFile: "package.json",
-    suggestions: { dev: "npm run dev", test: "npm test", lint: "npm run lint" },
+    conventions: {
+      dev: "npm run dev",
+      test: "npm test",
+      lint: "npm run lint",
+    },
+    read: async (dir, markerFile) => {
+      const scripts = await readJsonScripts(join(dir, markerFile));
+      return {
+        ...(scripts.has("dev") ? { dev: "npm run dev" } : {}),
+        ...(scripts.has("test") ? { test: "npm test" } : {}),
+        ...(scripts.has("lint") ? { lint: "npm run lint" } : {}),
+      };
+    },
   },
   {
     id: "python",
     markerFile: "pyproject.toml",
-    suggestions: { test: "pytest", lint: "ruff check ." },
+    conventions: { test: "pytest", lint: "ruff check ." },
+    read: async (dir, markerFile) => {
+      const declared = await readPyprojectTools(join(dir, markerFile));
+      return {
+        ...(declared.has("pytest") ? { test: "pytest" } : {}),
+        ...(declared.has("ruff") ? { lint: "ruff check ." } : {}),
+      };
+    },
   },
   {
     id: "go",
     markerFile: "go.mod",
-    suggestions: { test: "go test ./...", lint: "go vet ./..." },
+    conventions: { test: "go test ./...", lint: "go vet ./..." },
+    // `test` and `vet` are subcommands of the go tool itself: the module the
+    // marker file declares is what makes them runnable, so go.mod *is* the
+    // reading. Nothing else has to be installed or declared.
+    read: async () => ({ test: "go test ./...", lint: "go vet ./..." }),
   },
   {
     id: "rust",
     markerFile: "Cargo.toml",
-    suggestions: { test: "cargo test", lint: "cargo clippy" },
+    conventions: { test: "cargo test", lint: "cargo clippy" },
+    // `cargo test` is built into cargo; `cargo clippy` is a separate component
+    // that a Cargo.toml does not promise, so it stays a suggestion.
+    read: async () => ({ test: "cargo test" }),
   },
   {
     id: "ruby",
     markerFile: "Gemfile",
-    suggestions: { test: "bundle exec rake test", lint: "bundle exec rubocop" },
+    conventions: { test: "bundle exec rake test", lint: "bundle exec rubocop" },
+    read: async (dir, markerFile) => {
+      const gems = await readGemfileGems(join(dir, markerFile));
+      return {
+        ...(gems.has("rspec") || gems.has("rspec-rails")
+          ? { test: "bundle exec rspec" }
+          : {}),
+        ...(gems.has("rubocop") ? { lint: "bundle exec rubocop" } : {}),
+      };
+    },
   },
   {
     id: "php",
     markerFile: "composer.json",
-    suggestions: { test: "composer run test", lint: "composer run lint" },
+    conventions: { test: "composer run test", lint: "composer run lint" },
+    read: async (dir, markerFile) => {
+      const scripts = await readJsonScripts(join(dir, markerFile));
+      return {
+        ...(scripts.has("dev") ? { dev: "composer run dev" } : {}),
+        ...(scripts.has("test") ? { test: "composer run test" } : {}),
+        ...(scripts.has("lint") ? { lint: "composer run lint" } : {}),
+      };
+    },
   },
 ];
 
 /**
  * Recognizes the repo's stack(s) from their marker files, in a fixed order so
- * the result is deterministic.
+ * the result is deterministic, and separates what each marker file *proves*
+ * from what it merely suggests.
  */
 export async function detectStack(dir: string): Promise<StackInfo[]> {
   const found: StackInfo[] = [];
   for (const stack of STACK_MARKERS) {
-    if (await isFile(join(dir, stack.markerFile))) {
-      found.push(stack);
+    if (!(await isFile(join(dir, stack.markerFile)))) {
+      continue;
     }
+    const commands = await stack.read(dir, stack.markerFile);
+    const unverified: StackCommands = {};
+    for (const action of STACK_ACTIONS) {
+      const convention = stack.conventions[action];
+      if (convention !== undefined && commands[action] === undefined) {
+        unverified[action] = convention;
+      }
+    }
+    found.push({
+      id: stack.id,
+      markerFile: stack.markerFile,
+      commands,
+      unverified,
+    });
   }
   return found;
+}
+
+/** Keys of the `scripts` object of a package.json / composer.json. */
+async function readJsonScripts(path: string): Promise<Set<string>> {
+  let data: unknown;
+  try {
+    data = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    // unreadable or malformed: it declares nothing, which is what we report
+    return new Set();
+  }
+  if (typeof data !== "object" || data === null) {
+    return new Set();
+  }
+  const scripts = (data as Record<string, unknown>)["scripts"];
+  if (typeof scripts !== "object" || scripts === null) {
+    return new Set();
+  }
+  return new Set(Object.keys(scripts));
+}
+
+/**
+ * Tool names a pyproject.toml declares: its `[tool.<name>]` tables plus every
+ * package named in a dependency list. A tool the file never mentions is not
+ * installed as far as this repository is concerned.
+ */
+async function readPyprojectTools(path: string): Promise<Set<string>> {
+  let data: unknown;
+  try {
+    data = parseToml(await readFile(path, "utf8"));
+  } catch {
+    return new Set();
+  }
+  if (typeof data !== "object" || data === null) {
+    return new Set();
+  }
+  const table = data as Record<string, unknown>;
+  const names = new Set<string>();
+  const tools = table["tool"];
+  if (typeof tools === "object" && tools !== null) {
+    for (const name of Object.keys(tools)) {
+      names.add(name);
+    }
+  }
+  for (const requirement of collectStrings(table["project"])) {
+    const name = requirement.match(/^[A-Za-z0-9._-]+/)?.[0];
+    if (name !== undefined) {
+      names.add(name.toLowerCase());
+    }
+  }
+  for (const requirement of collectStrings(table["dependency-groups"])) {
+    const name = requirement.match(/^[A-Za-z0-9._-]+/)?.[0];
+    if (name !== undefined) {
+      names.add(name.toLowerCase());
+    }
+  }
+  return names;
+}
+
+/** Every string in a nested TOML value — dependency lists live at many depths. */
+function collectStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectStrings(entry));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).flatMap((entry) => collectStrings(entry));
+  }
+  return [];
+}
+
+/** Gem names a Gemfile declares — `gem "rubocop"`, quotes either way. */
+async function readGemfileGems(path: string): Promise<Set<string>> {
+  let source: string;
+  try {
+    source = await readFile(path, "utf8");
+  } catch {
+    return new Set();
+  }
+  const names = new Set<string>();
+  for (const match of source.matchAll(/^\s*gem\s+["']([^"']+)["']/gm)) {
+    const name = match[1];
+    if (name !== undefined) {
+      names.add(name.toLowerCase());
+    }
+  }
+  return names;
 }
 
 export interface HarnessesInfo {

@@ -30,6 +30,7 @@ import {
   renderGeneratorReport,
   resyncProjections,
   runGeneratorCli,
+  syncClaudePermissions,
   type GeneratorChange,
   type GeneratorResult,
 } from "./add-common.js";
@@ -160,6 +161,8 @@ export async function runPackAdd(
           toWrite.map((file) => [file.path, file.content]),
         ),
       })),
+      // and the scripts it installs must be runnable without a prompt each time
+      ...(await syncClaudePermissions(root, nextManifest, options)),
     ]),
     notes,
     exitCode: EXIT_CODES.ok,
@@ -313,6 +316,10 @@ export async function runPackRemove(
       ...changes,
       // removing a pack strands the projections of the files it took away
       ...(await resyncProjections(root, nextManifest, {
+        dryRun: options.dryRun,
+      })),
+      // and leaves behind the allow rules of scripts that are gone
+      ...(await syncClaudePermissions(root, nextManifest, {
         dryRun: options.dryRun,
       })),
     ]),

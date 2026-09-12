@@ -75,6 +75,7 @@ export function initAnswers(overrides: Partial<InitAnswers> = {}): InitAnswers {
     productName: "demo",
     description: "A demo product.",
     commands: { test: "npm test" },
+    unverified: {},
     harnesses: ["claude", "codex", "cursor"],
     packs: ["core"],
     mode: "copy",

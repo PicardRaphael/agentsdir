@@ -42,6 +42,11 @@ the alternatives. It is never reported as `1`, which belongs to drift and
 violated invariants — a CI script must be able to tell a typo from a repository
 that moved.
 
+**Missing argument.** A command run without a required positional is a usage
+error too: exit code `2`, with a message naming the argument and the usage
+line. Left to the argument parser it would print the help and exit `1`, which
+a CI script reads as drift.
+
 **Answering without a terminal.** Every interview question has a flag. A caller
 that already knows the repository — a coding agent asked to install agentsdir,
 a provisioning script — supplies the answers directly and never sees a prompt.
@@ -112,7 +117,14 @@ npx agentsdir init [options]
    `pyproject.toml`, `go.mod`, `Cargo.toml` — to pre-fill the `dev`, `test`
    and `lint` commands that the user confirms or corrects. Detection only
    serves to parameterize the templates: no dependency is added to the
-   project, whatever its language.
+   project, whatever its language. Detection tells apart what the repo
+   proves — a declared script, a declared tool, a built-in the marker file
+   guarantees — from what it merely suggests. The interview is where an
+   unproven suggestion belongs: it arrives as the pre-fill of the question,
+   and whatever comes back, accepted or corrected, is the user's answer.
+   Where nobody answers — `--yes`, or the fallback without a terminal — an
+   unproven command is not asserted: the row lands in `AGENTS.md` as
+   `_to fill in_` rather than as a command no one has run.
 3. **Choice of harnesses** (Claude Code, Codex, Cursor) and **of packs**
    (`core` mandatory; `creator` checked by default — assisted creation,
    see [creation-assistee.md](creation-assistee.md); `verification`,
@@ -135,7 +147,8 @@ npx agentsdir init [options]
    excluded from git and created locally).
 6. **Projections** according to the chosen harnesses: `CLAUDE.md` and
    `.claude/{rules,skills,agents}` (symlinks or copies), `.claude/settings.json`
-   (managed permissions block covering the emitted scripts), per-skill Codex
+   (the permission rules covering the scripts the installed packs tell an agent
+   to run — written only when there are such scripts), per-skill Codex
    projections (`agents/openai.yaml`, `assets/icon.svg`), files of the
    `worktrees` pack where applicable (`.cursor/worktrees.json`).
 7. **Repo hygiene**: `.gitignore` entries (managed blocks), a `line-endings`
@@ -178,8 +191,10 @@ initialized — use `sync` to regenerate". Regeneration is the job of `sync`.
 
 ### Outputs
 
-Human-readable report (or `--json`): created files, projection mode, installed
-packs, next commands.
+Human-readable report: created files, projection mode, installed packs, next
+commands. With `--json`, a single object `{command, mode, changes[], errors[],
+exitCode}` on stdout — `--json` implies `--yes`, since the interview writes its
+prompts to the same stdout a script came to parse.
 
 ### Exit codes
 
@@ -193,7 +208,10 @@ packs, next commands.
 ### Synopsis
 
 ```
-npx agentsdir add skill <name> [--implicit] [--read-only] [--dry-run] [--json]
+npx agentsdir add skill <name> [--description "<text>"] [--display-name "<text>"]
+                             [--short-description "<text>"] [--color "#RRGGBB"]
+                             [--icon <name>] [--default-prompt "<text>"]
+                             [--implicit] [--read-only] [--dry-run] [--json]
 ```
 
 ### Behavior
@@ -203,8 +221,11 @@ npx agentsdir add skill <name> [--implicit] [--read-only] [--dry-run] [--json]
    that acts as a catalog** (see [conventions.md](conventions.md)). The fields
    are asked interactively — "Use when…" description, display name, short
    description (25 to 64 characters), color, icon chosen from the embedded set
-   (the prompt lists the valid names), default prompt; without a TTY, valid
-   default values are used:
+   (the prompt lists the valid names), default prompt. Each question has its
+   flag (`--description`, `--display-name`, `--short-description`, `--color`,
+   `--icon`, `--default-prompt`), refused by the same rule as the prompt it
+   replaces; a question the flag answered is not asked. Without a TTY, what no
+   flag answered falls back to valid default values:
 
    ```yaml
    ---
@@ -255,7 +276,8 @@ environment (usage errors).
 ### Synopsis
 
 ```
-npx agentsdir add rule <name> [--paths "<glob>[,<glob>]"] [--dry-run] [--json]
+npx agentsdir add rule <name> [--paths "<glob>[,<glob>]"] [--hook "<sentence>"]
+                            [--dry-run] [--json]
 ```
 
 ### Behavior
@@ -268,7 +290,8 @@ npx agentsdir add rule <name> [--paths "<glob>[,<glob>]"] [--dry-run] [--json]
    is discoverable only through the index.
 3. Updates the corresponding line in the managed block
    `agentsdir:rules-index` of `AGENTS.md`: `\`.agents/rules/<name>.md\` — <quand
-   la lire>` (the prompt asks for the reading condition in one sentence).
+   la lire>` (the prompt asks for the reading condition in one sentence, and
+   `--hook` answers it without a terminal).
 
 ### Idempotence
 
@@ -286,14 +309,16 @@ Existing file: refusal with `2`. The index is regenerated in full on every
 ### Synopsis
 
 ```
-npx agentsdir add agent <name> [--model <model>] [--dry-run] [--json]
+npx agentsdir add agent <name> [--model <model>] [--description "<sentence>"]
+                             [--dry-run] [--json]
 ```
 
 ### Behavior
 
 Creates `.agents/agents/<name>.md`: `name` frontmatter (kebab-case, identical to
 the file name — see invariant 14 in [conventions.md](conventions.md)),
-`description` (when to delegate to this agent), `color`, `model` (default
+`description` (when to delegate to this agent — the interview question, and
+`--description` answers it without a terminal), `color`, `model` (default
 `inherit`), followed by the system prompt. The file is exposed to Claude Code by
 the `.claude/agents` projection; the other harnesses discover it through
 `AGENTS.md`.
@@ -398,8 +423,13 @@ Regenerates every projection from the source of truth, in this order:
 3. **Codex projections** — `agents/openai.yaml` and `assets/icon.svg` of each
    skill, derived from the frontmatter, compared byte for byte (rewritten only
    if different).
-4. **Managed blocks** — rules index of `AGENTS.md`, permissions of
-   `.claude/settings.json`, hook registrations, `.gitignore` entries.
+4. **Managed blocks** — rules index of `AGENTS.md`, `.gitignore` entries, and,
+   in `.claude/settings.json`, both the hook registrations and the permission
+   rules of the installed packs' scripts. That file has no comment markers to
+   delimit a block, so ownership is structural: a rule is agentsdir's iff it
+   reads `Bash(node <path under .agents/> *)`, a registration iff its command is
+   exactly `node .agents/hooks/<file>`. Everything else the file holds is
+   preserved, in place and in order.
 5. **Lock** — recomputation of the sha256 fingerprints of `skills-lock.json`
    for vendored skills (`sourceType: "github"`); the `"agentsdir"` entries stay
    pinned to the installed version (`update` protection), never recomputed.

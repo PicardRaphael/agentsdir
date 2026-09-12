@@ -1,27 +1,43 @@
-import { entryExists } from "../core/fs-utils.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
-import { readManifest } from "../core/manifest.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import { renderRuleTemplate, type RuleAnswers } from "../templates/rules.js";
 import {
   ensureAnswer,
   ensureValidName,
+  ensureWritable,
   isInteractive,
   renderGeneratorReport,
   resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
   type GeneratorResult,
+  type GeneratorTarget,
 } from "./add-common.js";
 import { planRulesIndex } from "../core/rules-index.js";
 
 export const DEFAULT_RULE_HOOK =
   "Read before touching the files this rule covers.";
+
+/** What `add rule <name>` would create, and why it would refuse to. */
+export function ruleTarget(name: string): GeneratorTarget {
+  const path = `.agents/rules/${name}.md`;
+  return {
+    path,
+    refusal: `Rule "${name}" already exists (${path}). Pick another name, or edit the existing file — \`sync\` keeps the index in step.`,
+  };
+}
+
+/** Usage error (exit 2) when `--hook` carries what its prompt would have refused. */
+export function ensureValidRuleHook(hook: string | undefined): void {
+  if (hook !== undefined && hook.trim() === "") {
+    throw new CliError("--hook: the sentence is required.");
+  }
+}
 
 /**
  * Creates `.agents/rules/<name>.md` from the template and regenerates the
@@ -36,14 +52,9 @@ export async function runAddRule(
   options: { dryRun: boolean },
 ): Promise<GeneratorResult> {
   ensureValidName("rule", answers.name);
-  const manifest = await readManifest(root);
+  const manifest = await ensureWritable(root, ruleTarget(answers.name));
   const ruleFile = `${answers.name}.md`;
   const rulePath = `.agents/rules/${ruleFile}`;
-  if (await entryExists(join(root, ".agents", "rules", ruleFile))) {
-    throw new CliError(
-      `Rule "${answers.name}" already exists (${rulePath}). Pick another name, or edit the existing file — \`sync\` keeps the index in step.`,
-    );
-  }
   const source = renderRuleTemplate(answers);
   const indexPlan = await planRulesIndex(root, {
     add: [{ file: ruleFile, content: source }],
@@ -72,13 +83,22 @@ export async function runAddRule(
   };
 }
 
-/** Asks the "when to read it" sentence; scripts and CI get the default. */
+/**
+ * Asks the "when to read it" sentence, unless `--hook` already gave it. Without
+ * a TTY and without the flag the generic default is used — which is why the
+ * flag exists: it is the only way a script or an agent can put a real sentence
+ * there (`docs/commandes.md`).
+ */
 export async function collectRuleAnswers(
   name: string,
   paths: string[],
+  flags: { hook?: string } = {},
 ): Promise<RuleAnswers> {
+  if (flags.hook !== undefined) {
+    return { name, hook: flags.hook, paths };
+  }
   if (!isInteractive()) {
-    console.error("stdin is not a TTY — using template defaults.");
+    console.error("stdin is not a TTY — using template defaults for --hook.");
     return { name, hook: DEFAULT_RULE_HOOK, paths };
   }
   prompts.intro(`agentsdir add rule ${name}`);
@@ -128,6 +148,11 @@ export const addRuleCommand = defineCommand({
       description:
         'Scope the rule to comma-separated globs (e.g. "src/api/**")',
     },
+    hook: {
+      type: "string",
+      description:
+        'When an agent should read this rule (one sentence, e.g. "Read before touching src/api/**.")',
+    },
     "dry-run": {
       type: "boolean",
       description: "Print the write plan without touching the disk",
@@ -146,7 +171,16 @@ export const addRuleCommand = defineCommand({
       const paths = parsePathsFlag(
         typeof args.paths === "string" ? args.paths : undefined,
       );
-      const answers = await collectRuleAnswers(name, paths);
+      const hook = typeof args.hook === "string" ? args.hook : undefined;
+      ensureValidRuleHook(hook);
+      // the refusal comes before the question: a taken name, or a repo without
+      // a manifest, must not cost an answer first
+      await ensureWritable(root, ruleTarget(name));
+      const answers = await collectRuleAnswers(
+        name,
+        paths,
+        hook === undefined ? {} : { hook },
+      );
       const result = await runAddRule(root, answers, { dryRun });
       return { result, report: renderGeneratorReport(result, { dryRun }) };
     });

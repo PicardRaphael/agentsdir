@@ -8,11 +8,11 @@ Ce fichier est le point d'entrée des agents IA qui travaillent sur ce repo. Il 
 
 CLI open source (MIT) qui installe dans un repo existant une architecture de configuration d'agents fondée sur les standards ouverts (AGENTS.md, Agent Skills) : source de vérité `.agents/`, projections par harness (Claude Code, Codex, Cursor), vérification de dérive en CI. Voir [README.md](README.md) et [docs/SPEC.md](docs/SPEC.md).
 
-**Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** CI verte sur ubuntu et windows, paquet npm éprouvé jusqu'au tarball installé. Un audit multi-lentilles le 30 août 2026 a fait corriger quatre évasions par lien symbolique, l'absence de notice de licence tierce dans le paquet, l'impasse Windows du mode symlink et les options inconnues avalées en silence ; ce qu'il reste vit dans la tâche 35. **Ne pas publier** tant que la porte ci-dessous n'est pas franchie : ni `npm publish`, ni tag, sans demande explicite de l'utilisateur.
+**Phase actuelle : v1.0.0 vérifiée, publication volontairement différée.** CI verte sur ubuntu et windows, paquet npm éprouvé jusqu'au tarball installé. Un audit multi-lentilles le 30 août 2026 a fait corriger quatre évasions par lien symbolique, l'absence de notice de licence tierce dans le paquet, l'impasse Windows du mode symlink et les options inconnues avalées en silence, puis livrer le contrat transverse de la CLI que la tâche 35 tenait ouvert. **Ne pas publier** tant que la porte ci-dessous n'est pas franchie : ni `npm publish`, ni tag, sans demande explicite de l'utilisateur.
 
 **Direction produit, décidée le 30 août 2026.** Ne pas courir après le nombre de harness : trois contre trente-deux, quarante et soixante-dix-sept, c'est perdu et sans intérêt (voir [docs/recherche/paysage-2026-08.md](docs/recherche/paysage-2026-08.md)). La position visée est décrite dans [docs/positionnement.md](docs/positionnement.md) : être la référence de l'`init` **et** gouverner ce qui a été installé — ce que personne ne fait. Vérifier que la configuration ne dérive pas (`check`/`sync`), faire que l'`init` produise une proposition argumentée au lieu d'un squelette (tâche 24), mesurer si elle **sert** (collecte : tâche 25, analyse : tâche 30), mesurer ce qu'elle **coûte** en contexte (tâche 28), et la brancher partout, MCP compris (tâche 27). `vendor` et `migrate` sont livrés par la concurrence : les traiter comme du rattrapage, pas comme de la différenciation.
 
-**Ordre de construction et porte de publication.** L'ordre arrêté est 26 → 24 → 25 → 28 → 30 → 27, détaillé et argumenté dans [docs/positionnement.md](docs/positionnement.md) ; les tâches 17 à 23 et 35 se traitent en parallèle. La v1.0 ne sort pas avant que l'`init` produise du contenu (tâche 24) et que le critère « un inconnu installe en moins de cinq minutes en lisant le seul README » ait été vérifié pour de vrai.
+**Ordre de construction et porte de publication.** L'ordre arrêté est 26 → 24 → 25 → 28 → 30 → 27, détaillé et argumenté dans [docs/positionnement.md](docs/positionnement.md) ; les tâches 17 à 23 se traitent en parallèle. La v1.0 ne sort pas avant que l'`init` produise du contenu (tâche 24) et que le critère « un inconnu installe en moins de cinq minutes en lisant le seul README » ait été vérifié pour de vrai.
 
 ## Index des règles
 
@@ -54,6 +54,6 @@ Une tâche de `.agents/tasks/` est livrée quand : ses critères d'acceptation s
 - `.agents/rules/` — règles de travail détaillées (voir l'index ci-dessus).
 - `.agents/skills/` — méta-skills du pack `creator`, installés par la CLI elle-même.
 - `.agents/plan/v1.md` — plan d'exécution de la v1, conservé comme trace des dépendances entre tâches livrées.
-- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue du premier audit), 24 à 30 (produit), 35 (issue de l'audit du 30 août 2026 : contrat de la CLI). L'ordre de prise est celui de `docs/positionnement.md`, pas l'ordre des numéros.
+- `.agents/tasks/` — backlog : 17 à 23 (dette technique issue du premier audit), 24 à 30 (produit). L'ordre de prise est celui de `docs/positionnement.md`, pas l'ordre des numéros.
 - `CHANGELOG.md` — ce que chaque version apporte (public, anglais).
 - `.claude/rules/`, `.claude/skills/`, `CLAUDE.md` — projections générées ; ne jamais les éditer, lancer `agentsdir sync`.
