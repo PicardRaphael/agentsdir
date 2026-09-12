@@ -244,7 +244,10 @@ describe("25 - pack usage, the collection stage", () => {
     const dir = await repoWithUsage();
     for (const file_path of [
       "/etc/passwd",
-      "C:\\\\Users\\\\alice\\\\secrets.txt",
+      // absolute on Windows, an ordinary relative name on Linux: the guarantee
+      // must not depend on which platform the harness runs on
+      "C:\\Users\\alice\\secrets.txt",
+      "\\\\server\\share\\file.ts",
       "../sibling-repo/file.ts",
     ]) {
       await fire(dir, "pretooluse-usage.mjs", {
@@ -254,11 +257,33 @@ describe("25 - pack usage, the collection stage", () => {
       });
     }
     const lines = await journal(dir);
-    expect(lines).toHaveLength(3);
+    expect(lines).toHaveLength(4);
     expect(lines.every((line) => line.path === null)).toBe(true);
     const raw = await rawJournal(dir);
-    expect(raw).not.toContain("passwd");
-    expect(raw).not.toContain("sibling-repo");
+    // the leak these paths carry is the username and the machine, not the file
+    for (const leak of [
+      "passwd",
+      "alice",
+      "secrets",
+      "server",
+      "sibling-repo",
+    ]) {
+      expect(raw, `"${leak}" reached the journal`).not.toContain(leak);
+    }
+    // On Windows `isAbsolute` already refuses a drive letter, so the assertion
+    // above cannot distinguish the two guards there — on Linux the same string
+    // is an ordinary relative name and only the explicit guard stops it. The
+    // guard is pinned here so it survives an edit made on either platform.
+    const collector = await readFile(
+      join(dir, ".agents", "hooks", "lib", "usage-log.mjs"),
+      "utf8",
+    );
+    const guard = collector.indexOf("WINDOWS_ABSOLUTE.test(candidate)");
+    expect(guard, "the platform-independent guard is gone").toBeGreaterThan(-1);
+    expect(
+      guard,
+      "the guard must run before node:path decides what is absolute",
+    ).toBeLessThan(collector.indexOf("isAbsolute(candidate)"));
   });
 
   it("Given exclude globs in the manifest, When a matching path is touched, Then the event is kept and the path is not", async () => {

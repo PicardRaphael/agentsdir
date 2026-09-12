@@ -89,8 +89,11 @@ resolved, on the first ordinary command.
   and are pruned after 30 days at session boundaries, and `pack remove usage`
   takes the scripts, the registrations and the journal with it. Measured cost:
   7.6 ms per tool call on top of the Node process the harness starts anyway.
-  The format is the contract of the analysis stage to come, specified in
-  `docs/conventions.md` §9.
+  A path carrying a Windows drive letter or a UNC prefix is refused on every
+  platform, not only where the operating system calls it absolute: on Linux
+  such a path is an ordinary relative file name, and the journal would have
+  recorded it, username included. The format is the contract of the analysis
+  stage to come, specified in `docs/conventions.md` §9.
 - **`init` no longer leaves the user in front of an empty structure.** The
   architecture landed installed and blank: `.agents/rules/` held the generic
   rules only, `.agents/hooks/` and `.agents/agents/` held nothing, and nothing
