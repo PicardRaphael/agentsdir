@@ -105,6 +105,20 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **Copy mode no longer hides a skill's or a sub-agent's frontmatter.** The
+  generated header was written ahead of the file, so a projected `SKILL.md` or
+  sub-agent no longer opened on its YAML frontmatter — and a harness only parses
+  frontmatter that starts on the very first byte. Claude Code dropped projected
+  sub-agents from its delegation list entirely, and read projected skills
+  without their metadata: the description it showed was the header comment, and
+  `disable-model-invocation` was ignored, so a skill meant to stay out of the
+  context window was injected into every session. `check` was green throughout:
+  the copies matched the expected rendering byte for byte. A Markdown source
+  that opens with a frontmatter block now keeps it first and takes the header
+  right after it; every other file is prefixed as before. Found by the first
+  real-agent validation (see `e2e/validation-agent/`). **Upgrading rewrites
+  every Markdown projection**: `check` reports drift on `.claude/` until you
+  run `agentsdir sync` once.
 - **`AGENTS.md` no longer states commands the repository does not have.** Stack
   detection tested only for the marker file and wrote the stack's usual commands
   as facts, so a Python project with no test runner declared got an `AGENTS.md`

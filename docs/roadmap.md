@@ -32,11 +32,26 @@ Package skeleton (TypeScript, Node >= 22, `npx` bundle), environment detection (
 
 **Exit criterion**: a skill created by `add skill` is discovered by Claude Code (`/name`) and displayed by Codex with its icon and its color, without any manual editing.
 
+> **Verified on 2026-09-12, in part.** A real Claude Code session on a freshly
+> installed repo discovers the skill and loads its content through `/name` —
+> in both projection modes. It did not hold at first in copy mode: the generated header
+> was written ahead of the YAML frontmatter, so the harness dropped the block
+> entirely — sub-agents vanished from the delegation list and skills lost their
+> metadata, while `check` stayed green. Fixed in the same commit, then proved
+> again by a session. **The Codex half of this criterion is out of reach of an
+> agent**: icon and colour are visual, only a human looking at the interface can
+> confirm them. It is not claimed as verified. Report:
+> [../e2e/validation-agent/rapports/2026-09-12-claude-code.md](../e2e/validation-agent/rapports/2026-09-12-claude-code.md).
+
 ## v0.4 — Multi-harness hooks
 
 `add hook <event>`: one portable Node script, three registrations (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`).
 
 **Exit criterion**: a `PreToolUse` hook created once fires in all three harnesses.
+
+> **Verified on 2026-09-12 for Claude Code only.** The hook fires, and its
+> `exit 2` blocks the tool call — proved by the hook events of a real session.
+> Codex and Cursor remain unverified: the criterion is one third met, not met.
 
 ## v0.5 — Packs
 

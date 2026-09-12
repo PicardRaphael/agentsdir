@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { detectGitSymlinks } from "./detect.js";
 import { CliError } from "./errors.js";
+import { frontmatterBlockLength } from "./frontmatter.js";
 import type { ProjectionMode } from "./manifest.js";
 
 export const GENERATED_HEADER =
@@ -740,14 +741,37 @@ async function expectedCopies(
 
 function toExpectedCopy(rel: string, raw: Buffer): ExpectedCopy {
   if (rel.endsWith(".md")) {
-    const decorated = `${MD_HEADER_LINE}\n\n${raw.toString("utf8")}`;
     return {
       path: rel,
-      content: Buffer.from(decorated, "utf8"),
+      content: Buffer.from(decorateMarkdown(raw.toString("utf8")), "utf8"),
       isMarkdown: true,
     };
   }
   return { path: rel, content: raw, isMarkdown: false };
+}
+
+/**
+ * The generated header, placed where it cannot hide a frontmatter block.
+ *
+ * Claude Code only reads frontmatter that opens the file: prefixing the header
+ * to a SKILL.md or a sub-agent left the projection byte-correct and
+ * functionally dead — `check` was green while the sub-agent never reached the
+ * delegation list and the skill was announced by the comment instead of its
+ * description. A source that opens with a frontmatter block therefore keeps it
+ * first and takes the header right after; everything else is prefixed as
+ * before. Unparseable frontmatter is not ours to repair: it falls back to the
+ * prefix.
+ */
+function decorateMarkdown(source: string): string {
+  const blockLength = frontmatterBlockLength(source);
+  if (blockLength === 0) {
+    return `${MD_HEADER_LINE}\n\n${source}`;
+  }
+  const block = source.slice(0, blockLength);
+  const rest = source.slice(blockLength);
+  // a closing `---` at end of file matches without its newline
+  const separator = block.endsWith("\n") ? "" : "\n";
+  return `${block}${separator}\n${MD_HEADER_LINE}\n${rest === "" ? "" : `\n${rest}`}`;
 }
 
 /** Recursive, sorted by name (code units) so every output is deterministic. */

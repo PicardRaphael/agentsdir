@@ -8,7 +8,7 @@
 
 - **Deux langues, deux périmètres**, depuis la release 1.0.0 :
   - **Anglais** — tout ce que lit un utilisateur du produit : `README.md`, `docs/**` (sauf `docs/recherche/`, `docs/positionnement.md` et `docs/readme-fr.md`), `CHANGELOG.md`, les messages de la CLI et les contenus qu'elle émet.
-  - **Français** — la documentation de travail interne : `AGENTS.md`, `TESTING.md`, `.agents/rules/`, `.agents/tasks/`, `.agents/plan/`, `docs/recherche/` (étude interne), `docs/positionnement.md` (direction produit interne) et `docs/readme-fr.md` (archive du README de conception).
+  - **Français** — la documentation de travail interne : `AGENTS.md`, `TESTING.md`, `.agents/rules/`, `.agents/tasks/`, `.agents/plan/`, `docs/recherche/` (étude interne), `docs/positionnement.md` (direction produit interne), `docs/readme-fr.md` (archive du README de conception) et `e2e/validation-agent/` (scénario et comptes rendus du tier manuel).
   - Dans les deux cas : orthographe et accents irréprochables ; identifiants techniques (fichiers, commandes, champs, événements) toujours en anglais.
 - **Terminologie canonique**, à employer telle quelle. En français : « source de vérité », « projection », « mode symlink / mode copie (repli) », « blocs gérés », « manifeste `.agents.toml` », « harness ». En anglais : "source of truth", "projection", "symlink mode / copy mode (fallback)", "managed blocks", "the `.agents.toml` manifest", "harness".
 - **`docs/architecture.md` fait foi** en cas de conflit entre documents ; la correction se propage aux autres dans le même commit.

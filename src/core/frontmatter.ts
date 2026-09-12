@@ -108,6 +108,20 @@ export function readAgentFrontmatter(
 
 const FRONTMATTER_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
+/**
+ * Length of the leading frontmatter block, `0` when the source has none.
+ *
+ * A harness only parses frontmatter that starts on the very first byte of the
+ * file: a copy-mode projection that prefixed its generated header made Claude
+ * Code drop the block entirely — sub-agents disappeared from the delegation
+ * list and skills lost their description. The projection engine therefore has
+ * to know where the block ends, and it asks here rather than matching `---` a
+ * second time somewhere else.
+ */
+export function frontmatterBlockLength(source: string): number {
+  return source.match(FRONTMATTER_BLOCK)?.[0].length ?? 0;
+}
+
 function parseFrontmatterBlock(source: string): {
   table: Record<string, unknown>;
   body: string;
