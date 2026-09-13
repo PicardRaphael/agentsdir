@@ -677,8 +677,17 @@ function askResolver(): ConflictResolver {
   };
 }
 
-/** Sync's plan on top of ours; ours wins, it describes the write that led there. */
-function mergeChanges(own: SyncChange[], sync: SyncChange[]): SyncChange[] {
+/**
+ * Sync's plan on top of ours; ours wins, it describes the write that led there.
+ *
+ * Exported for its own tests: the rule it applies is what the user reads in the
+ * report — a file this command wrote must not be reported as "ok" because its
+ * projection happened to be in step already.
+ */
+export function mergeChanges(
+  own: SyncChange[],
+  sync: SyncChange[],
+): SyncChange[] {
   const byPath = new Map<string, SyncChange>();
   for (const change of [...sync, ...own]) {
     const previous = byPath.get(change.path);

@@ -166,7 +166,7 @@ Deux choses ont été écartées, et pour la même raison : `chmod` ne produit r
 
 `npm run test:coverage` produit le tableau et `coverage/coverage-summary.json`. **Aucun seuil bloquant** : la décision est inchangée (voir plus bas), et un pourcentage se gagne avec des tests qui exécutent des lignes sans rien affirmer.
 
-Au 13 septembre 2026 : **82 % des instructions, 72 % des branches**. Les fichiers les moins couverts, avec la décision prise pour chacun :
+Au 13 septembre 2026 : **84 % des instructions, 74 % des branches**. Les fichiers les moins couverts, avec la décision prise pour chacun :
 
 | Fichier | Couverture | Décision |
 | --- | --- | --- |
@@ -177,10 +177,10 @@ Au 13 septembre 2026 : **82 % des instructions, 72 % des branches**. Les fichier
 | `src/commands/check.ts` | 21 % | **Assumé, même raison que `cli.ts`** : la logique est dans `core/validate.ts` (94 %), le fichier n'est que la commande citty. |
 | `src/commands/add-skill.ts` | 27 % | **Assumé.** Le corps non couvert est l'interview et le câblage de la commande ; `runAddSkill`, la partie qui écrit, l'est par `add-skill.test.ts` et par le test de panne. |
 | `src/commands/add-agent.ts`, `add-rule.ts`, `add-common.ts` | 33 à 55 % | **Assumé, même partage** : interview et commande non couvertes, fonction `run*` couverte. |
-| `src/commands/update.ts` | 71 % | **À couvrir.** C'est la commande la plus exposée — elle remplace du contenu installé — et 29 % de ses instructions ne sont exercées par rien. Les branches manquantes sont la résolution interactive des conflits et les chemins de migration multi-étapes. |
-| `src/commands/sync.ts` | 75 % | **À couvrir**, dans une moindre mesure : les branches de bascule de mode sous conditions rares. |
+| `src/commands/update.ts` | 84 % | **Couvert le 13 septembre 2026.** `renderUpdateReport` et `mergeChanges` — le texte que l'utilisateur lit et la règle de fusion qui le nourrit — ont leurs tests directs (`src/commands/__tests__/reports.test.ts`), branche d'abandon et conflits non tranchés compris. Reste `askResolver` (prompts, assumé comme `init-interview`) et le bloc citty `run()` (exercé en sous-processus). |
+| `src/commands/sync.ts` | 88 % | **Couvert le 13 septembre 2026.** `renderSyncReport` a ses tests directs, abandon sur invariants compris. Reste le bloc citty `run()`, assumé comme `cli.ts`. |
 
-Les deux dernières lignes sont les seules qui appellent du travail. Elles ne sont pas faites ici : la tâche 23 demandait de **nommer** les moins couverts et de décider pour chacun, pas de tout couvrir — et une tâche qui élargit son périmètre en cours de route est la façon la plus sûre de ne jamais la livrer.
+Les deux dernières lignes appelaient du travail ; il a été fait le 13 septembre 2026. Ce qui reste non couvert dans ces deux fichiers est assumé pour les raisons déjà écrites plus haut — les prompts et le câblage citty — et le couvrir en mémoire contredirait ces décisions au lieu de les honorer.
 
 ## Ce qu'on ne teste pas (décisions explicites)
 
@@ -190,4 +190,5 @@ Les deux dernières lignes sont les seules qui appellent du travail. Elles ne so
 - **Aucun seuil de couverture bloquant** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage. La couverture est mesurée et lisible (`npm run test:coverage`), elle ne fait échouer personne.
 - **L'interactivité `@clack/prompts`** : les tests passent par les drapeaux, par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
 - **Quatre règles de `check` restent sans test qui les nomme** : `agent-unreadable`, `lock-skill-missing`, `projection-missing` et `projection-header-removed`. Aucun test ne déclenche ces quatre-là en vérifiant leur message ; c'est un trou connu, pas une décision.
+- **Deux `readdir` nus dans `src/`** : `src/core/fs-utils.ts` héberge le helper lui-même et l'unique parcours récursif ; `src/core/projections.ts` en garde un dans `removeIfNoFilesLeft`, où la tolérance est le contrat (nettoyer les sous-dossiers vidés d'un miroir est du meilleur effort, jamais une décision). Toute autre occurrence est refusée par le test-garde de `src/core/__tests__/unreadable-directory.test.ts` : un répertoire illisible lu comme vide a déjà fait passer `check` au vert sur un dépôt qu'il ne voyait pas.
 - **Le doublon de garde de `planLock` (`src/commands/sync.ts`)** : le filtre `NAME_SPEC` y est une ceinture par-dessus les bretelles de `validateRepo`, qui refuse la clé avant que `sync` ne planifie quoi que ce soit. Le retirer ne peut faire échouer aucun test — la garde observable est celle de `src/core/validate.ts`, et c'est elle que la mutation prouve.
