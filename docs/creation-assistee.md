@@ -121,6 +121,7 @@ Each meta-skill bundles its bank in `references/interview.md`. The five most dis
 | Sub-agent | Which single task, finished when? · Modify or only read? · Spontaneous delegation or on demand? · Which context, given that it starts blank? · Deep reasoning or bulky mechanical work? |
 | Rule | Which observed failure justifies it? · Scoped to which files? · Mechanically verifiable (→ hook/CI instead)? · When must an agent read it? · Which real GOOD/BAD example? |
 | Whole-repo proposal | What did the agents get wrong here recently? · What is already enforced mechanically? · Which command must never run? · Which step do you repeat by hand? · Which paths are off limits, generated or vendored? |
+| Usage review | Was collection suspended during the window? · Which harnesses does the team actually use? · Did the window hold a release, a freeze or a holiday? · Do the `exclude` globs overlap a rule's scope? · Is any skill invoked by a script rather than a session? |
 
 ## The `creator` pack
 
@@ -131,6 +132,14 @@ Installed by `init` (checked by default), it contains:
 - `$propose-setup` — the whole-repo proposal that fills the structure `init` installs: repo analysis, then a table of the hooks, rules and sub-agents that earn their place *here*, each accepted, refused or amended on its own line. See [The whole-repo proposal](#the-whole-repo-proposal) below.
 
 Constraints: these meta-skills themselves follow all the conventions ([conventions.md](conventions.md)) — `disable-model-invocation: true` (they write), body < 500 lines, rubrics and question banks in `references/`.
+
+## The `usage` pack meta-skill
+
+The `usage` pack (optional, never installed by default) ships one meta-skill of its own, with the same shape and the same constraints:
+
+- `$review-usage` — turns the usage journal into a review of what the configuration is actually used for. It follows the protocol above with one addition of its own: **the arithmetic is done by a script, not by the agent**. `.agents/skills/review-usage/scripts/summarize.mjs` reads the journal and prints the counts; the meta-skill interviews, judges and writes. A month of sessions is thousands of JSONL lines, and reading them into the window to count them would be exactly the waste the context budget exists to expose.
+
+Its rubric enforces what makes such a review honest rather than authoritative: the observation volume is stated, an absence is not concluded below the threshold, rules are spoken of as *relevant* and never as *used*, every removal is a proposal carrying its data, and the limits section is never the one cut for length. The contract is [conventions.md](conventions.md) §11.
 
 ## Update (`update`) and protection of the installed content
 

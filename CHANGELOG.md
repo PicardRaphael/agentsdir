@@ -66,6 +66,37 @@ resolved, on the first ordinary command.
 
 ### Added
 
+- **And it can now find out whether that cost buys anything.** The `usage`
+  pack observed; it now concludes. `$review-usage` turns the journal into a
+  review saying three things, and the third is the one nobody else writes:
+  what serves, what was never seen, and **what the measure cannot say**.
+  Crossed with the context budget, the two answer the only question a team
+  asks: is this skill worth what it costs?
+
+  Two properties shape it. The first is an asymmetry: **a presence is proved
+  by one line, an absence is not.** So the review states the volume it rests
+  on and refuses to conclude that anything is unused below 20 sessions over 14
+  distinct days — both conditions, because twenty sessions in one afternoon
+  say nothing about a skill that serves at release time. The list of what WAS
+  used is printed regardless. The second is vocabulary: **a rule is not
+  invocable**, and no hook can say whether an agent read one, so rules are
+  reported as *relevant* or *never relevant* — never as used — and a rule with
+  no `paths:` scope has nothing to meet, so it lands in the limits section
+  rather than among the dead ones, with the cost it pays at every session.
+
+  The arithmetic is a dependency-free script, not a prompt telling the agent
+  to read the journal: a month of sessions is thousands of JSONL lines, and
+  pouring them into the context window to count them is the exact waste the
+  budget report exists to expose. The script counts and writes nothing; the
+  meta-skill interviews, judges and proposes. Nothing is ever deleted — every
+  removal carries its data (sessions observed, last occurrence, cost per
+  session) and stays a proposal. And the review closes on why it exists: the
+  harness already arbitrates this silently, truncating skill descriptions at
+  1,536 characters in the listing and, after a compaction, re-attaching them
+  most-recently-invoked first within a 25,000-token budget, where older ones
+  can be dropped entirely. The review makes a
+  decision taken in the team's back visible and arguable.
+
 - **A repository can now find out what its configuration costs in context.**
   Everything this CLI installs is paid, at every session, in the context
   window — and nothing measured it. `doctor` now reports what each installed

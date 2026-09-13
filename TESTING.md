@@ -84,6 +84,16 @@ verte) est collée dans le message de commit qui l'introduit.
 | Un dépassement de budget informe : `doctor` sort en `0` et `check` ne bronche pas | `src/commands/__tests__/doctor.test.ts` | l'`exitCode: EXIT_CODES.ok` de `runDoctor`, et l'absence de règle de budget dans `validateRepo` |
 | Le total payé à chaque session est distingué du total général, jusque dans la ligne de synthèse | `src/commands/__tests__/doctor.test.ts` | `contextBudgetFinding` (`src/commands/doctor.ts`) |
 | Le terminal montre les éléments les plus lourds d'abord, `--json` les porte tous | `src/commands/__tests__/doctor.test.ts` | le tri de `renderContextBudget` et le champ `items` de `machineContext` |
+| Sous le seuil de volume, aucune absence n'est conclue — et le refus n'est pas adouci en suggestion | `src/commands/__tests__/pack-usage-review.test.ts` | le `conclusive` de `measureVolume` et la branche de `renderNeverSeen` |
+| Le seuil exige **20 sessions ET 14 jours distincts**, pas l'un ou l'autre | `src/commands/__tests__/pack-usage-review.test.ts` | la conjonction de `measureVolume`, testee aux deux bords |
+| Ce qui a servi est rapporte quel que soit le volume : une presence se prouve sur une ligne | `src/commands/__tests__/pack-usage-review.test.ts` | `renderUsed`, hors de la garde de seuil |
+| Une regle sans `paths:` va en « ce qu'on ne peut pas dire », jamais en « jamais pertinente » | `src/commands/__tests__/pack-usage-review.test.ts` | `ruleBucket` et la branche `unscoped` de `renderLimits` |
+| Les regles sont dites pertinentes, jamais utilisees ni lues | `src/commands/__tests__/pack-usage-review.test.ts` | le vocabulaire de `renderRules`, greppe sur le Markdown rendu |
+| Le coût croise est celui de l'element lui-meme, par session et par invocation separement | `src/commands/__tests__/pack-usage-review.test.ts` | `skillCost` et `pathCost`, compares aux items de `doctor` |
+| Un coût non mesure est rapporte comme non mesure, jamais comme nul | `src/commands/__tests__/pack-usage-review.test.ts` | le `null` de `skillCost` et la ligne de `renderLimits` |
+| Des delegations sans nom d'agent sont signalees au lieu d'un zero trompeur | `src/commands/__tests__/pack-usage-review.test.ts` | `unnamedDelegations` et sa branche dans `renderLimits` |
+| Une ligne JSONL tronquee est ignoree, pas fatale | `src/commands/__tests__/pack-usage-review.test.ts` | le `catch` de `readJournal` |
+| Le script de revue n'ecrit rien | `src/commands/__tests__/pack-usage-review.test.ts` | empreinte de l'arbre avant/apres |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

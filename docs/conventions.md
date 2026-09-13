@@ -264,7 +264,7 @@ Measured on 2026-09-12, Windows 11, Node 22, median of 40 invocations: **41.8 ms
 
 ### What the collection does *not* do
 
-It produces no report and passes no judgement — that is the analysis stage. And **rules are not observable**: a rule is injected into the context, and no hook can say whether an agent read it. What the journal supports is *relevance*, not reading: a rule declares its scope (`--paths "src/api/**"`), the journal records that the session touched `src/api/x.ts`, and the analysis draws the conclusion.
+It produces no report and passes no judgement — that is the review stage below. And **rules are not observable**: a rule is injected into the context, and no hook can say whether an agent read it. What the journal supports is *relevance*, not reading: a rule declares its scope (`--paths "src/api/**"`), the journal records that the session touched `src/api/x.ts`, and the analysis draws the conclusion.
 
 ## 10. The context budget
 
@@ -324,5 +324,39 @@ An overrun is **information, never a failure**: `check` stays the guardian of dr
 ### Cost of the measure
 
 Measured on 2026-09-12, Windows 11, Node 22, on a generated repository of **60 skills, 6 rules and 60 reference files** (187 measured items), median of 20 runs: **16.3 ms** for the whole measure (14.2 ms min, 29.2 ms max). It is one pass over `.agents/` and `AGENTS.md`, with no fingerprint and no process started — the measure is negligible against the `doctor` probes that surround it.
+
+## 11. The usage review
+
+Stage 2 of the same pack, and the consumer of the format above. It answers three questions, and the third is the one nobody else asks: what serves, what was never seen, and **what the measure cannot say**.
+
+The work is split the way the two stages are: a dependency-free script (`.agents/skills/review-usage/scripts/summarize.mjs`) counts, and the `$review-usage` meta-skill judges. The script exists rather than instructions to read the journal because a month of sessions is thousands of JSONL lines, and pouring them into the context window to count them is the waste §10 exists to expose. It reads, prints Markdown (or JSON under `--json`), and writes nothing.
+
+### Presence and absence are not symmetric
+
+**A presence is proved by one line; an absence needs volume.** The review therefore states the volume it rests on and refuses to conclude on an absence below **20 distinct sessions AND 14 distinct days**. Both conditions: twenty sessions crammed into one afternoon say nothing about a skill that serves only at release time, and fourteen days holding three sessions say nothing at all.
+
+Below the threshold the "never seen" table is replaced by the refusal, naming what is missing. The "what was used" table is printed regardless — it needs no threshold.
+
+### Rules: relevance, never usage
+
+A rule is not invocable, and no hook can say whether an agent read one. The review speaks only of **relevance**, in three buckets — never two:
+
+| Bucket | Meaning |
+| --- | --- |
+| `relevant` | the rule declares a `paths:` scope, and that scope met a path a session touched |
+| `never-relevant` | the rule declares a scope, and it never met one over the window |
+| `cannot-say` | the rule declares **no** scope: there is nothing to meet, so nothing can be concluded either way |
+
+The third bucket is the one that is easy to get wrong. An unscoped rule filed as "never relevant" would propose deleting a rule that applies everywhere — and it is precisely the kind that is paid at every session (§10). It belongs in the limits section, with its cost.
+
+The glob semantics are those of `add rule --paths`, and the matcher is the collector's, character for character: a scope and a journalled path have to be compared under one set of rules.
+
+### Crossing usage with cost
+
+Given `agentsdir doctor --json` through `--doctor <file>`, the review crosses what an element is used for with what it costs. The two costs stay apart, as in §10: what is paid **at every session** and what is paid **per invocation**. A skill that is never invoked pays its metadata always and its body never, so adding the two would reproduce the impressive, false total. Without the file the review says the cost was **not measured** — never that it is zero.
+
+### What the review never does
+
+It deletes nothing and runs no `pack remove`. Every removal is a proposal carrying the data that motivates it — sessions observed, last occurrence, cost per session — and the decision is the team's. The review is written to `.agents/output/usage/`, which git ignores: it summarizes the journal and carries the same sensitivity.
 
 See also: [architecture.md](architecture.md) (engine and projections), [commandes.md](commandes.md) (command specification), [roadmap.md](roadmap.md) (milestones).

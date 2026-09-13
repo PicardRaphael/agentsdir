@@ -1,6 +1,10 @@
 import { HOOK_PROBE_SESSION_ID } from "../core/hook-protocol.js";
 import { hookMetadataLine } from "../core/hook-registries.js";
-import { USAGE_JOURNAL_DIR } from "../core/usage-journal.js";
+import {
+  USAGE_JOURNAL_DIR,
+  USAGE_RETENTION_DAYS,
+} from "../core/usage-journal.js";
+import { reviewSkillFiles, REVIEW_SKILL } from "./usage-review.js";
 import type { PackContent, PackFile } from "./index.js";
 
 /**
@@ -29,6 +33,7 @@ export function usagePack(): PackContent {
   const files: PackFile[] = [
     { path: `${LIB_DIR}/usage-log.mjs`, content: renderLogModule() },
     { path: ".agents/rules/usage-journal.md", content: renderRule() },
+    ...reviewSkillFiles(),
   ];
   for (const hook of HOOKS) {
     files.push({
@@ -39,7 +44,7 @@ export function usagePack(): PackContent {
   return {
     name: "usage",
     files,
-    skills: [],
+    skills: [REVIEW_SKILL],
     rules: ["usage-journal.md"],
     keepExisting: [],
     runtimeState: [USAGE_JOURNAL_DIR],
@@ -52,9 +57,6 @@ export function usagePack(): PackContent {
  * a subdirectory is never mistaken for a hook to register or to probe.
  */
 const LIB_DIR = ".agents/hooks/lib";
-
-/** Days a journal file survives; older ones are pruned at session boundaries. */
-const RETENTION_DAYS = 30;
 
 interface UsageHook {
   event: string;
@@ -206,7 +208,7 @@ function renderLogModule(): string {
     "// .agents/hooks/lib/ sits three levels below the repository root.",
     'const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");',
     `const JOURNAL_DIR = join(ROOT, ${journalSegments});`,
-    `const RETENTION_DAYS = ${RETENTION_DAYS};`,
+    `const RETENTION_DAYS = ${USAGE_RETENTION_DAYS};`,
     "",
     "// `check` invokes every hook script for real, with a payload carrying this",
     "// exact session id. A collector writing a line there would make `check`",
@@ -490,8 +492,16 @@ function renderRule(): string {
     "## Rotation",
     "",
     "One file per day, `usage-YYYY-MM-DD.jsonl`. Files older than",
-    `${RETENTION_DAYS} days are deleted when a session starts or ends — never on the`,
+    `${USAGE_RETENTION_DAYS} days are deleted when a session starts or ends — never on the`,
     "tool path, which must stay a single append.",
+    "",
+    "## Reading the journal",
+    "",
+    `Run \`$${REVIEW_SKILL}\`: it turns the journal into a review of what serves,`,
+    "what was never seen, and what the measure cannot say. The counting is done",
+    `by \`.agents/skills/${REVIEW_SKILL}/scripts/summarize.mjs\`, which reads the`,
+    "journal and writes nothing — never read the journal by hand into a session,",
+    "which is thousands of lines of context for an arithmetic a script does.",
     "",
     "## What the journal holds",
     "",

@@ -576,7 +576,8 @@ npx agentsdir pack remove <name> [--force] [--dry-run] [--json]
 
 ### Behavior
 
-`pack add` installs a pack (`creator`, `verification`, `changelog`, `worktrees`):
+`pack add` installs a pack (`creator`, `verification`, `changelog`, `worktrees`,
+`usage`):
 pack files, index entries in managed blocks, update of
 `[packs] installed` in the manifest. `pack remove` removes those same elements;
 it **refuses** if pack files have been modified locally, unless
@@ -594,6 +595,11 @@ Mechanics common to all packs:
   manifest fingerprints prove they belong to the pack, and removes those
   fingerprints in the same manifest write — without which Claude Code
   would keep discovering a deleted skill.
+- The `usage` pack installs two stages: the collectors that write the journal
+  ([conventions.md](conventions.md) §9) and `$review-usage`, the meta-skill
+  that turns it into a review (§11). `pack remove usage` takes the journal with
+  it, which is the data the user uninstalled the pack to be rid of.
+
 - A pre-existing `CHANGELOG.md` is kept as is when the `changelog` pack is
   installed (a note is emitted); on uninstall, a changelog that has lived
   differs from the seed and falls under the exit `1` refusal — `--force`

@@ -11,3 +11,11 @@
  * journal format.
  */
 export const USAGE_JOURNAL_DIR = ".agents/output/usage";
+
+/**
+ * Days a journal file survives. Shared by the two stages of the pack: the
+ * collectors prune past it, and the review states it as a limit of what it
+ * could observe — a conclusion drawn on a 30-day window is not a conclusion
+ * about the year.
+ */
+export const USAGE_RETENTION_DAYS = 30;

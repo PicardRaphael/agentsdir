@@ -148,8 +148,12 @@ ce document : la preuve passe devant, et la mesure d'usage se scinde.
    il est payé ; les octets et les lignes sont exacts, les tokens sont une
    estimation assumée et calibrée. Purement statique, livrable en une passe, et
    visible immédiatement — ce qu'elle a été.
-5. **Conclure** — tâche 30, l'analyse du journal, quand il y a enfin quelque
-   chose à analyser, croisée avec le coût de l'étape 4.
+5. **Conclure** — tâche 30, l'analyse du journal, **livrée le 13 septembre
+   2026**. `$review-usage` dit ce qui sert, ce qui n'a jamais été vu et ce que
+   la mesure ne peut pas dire, croisé avec le coût de l'étape 4. Le rapport
+   refuse de conclure sur une absence tant que le journal n'a pas le volume
+   pour ça : c'est la garantie qui distingue un constat d'une statistique sur
+   trois points.
 6. **Brancher** — tâche 27 (MCP), le quatrième objet qui manque à la structure.
    Placée en dernier parce que c'est du rattrapage — ruler et rulesync le font
    déjà — et parce que le groupe de travail « Skills over MCP » peut encore
