@@ -420,6 +420,21 @@ resolved, on the first ordinary command.
 
 ### Internal
 
+- **The technical debt of the first architecture audit is cleared** (tasks 17
+  to 23). Seven refactors, every one of them byte-for-byte neutral — 234
+  fingerprints of what `init` produces, across two stacks and two pack sets,
+  taken before the first and replayed after each. One directory walk instead of
+  three, with the sort order made a contract because the lock fingerprints are
+  fed in it. One gate for the manifest, one planner for the lock. A harness now
+  declares itself once — its directory, its hook registry, its event casing and
+  whether agentsdir projects files for it — instead of being named by twelve
+  event definitions and six `includes("claude")` guards. Every diagnosis names
+  what actually happened rather than asserting an absence it never checked.
+  Every command that writes does so atomically, and has a test where a write
+  fails. Coverage is measured (`npm run test:coverage`, 82% of statements) and
+  still enforces nothing.
+
+
 - Consolidation after an architecture audit, with no change in behaviour: the
   projection orchestration, the pack registry, the rules index composition, the
   harness list and the filesystem probes each existed in several copies and now

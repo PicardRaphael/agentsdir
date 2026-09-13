@@ -43,6 +43,7 @@ fabrique.
 | `npm run lint` | ESLint puis `prettier --check` — bloquants, en local comme en CI. |
 | `npm run build` | Bundle unique `dist/cli.js` via tsup. |
 | `npm run test:e2e` | Construit le bundle puis lance les scénarios de `e2e/` contre la CLI compilée. |
+| `npm run test:coverage` | Construit le bundle puis lance Vitest avec la couverture v8 : tableau lisible en CI et `coverage/coverage-summary.json` pour un suivi dans le temps. |
 
 La CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) enchaîne typecheck → lint → test → build → test:e2e sur ubuntu-latest **et** windows-latest. La CI Windows n'est pas optionnelle : le mode copie (repli) doit y passer sans symlinks. Les scénarios e2e en mode symlink se désactivent d'eux-mêmes (sonde `detectSymlinkSupport`) là où les symlinks sont indisponibles : ubuntu prouve le mode symlink, windows prouve le mode copie.
 
@@ -151,12 +152,42 @@ fragile, dépendant de services tiers. Ce tier reste manuel et peu fréquent,
 assumé comme tel. Son résultat, en revanche, n'est pas facultatif : tout écart
 constaté devient une tâche de `.agents/tasks/` ou un correctif.
 
+## L'injection de pannes
+
+Aucun test ne simulait une écriture qui échoue, et c'est par ce trou que l'audit d'architecture est passé : ses cinq défauts vivaient tous sur un chemin d'erreur, et aucun de ces chemins n'était exécuté.
+
+**Le procédé est une seule fonction partagée**, `makeUnreadable` (`src/test-support/index.ts`) : elle échange la nature du chemin — un fichier là où un répertoire est attendu (`ENOTDIR` sur `readdir`), un répertoire là où un fichier est attendu (`EISDIR` sur `readFile`) — et rend l'annulation, pour qu'un test prouve aussi que le dépôt redevient sain une fois la cause retirée.
+
+Deux choses ont été écartées, et pour la même raison : `chmod` ne produit rien sous Windows, où la CI tourne aussi, et une garde prouvée sur une plateforme n'est pas prouvée ; un mock de `node:fs` testerait le mock. Le procédé retenu marche partout et exerce le vrai code errno, que les diagnostics inspectent désormais (tâche 22).
+
+**Chaque commande qui écrit a son test de panne** (`src/commands/__tests__/write-failures.test.ts`), et chacun vérifie les trois choses qu'un utilisateur constate : le code de sortie, le message, et l'état du dépôt après l'échec — `init`, `sync`, `add rule`, `add skill`, `add agent`, `add hook`, `pack add`, `pack remove`, `update`.
+
+## La couverture : ce qu'elle mesure, et ce qu'elle ne mesure pas
+
+`npm run test:coverage` produit le tableau et `coverage/coverage-summary.json`. **Aucun seuil bloquant** : la décision est inchangée (voir plus bas), et un pourcentage se gagne avec des tests qui exécutent des lignes sans rien affirmer.
+
+Au 13 septembre 2026 : **82 % des instructions, 72 % des branches**. Les fichiers les moins couverts, avec la décision prise pour chacun :
+
+| Fichier | Couverture | Décision |
+| --- | --- | --- |
+| `src/cli.ts` | 0 % | **Assumé.** C'est le câblage citty ; il n'est jamais importé en test, il est exécuté en sous-processus par les tests du contrat `--json` et par `e2e/`. Le couvrir en mémoire mesurerait l'import, pas la traversée. |
+| `src/commands/init-interview.ts` | 0 % | **Assumé.** Les questions `@clack/prompts` n'ont pas de chemin non interactif : les tests passent par les drapeaux et par le repli non-TTY, décision déjà prise plus bas. Chaque question a son drapeau, et c'est le drapeau qui est testé (`generator-flags.test.ts`). |
+| `src/core/errors.ts` | 20 % | **Assumé.** Les branches non couvertes sont la traduction d'erreurs filesystem que le code appelant attrape avant d'arriver là ; leur sortie est vérifiée par le contrat `--json` en sous-processus. |
+| `src/core/repo.ts` | 20 % | **Assumé.** Cinq lignes qui appellent `git rev-parse` ; l'échec est couvert par `json-failure-contract.test.ts`, en sous-processus. |
+| `src/commands/check.ts` | 21 % | **Assumé, même raison que `cli.ts`** : la logique est dans `core/validate.ts` (94 %), le fichier n'est que la commande citty. |
+| `src/commands/add-skill.ts` | 27 % | **Assumé.** Le corps non couvert est l'interview et le câblage de la commande ; `runAddSkill`, la partie qui écrit, l'est par `add-skill.test.ts` et par le test de panne. |
+| `src/commands/add-agent.ts`, `add-rule.ts`, `add-common.ts` | 33 à 55 % | **Assumé, même partage** : interview et commande non couvertes, fonction `run*` couverte. |
+| `src/commands/update.ts` | 71 % | **À couvrir.** C'est la commande la plus exposée — elle remplace du contenu installé — et 29 % de ses instructions ne sont exercées par rien. Les branches manquantes sont la résolution interactive des conflits et les chemins de migration multi-étapes. |
+| `src/commands/sync.ts` | 75 % | **À couvrir**, dans une moindre mesure : les branches de bascule de mode sous conditions rares. |
+
+Les deux dernières lignes sont les seules qui appellent du travail. Elles ne sont pas faites ici : la tâche 23 demandait de **nommer** les moins couverts et de décider pour chacun, pas de tout couvrir — et une tâche qui élargit son périmètre en cours de route est la façon la plus sûre de ne jamais la livrer.
+
 ## Ce qu'on ne teste pas (décisions explicites)
 
 - **Le texte exact de l'aide** : on vérifie la traversée (nom du binaire, section usage, code de sortie), pas la mise en forme — elle appartient au parseur (citty).
 - **Les dépendances elles-mêmes** (citty) : on teste le comportement d'agentsdir, pas leurs internes.
 - **macOS en CI** : ubuntu couvre le mode symlink, windows couvre le mode copie (repli) ; macOS n'apporterait aucun cas supplémentaire.
-- **Aucun seuil de couverture** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage.
+- **Aucun seuil de couverture bloquant** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage. La couverture est mesurée et lisible (`npm run test:coverage`), elle ne fait échouer personne.
 - **L'interactivité `@clack/prompts`** : les tests passent par les drapeaux, par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
 - **Quatre règles de `check` restent sans test qui les nomme** : `agent-unreadable`, `lock-skill-missing`, `projection-missing` et `projection-header-removed`. Aucun test ne déclenche ces quatre-là en vérifiant leur message ; c'est un trou connu, pas une décision.
 - **Le doublon de garde de `planLock` (`src/commands/sync.ts`)** : le filtre `NAME_SPEC` y est une ceinture par-dessus les bretelles de `validateRepo`, qui refuse la clé avant que `sync` ne planifie quoi que ce soit. Le retirer ne peut faire échouer aucun test — la garde observable est celle de `src/core/validate.ts`, et c'est elle que la mutation prouve.
