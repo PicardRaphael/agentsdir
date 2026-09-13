@@ -197,6 +197,7 @@ Les deux dernières lignes appelaient du travail ; il a été fait le 13 septemb
 
 - **Le texte exact de l'aide** : on vérifie la traversée (nom du binaire, section usage, code de sortie), pas la mise en forme — elle appartient au parseur (citty).
 - **Les dépendances elles-mêmes** (citty) : on teste le comportement d'agentsdir, pas leurs internes.
+- **Le budget de temps d'un test** : 20 s, pas les 5 s par défaut de Vitest. Les tests les plus lourds installent un dépôt puis le traversent avec une dizaine de sous-processus — un `node` ou un `git` par spawn — et un runner Windows partagé met six à sept fois ce que met une machine de développement : 900 ms ici, 6,5 s en CI. Deux tests du pack `usage` ont expiré le 13 septembre 2026 sur une exécution dont toutes les assertions passaient. La borne reste une borne : seul un test réellement bloqué l'atteint.
 - **macOS en CI** : ubuntu couvre le mode symlink, windows couvre le mode copie (repli) ; macOS n'apporterait aucun cas supplémentaire.
 - **Aucun seuil de couverture bloquant** : la mesure de livraison est la satisfaction des critères d'acceptation des tâches, pas un pourcentage. La couverture est mesurée et lisible (`npm run test:coverage`), elle ne fait échouer personne.
 - **L'interactivité `@clack/prompts`** : les tests passent par les drapeaux, par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
