@@ -166,7 +166,11 @@ Deux choses ont été écartées, et pour la même raison : `chmod` ne produit r
 
 `npm run test:coverage` produit le tableau et `coverage/coverage-summary.json`. **Aucun seuil bloquant** : la décision est inchangée (voir plus bas), et un pourcentage se gagne avec des tests qui exécutent des lignes sans rien affirmer.
 
-Au 13 septembre 2026 : **84 % des instructions, 74 % des branches**. Les fichiers les moins couverts, avec la décision prise pour chacun :
+Au 13 septembre 2026 : **86 % des instructions, 75 % des branches**.
+
+**Le plafond est là, et il est assumé.** Ce qui reste non couvert est de quatre natures, toutes tranchées ci-dessous : le câblage citty, les questions `@clack/prompts`, les sorties console et les branches défensives. Chaque point au-delà exigerait de tester un mock ou un import — c'est-à-dire d'écrire des tests qui n'affirment rien, pour contredire les décisions de ce document. 100 % n'est pas un objectif ici ; ce qui en est un, c'est qu'aucune ligne que l'utilisateur lit ou heurte ne reste sans test, et c'est fait.
+
+Les fichiers les moins couverts, avec la décision prise pour chacun :
 
 | Fichier | Couverture | Décision |
 | --- | --- | --- |
@@ -175,8 +179,9 @@ Au 13 septembre 2026 : **84 % des instructions, 74 % des branches**. Les fichier
 | `src/core/errors.ts` | 20 % | **Assumé.** Les branches non couvertes sont la traduction d'erreurs filesystem que le code appelant attrape avant d'arriver là ; leur sortie est vérifiée par le contrat `--json` en sous-processus. |
 | `src/core/repo.ts` | 20 % | **Assumé.** Cinq lignes qui appellent `git rev-parse` ; l'échec est couvert par `json-failure-contract.test.ts`, en sous-processus. |
 | `src/commands/check.ts` | 21 % | **Assumé, même raison que `cli.ts`** : la logique est dans `core/validate.ts` (94 %), le fichier n'est que la commande citty. |
-| `src/commands/add-skill.ts` | 27 % | **Assumé.** Le corps non couvert est l'interview et le câblage de la commande ; `runAddSkill`, la partie qui écrit, l'est par `add-skill.test.ts` et par le test de panne. |
-| `src/commands/add-agent.ts`, `add-rule.ts`, `add-common.ts` | 33 à 55 % | **Assumé, même partage** : interview et commande non couvertes, fonction `run*` couverte. |
+| `src/commands/add-skill.ts` | 45 % | **Assumé.** Ce qui reste est l'interview et le câblage de la commande ; `runAddSkill` est couverte par `add-skill.test.ts` et par le test de panne, et la table `SKILL_RULES` — les six refus qu'un utilisateur rencontre en se trompant de drapeau — par `flag-validation.test.ts` depuis le 13 septembre 2026. |
+| `src/commands/add-agent.ts`, `add-rule.ts`, `add-common.ts` | 37 à 63 % | **Assumé, même partage** : interview et commande non couvertes, fonction `run*` couverte, validateurs de drapeaux et `renderGeneratorReport` couverts. |
+| `src/commands/init.ts` | 78 % | **Assumé.** `runInit` est couverte de bout en bout par `init.test.ts` et la base d'empreintes ; `renderReport` — le premier écran du produit — l'est depuis le 13 septembre 2026. Ce qui reste est le bloc citty `run()` et le repli non-TTY de l'interview. |
 | `src/commands/update.ts` | 84 % | **Couvert le 13 septembre 2026.** `renderUpdateReport` et `mergeChanges` — le texte que l'utilisateur lit et la règle de fusion qui le nourrit — ont leurs tests directs (`src/commands/__tests__/reports.test.ts`), branche d'abandon et conflits non tranchés compris. Reste `askResolver` (prompts, assumé comme `init-interview`) et le bloc citty `run()` (exercé en sous-processus). |
 | `src/commands/sync.ts` | 88 % | **Couvert le 13 septembre 2026.** `renderSyncReport` a ses tests directs, abandon sur invariants compris. Reste le bloc citty `run()`, assumé comme `cli.ts`. |
 
@@ -191,4 +196,5 @@ Les deux dernières lignes appelaient du travail ; il a été fait le 13 septemb
 - **L'interactivité `@clack/prompts`** : les tests passent par les drapeaux, par `--yes` ou par le repli non-TTY (défauts) ; le rendu et la navigation des questions appartiennent à la bibliothèque.
 - **Quatre règles de `check` restent sans test qui les nomme** : `agent-unreadable`, `lock-skill-missing`, `projection-missing` et `projection-header-removed`. Aucun test ne déclenche ces quatre-là en vérifiant leur message ; c'est un trou connu, pas une décision.
 - **Deux `readdir` nus dans `src/`** : `src/core/fs-utils.ts` héberge le helper lui-même et l'unique parcours récursif ; `src/core/projections.ts` en garde un dans `removeIfNoFilesLeft`, où la tolérance est le contrat (nettoyer les sous-dossiers vidés d'un miroir est du meilleur effort, jamais une décision). Toute autre occurrence est refusée par le test-garde de `src/core/__tests__/unreadable-directory.test.ts` : un répertoire illisible lu comme vide a déjà fait passer `check` au vert sur un dépôt qu'il ne voyait pas.
+- **Le `padEnd(7)` de `renderGeneratorReport` (`src/commands/add-common.ts`)** : les trois actions d'un générateur — `created`, `updated`, `removed` — font exactement sept caractères, donc le remplissage ne remplit jamais rien. Le retirer ne peut faire échouer aucun test, et la mutation le prouve. Il reste parce qu'il est la défense d'une quatrième action plus courte, pas parce qu'il est observable aujourd'hui ; à ne pas confondre avec l'`actionLabel` de `sync.ts`, où `ok` fait deux lettres et où le remplissage est bel et bien testé.
 - **Le doublon de garde de `planLock` (`src/commands/sync.ts`)** : le filtre `NAME_SPEC` y est une ceinture par-dessus les bretelles de `validateRepo`, qui refuse la clé avant que `sync` ne planifie quoi que ce soit. Le retirer ne peut faire échouer aucun test — la garde observable est celle de `src/core/validate.ts`, et c'est elle que la mutation prouve.

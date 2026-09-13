@@ -165,9 +165,14 @@ describe("core - an unreadable directory is not an empty one", () => {
       // best effort by contract: emptied sub-folders of a mirror that is being
       // cleaned up, inside a try/catch that documents the tolerance
       ["core/projections.ts", "removeIfNoFilesLeft, best effort by contract"],
+      // not code this CLI runs: these two render the JavaScript of the hook
+      // scripts installed in the user repo, where a directory read that throws
+      // would abort an agent session — tolerance is the right answer there
+      ["packs/usage.ts", "emitted hook source, not executed here"],
+      ["packs/usage-review.ts", "emitted hook source, not executed here"],
     ]);
     const offenders = sourceFiles(srcRoot)
-      .filter((file) => /\breaddir\(/.test(readFileSync(file, "utf8")))
+      .filter((file) => /\breaddir(Sync)?\(/.test(readFileSync(file, "utf8")))
       .map((file) => file.slice(srcRoot.length).split("\\").join("/"))
       .filter((file) => !allowed.has(file));
 

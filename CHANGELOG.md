@@ -226,7 +226,7 @@ resolved, on the first ordinary command.
   it never saw. `.agents/skills` had the same hole, hidden behind the lock
   whenever one existed, and `doctor` billed both directories at zero in the
   context budget it reports. The 1.0.0 fix that taught the projection engine to
-  tell an absent directory from an unreadable one missed these four call sites;
+  tell an absent directory from an unreadable one missed five call sites;
   every directory read now goes through the same helper, which returns nothing
   for an absent directory and refuses on any other error, and a test refuses a
   new bare `readdir` anywhere outside it. `doctor` reports the refusal as a
