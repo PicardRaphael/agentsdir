@@ -432,14 +432,23 @@ Regenerates every projection from the source of truth, in this order:
    reads `Bash(node <path under .agents/> *)`, a registration iff its command is
    exactly `node .agents/hooks/<file>`. Everything else the file holds is
    preserved, in place and in order.
-5. **Lock** — recomputation of the sha256 fingerprints of `skills-lock.json`
+5. **MCP servers** — the servers declared in `.agents/mcp.toml` are written
+   into the file each enabled harness reads: `.mcp.json`, `.cursor/mcp.json`
+   and a managed block at the end of `.codex/config.toml` (formats and
+   rationale in [conventions.md](conventions.md) §12). Ownership is by server
+   name: an entry named in the declaration is rewritten, an entry the manifest
+   recorded but the declaration dropped is removed, and every other entry — a
+   server someone added by hand, token included — is left exactly as it is. A
+   repository with no declaration gets no file.
+6. **Lock** — recomputation of the sha256 fingerprints of `skills-lock.json`
    for vendored skills (`sourceType: "github"`); the `"agentsdir"` entries stay
    pinned to the installed version (`update` protection), never recomputed.
-6. **Orphan projections** — the projections of a harness removed from
+7. **Orphan projections** — the projections of a harness removed from
    `[harness] enabled` are deleted (listed in the report); `sync` never touches
    a file that does not carry the generated header or that is not a link known
    to the manifest.
-7. **Manifest** — timestamp and schema version.
+8. **Manifest** — timestamp, schema version, and the names of the MCP servers
+   projected by this run.
 
 ```mermaid
 flowchart LR
@@ -451,9 +460,11 @@ flowchart LR
     V -- ok --> P1[Links or copies:<br/>CLAUDE.md, .claude/*]
     V -- ok --> P2[Codex:<br/>openai.yaml + icon.svg]
     V -- ok --> P3[Managed blocks:<br/>rules index, settings, hooks]
+    V -- ok --> P4[MCP servers:<br/>.mcp.json, .cursor, .codex block]
     P1 --> L[skills-lock.json]
     P2 --> L
     P3 --> L
+    P4 --> L
     L --> M[Manifest .agents.toml]
     M --> R[Report: removed / created / updated / ok]
 ```

@@ -69,7 +69,7 @@ flowchart LR
     S --> C[".codex/config.toml<br/>managed block, env_vars"]
 ```
 
-**Not covered.** The MCP specification is at its 2026-07-28 revision and a "Skills over MCP" working group may bring the two objects of this product together. Nothing is anticipated here: what is projected is what the three harnesses document today, to be reassessed when that group publishes. Launching, supervising or reaching a server stays out of scope — this CLI installs and verifies configuration.
+**Not covered.** The task file behind this work (August 2026) noted a recent revision of the MCP specification and a "Skills over MCP" working group that may bring the two objects of this product together; neither was re-verified on 2026-09-13, and neither is anticipated here: what is projected is what the three harnesses document today, to be reassessed when that group publishes. Launching, supervising or reaching a server stays out of scope — this CLI installs and verifies configuration.
 
 ## 5. Non-standardized points, or points to verify
 

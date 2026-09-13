@@ -289,6 +289,10 @@ export async function planMcpProjections(
   servers: readonly McpServer[],
   previous: readonly string[] = [],
 ): Promise<McpProjectionPlan[]> {
+  // A projection emptied of every server keeps its file, holding `{}` or, for
+  // Codex, whatever the user had around the block. That is what the hook
+  // registries do with an emptied registry, and deleting a file the user can
+  // see is a bigger decision than this plan is allowed to make.
   const ours = new Set([...servers.map((server) => server.name), ...previous]);
   const plans: McpProjectionPlan[] = [];
   for (const harness of HARNESSES) {

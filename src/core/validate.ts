@@ -1,5 +1,5 @@
 import { pathExists, readdirEntriesOrEmpty } from "./fs-utils.js";
-import { hasFileProjections } from "./harnesses.js";
+import { HARNESSES, hasFileProjections } from "./harnesses.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
@@ -986,9 +986,11 @@ async function validateMcp(
     ];
   }
   const recorded = manifest.mcp?.servers ?? [];
-  if (servers === undefined && recorded.length === 0) {
-    return [];
-  }
+  // no short circuit when the source is absent: a projection restored from git,
+  // or left by a removal that never ran, is drift `sync` repairs — and `check`
+  // going green on it is the silent-green failure this CLI exists to prevent.
+  // A repository with neither source nor projection produces no plan at all,
+  // so the comparison below stays free for the common case.
   const declared = servers ?? [];
   const secrets = mcpSecretProblems(declared).map((problem): Violation => ({
     path: problem.path,
@@ -1039,10 +1041,7 @@ async function validateMcp(
     violations.push({
       path: plan.path,
       rule: "mcp-projection-drift",
-      message:
-        plan.deprojects === true
-          ? `this harness is no longer in \`[harness] enabled\`, yet it still declares MCP servers from ${MCP_SOURCE} — run \`agentsdir sync\` to remove them.`
-          : `differs from ${MCP_SOURCE} — run \`agentsdir sync\` to regenerate it.`,
+      message: mcpDriftMessage(plan, manifest.harness.enabled),
       severity: "error",
     });
   }
@@ -1050,9 +1049,35 @@ async function validateMcp(
 }
 
 /**
+ * Why this projection is out of step. The two reasons a projection can still
+ * hold servers call for different fixes, and a message that blurs them sends
+ * the user looking in the wrong file.
+ */
+function mcpDriftMessage(
+  plan: { path: string; deprojects?: boolean },
+  enabled: readonly string[],
+): string {
+  if (plan.deprojects !== true) {
+    return `differs from ${MCP_SOURCE} — run \`agentsdir sync\` to regenerate it.`;
+  }
+  const harness = HARNESSES.find(
+    (candidate) => MCP_PROJECTIONS[candidate] === plan.path,
+  );
+  return harness !== undefined && !enabled.includes(harness)
+    ? `this harness is no longer in \`[harness] enabled\`, yet it still declares MCP servers — it would keep starting them; run \`agentsdir sync\` to remove them.`
+    : `declares MCP servers that ${MCP_SOURCE} no longer does — they would still start; run \`agentsdir sync\` to remove them.`;
+}
+
+/**
  * The first key written after the managed block of `.codex/config.toml`, if
- * any. Only a top-level assignment matters: a `[table]` header of its own ends
- * the last server table and is perfectly safe.
+ * any. Only a bare assignment matters: a `[table]` header of its own ends the
+ * last server table, so anything under it is safe again.
+ *
+ * That includes `[mcp_servers.<ours>.env]`, which is legal TOML and does reach
+ * one of our servers — deliberately, since it is the only way to give a server
+ * a literal value the source refuses to carry. It is left alone rather than
+ * reported: the guard is about the key someone loses by accident, not about
+ * the table someone writes on purpose.
  */
 async function codexKeysAfterBlock(root: string): Promise<string | undefined> {
   let raw: string;

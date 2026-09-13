@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -243,6 +243,55 @@ describe("27 - one declaration, three projections", () => {
     expect(await read(dir, MCP_PROJECTIONS.codex)).not.toContain("agentsdir");
     expect(await read(dir, MCP_PROJECTIONS.claude)).not.toContain("context7");
     expect(await read(dir, MANIFEST_FILE)).not.toContain("[mcp]");
+  });
+
+  it("Given the declaration file deleted outright, When sync runs, Then all three projections lose our servers and check goes green", async () => {
+    // deleting the file is what a user actually does; emptying it is what a
+    // test does. The two must behave the same, and the manifest must forget
+    // the names so nothing stays half-owned.
+    const dir = await repo();
+    await declare(dir, TWO_SERVERS);
+    await runSync(dir, { dryRun: false });
+    await rm(join(dir, ...MCP_SOURCE.split("/")));
+
+    await runSync(dir, { dryRun: false });
+
+    expect(
+      Object.keys(
+        (await json(dir, MCP_PROJECTIONS.claude))["mcpServers"] ?? {},
+      ),
+    ).toEqual([]);
+    expect(
+      Object.keys(
+        (await json(dir, MCP_PROJECTIONS.cursor))["mcpServers"] ?? {},
+      ),
+    ).toEqual([]);
+    expect(await read(dir, MCP_PROJECTIONS.codex)).not.toContain("mcp_servers");
+    expect(await read(dir, MANIFEST_FILE)).not.toContain("[mcp]");
+    expect((await check(dir)).filter((v) => v.rule.startsWith("mcp-"))).toEqual(
+      [],
+    );
+  });
+
+  it("Given a projection restored from git after the source was deleted, When check runs, Then it refuses instead of passing green on servers that would still start", async () => {
+    // the silent-green failure this CLI exists to prevent: sync repairs it, so
+    // check must see it. A short circuit on "no source, nothing recorded" used
+    // to make this repository pass.
+    const dir = await repo();
+    await declare(dir, TWO_SERVERS);
+    await runSync(dir, { dryRun: false });
+    const codex = await read(dir, MCP_PROJECTIONS.codex);
+    await rm(join(dir, ...MCP_SOURCE.split("/")));
+    await runSync(dir, { dryRun: false });
+    // someone checks the old file back out
+    await writeFile(join(dir, MCP_PROJECTIONS.codex), codex, "utf8");
+
+    const drift = ruled(await check(dir), "mcp-projection-drift");
+
+    expect(drift[0]?.path).toBe(MCP_PROJECTIONS.codex);
+    expect(drift[0]?.message).toContain("they would still start");
+    await runSync(dir, { dryRun: false });
+    expect(await read(dir, MCP_PROJECTIONS.codex)).not.toContain("mcp_servers");
   });
 
   it("Given a harness no longer enabled, When sync runs, Then its servers are removed rather than left configured", async () => {
