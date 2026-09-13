@@ -112,6 +112,7 @@ Exhaustive list:
 16. **Hook registry shape**: every registry of an enabled harness (`.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`) that exists on disk is valid JSON with an object at the top level. `check` and `sync` hold it to the same contract, so CI never passes on a repository `sync` would refuse.
 17. **Hook registrations in step**: those registries hold exactly what the scripts of `.agents/hooks/` imply. A script added without a `sync` is registered nowhere and no harness would ever run it; a deleted script leaves registrations the harnesses would still try to execute. Both are drift (`hook-registration-drift`), and `sync` repairs them.
 18. **Nothing loaded that agentsdir cannot see**: a skill folder of `.agents/skills/` or a file of `.agents/agents/` that is a symlink is refused. The harness follows it and loads what it points at, which this CLI can neither validate nor project.
+19. **Hook metadata that cannot be read**: a script carrying an `agentsdir:hook` comment whose JSON is malformed, whose `event` key is missing, or which names an unknown event is reported (`hook-metadata-invalid`) instead of silently falling back to the file-name convention. The author declared an event; when the declaration cannot be read the script ends up registered under whatever its file name implies, or nowhere at all, and nothing said why. An **absent** comment is not a problem — the `<event>-<slug>.mjs` name is a documented way to declare the event.
 
 ## 5. Rule format
 

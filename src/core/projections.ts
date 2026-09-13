@@ -795,6 +795,14 @@ function walkProjected(
   });
 }
 
+/** A projection target that exists and cannot be read — never an absence. */
+function unreadableTarget(absTarget: string, error: unknown): CliError {
+  return new CliError(
+    `Cannot read ${absTarget} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to treat a file it cannot inspect as an absent one.`,
+    EXIT_CODES.environmentOrUsage,
+  );
+}
+
 async function classifyLinkTarget(
   absTarget: string,
   expected: string,
@@ -802,8 +810,13 @@ async function classifyLinkTarget(
   let stats;
   try {
     stats = await lstat(absTarget);
-  } catch {
-    return "absent";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return "absent";
+    }
+    // there and unreadable: classifying it "absent" would have the next write
+    // land on top of a file nobody could inspect
+    throw unreadableTarget(absTarget, error);
   }
   if (!stats.isSymbolicLink()) {
     return (await isMaterializedLink(absTarget, stats.isFile(), expected))
@@ -818,8 +831,8 @@ async function classifyLinkTarget(
 /**
  * A checkout without symlink support writes the link target as the file
  * content — the very case this product exists to cover. Such a file is ours,
- * not a stranger: treating it as foreign left  telling the user to run
- * , and  refusing, with no way out but a manual delete that no
+ * not a stranger: treating it as foreign left `check` telling the user to run
+ * `sync`, and `sync` refusing, with no way out but a manual delete that no
  * message mentioned.
  */
 async function isMaterializedLink(
@@ -847,8 +860,11 @@ async function classifyCopyTarget(
   let current: Buffer;
   try {
     current = await readFile(absTarget);
-  } catch {
-    return "absent";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return "absent";
+    }
+    throw unreadableTarget(absTarget, error);
   }
   if (current.equals(file.content)) {
     return "unchanged";

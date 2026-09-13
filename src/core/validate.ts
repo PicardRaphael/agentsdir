@@ -13,6 +13,8 @@ import {
 import {
   HOOK_HARNESSES,
   HOOK_REGISTRY_PATHS,
+  HOOKS_DIR,
+  hookMetadataProblems,
   planHookRegistrations,
   registryProblem,
 } from "./hook-registries.js";
@@ -66,6 +68,7 @@ export async function validateRepo(
   violations.push(...(await validateRulesIndex(root)));
   violations.push(...(await validateLock(root)));
   violations.push(...(await validateHookRegistries(root, manifest)));
+  violations.push(...(await validateHookMetadata(root)));
   violations.push(...(await validateHookProtocol(root, options.hooks)));
   violations.push(...(await validateUsageJournal(root, manifest)));
   return violations;
@@ -143,6 +146,23 @@ async function validateSymlinkHealth(
           : `this repo projects in copy mode, yet git still indexes this path as a symlink (mode 120000) — run \`git add ${path}\` so the index records a regular file; the next clone would otherwise turn it into a link pointing at its own content.`,
       severity: "error" as const,
     }));
+}
+
+/**
+ * A hook script whose `agentsdir:hook` comment is unusable.
+ *
+ * The author declared an event; the parser could not read it, and attribution
+ * fell back to the file name — so the script is registered under another event
+ * or under none, and nothing said why. The declaration and the registration
+ * disagree, which is exactly what `check` is for.
+ */
+async function validateHookMetadata(root: string): Promise<Violation[]> {
+  return (await hookMetadataProblems(root)).map(({ file, problem }) => ({
+    path: `${HOOKS_DIR}/${file}`,
+    rule: "hook-metadata-invalid",
+    message: `${problem} — fix the comment, or delete it and let the \`<event>-<slug>.mjs\` file name declare the event. As it stands the script is registered under whatever its name implies, or not at all.`,
+    severity: "error" as const,
+  }));
 }
 
 /** Invariant 15 — every attributable hook script honours the protocol. */

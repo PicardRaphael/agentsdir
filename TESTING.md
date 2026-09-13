@@ -97,6 +97,10 @@ verte) est collée dans le message de commit qui l'introduit.
 | La traversee trie en unites de code, jamais par locale | `src/core/__tests__/walk-files.test.ts` | le comparateur de `walkFiles` (`src/core/fs-utils.ts`), dont depend l'ordre des empreintes |
 | Les exclusions d'empreinte viennent de l'appelant, pas d'un rappel en dur | `src/core/__tests__/walk-files.test.ts` | `SKILL_HASH_EXCLUDED` passe a `walkFiles` (`src/core/skill-hash.ts`) |
 | Un repertoire absent et un repertoire illisible ne se ressemblent pas, dans la traversee partagee | `src/core/__tests__/walk-files.test.ts` | la branche `options.unreadable` de `walkFiles` |
+| Un manifeste illisible se dit illisible, pas absent | `src/core/__tests__/exact-diagnostics.test.ts` | la branche non-ENOENT de `readManifest` (`src/core/manifest.ts`) |
+| `doctor` diagnostique un manifeste illisible au lieu de sortir en 2 | `src/core/__tests__/exact-diagnostics.test.ts` | le `ManifestError` que `runDoctor` sait rapporter |
+| Une cible de projection illisible n'est pas ecrasee comme si elle etait absente | `src/core/__tests__/exact-diagnostics.test.ts` | `unreadableTarget` dans `classifyCopyTarget`/`classifyLinkTarget` |
+| Une metadonnee `agentsdir:hook` cassee est nommee, pas ignoree | `src/core/__tests__/exact-diagnostics.test.ts` | `hookMetadataProblem` et la regle `hook-metadata-invalid` |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

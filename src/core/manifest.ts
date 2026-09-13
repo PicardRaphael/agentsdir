@@ -54,12 +54,19 @@ export async function readManifest(dir: string): Promise<Manifest> {
   try {
     raw = await readFile(path, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
       throw new ManifestError(
         `Manifest ${MANIFEST_FILE} not found in ${dir}. Run \`agentsdir init\` to create it.`,
       );
     }
-    throw error;
+    // it is there and cannot be read: saying "not found" would send the user
+    // to `init`, which would refuse on a repository that is already
+    // initialized. And `doctor` promises a diagnosis, never a failure — it can
+    // only keep that promise if the fault reaches it as a ManifestError.
+    throw new ManifestError(
+      `Manifest ${MANIFEST_FILE} cannot be read in ${dir} (${code ?? "unknown error"}). Fix its permissions or restore it — it is there, it is just unreadable.`,
+    );
   }
   let data: unknown;
   try {

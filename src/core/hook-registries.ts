@@ -109,11 +109,55 @@ export function hookMetadataLine(
 // multiline: a shebang or a prepended comment must not hide the metadata
 const META_PATTERN = /^\/\/ agentsdir:hook (\{.*\})\s*$/m;
 
+// the same line, whatever follows the marker — what an author *meant* to
+// declare, so a malformed declaration can be told apart from no declaration
+const META_MARKER = /^\/\/ agentsdir:hook(.*)$/m;
+
 export interface HookRegistration {
   /** Script file name inside `.agents/hooks/`. */
   file: string;
   event: HookEventSpec;
   matcher: string | undefined;
+}
+
+/**
+ * Why an invalid metadata comment deserves a message rather than a fallback.
+ *
+ * A script carrying `// agentsdir:hook {…}` has an author who declared an
+ * event. When that JSON is malformed or names an unknown event, the parser
+ * returns nothing and attribution silently falls back to the file name — so
+ * the hook is registered under another event, or under none at all, and
+ * nothing anywhere says why. The declaration and the registration disagree,
+ * which is drift; `check` names the file and the reason.
+ *
+ * Returns undefined when the comment is absent (the name convention is then
+ * the documented way to declare an event) or when it is perfectly valid.
+ */
+export function hookMetadataProblem(source: string): string | undefined {
+  // the MARKER, not the well-formed shape: `META_PATTERN` already requires a
+  // `{…}`, so a comment whose braces are unbalanced does not match it at all
+  // and would read as "no metadata here" — the exact silence to remove
+  const marker = source.match(META_MARKER);
+  if (marker === null) {
+    return undefined;
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(marker[1]?.trim() ?? "");
+  } catch {
+    return "its `agentsdir:hook` comment is not valid JSON";
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return "its `agentsdir:hook` comment is not a JSON object";
+  }
+  const table = data as Record<string, unknown>;
+  if (typeof table["event"] !== "string") {
+    return "its `agentsdir:hook` comment declares no `event` string";
+  }
+  if (resolveHookEvent(table["event"]) === undefined) {
+    return `its \`agentsdir:hook\` comment names an unknown event "${table["event"]}"`;
+  }
+  return undefined;
 }
 
 export function parseHookMetadata(
@@ -609,6 +653,24 @@ export function isRegistrableScript(name: string): boolean {
  * user-managed — registered nowhere, so no harness ever runs it, and running it
  * here would hold a file agentsdir does not own to a protocol it never claimed.
  */
+/**
+ * Every hook script whose metadata comment is present and unusable, with the
+ * reason. Exposed rather than the script list itself: the enumeration stays
+ * private, and `check` gets exactly what it reports.
+ */
+export async function hookMetadataProblems(
+  root: string,
+): Promise<{ file: string; problem: string }[]> {
+  const found: { file: string; problem: string }[] = [];
+  for (const script of await listHookScripts(root, {})) {
+    const problem = hookMetadataProblem(script.source);
+    if (problem !== undefined) {
+      found.push({ file: script.file, problem });
+    }
+  }
+  return found;
+}
+
 export async function listAttributedHookScripts(
   root: string,
 ): Promise<HookRegistration[]> {
