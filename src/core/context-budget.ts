@@ -6,6 +6,7 @@ import {
   readAgentFrontmatter,
   frontmatterBlockLength,
 } from "./frontmatter.js";
+import { NORMS } from "./conventions-dates.js";
 import { readdirEntriesOrEmpty } from "./fs-utils.js";
 import { listRuleFiles } from "./rules-index.js";
 
@@ -35,11 +36,15 @@ import { listRuleFiles } from "./rules-index.js";
  */
 export const CHARS_PER_TOKEN = 4;
 
-/** Description bound of the Agent Skills spec, in characters. */
-export const MAX_DESCRIPTION_CHARS = 1024;
-
-/** Recommended body budget of the Agent Skills spec, in tokens. */
-export const MAX_BODY_TOKENS = 5000;
+/**
+ * The two spec bounds this budget applies, read from the dated table rather
+ * than written here: a number in a condition carries neither its source nor the
+ * day it was checked, and both are what make it arguable. See
+ * `core/conventions-dates.ts`.
+ */
+export const MAX_DESCRIPTION_CHARS =
+  NORMS["skill-description-length"].bound.value;
+export const MAX_BODY_TOKENS = NORMS["skill-body-tokens"].bound.value;
 
 /** When the context window pays for an element. */
 export type WhenPaid = "always" | "on-invocation" | "when-relevant";

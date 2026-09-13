@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, TomlError } from "smol-toml";
 import { EXIT_CODES } from "../exit-codes.js";
+import { NORMS } from "./conventions-dates.js";
 import { CliError } from "./errors.js";
 import { HARNESS_SPECS, HARNESSES, type Harness } from "./harnesses.js";
 import { upsertBlock } from "./managed-blocks.js";
@@ -79,7 +80,9 @@ export interface McpServer {
  * segment and, for the user, the name they type. The grammar is repeated here
  * rather than imported from `validate.ts`, which imports this module.
  */
-const MCP_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const MCP_NAME = new RegExp(
+  `^[a-z0-9](?:[a-z0-9-]{0,${NORMS["skill-name-length"].bound.value - 2}}[a-z0-9])?$`,
+);
 
 /**
  * What an environment variable name looks like. Anything else in an `env` entry
@@ -146,7 +149,7 @@ export function parseMcpSource(raw: string): McpServer[] {
     const entry = table(servers[name], `\`servers.${name}\``);
     if (!MCP_NAME.test(name)) {
       throw fail(
-        `${MCP_SOURCE}: server name "${name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+        `${MCP_SOURCE}: server name "${name}" must be 1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -, without a leading or trailing dash.`,
       );
     }
     const declared = entry["type"];

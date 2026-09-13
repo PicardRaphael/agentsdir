@@ -66,6 +66,55 @@ resolved, on the first ordinary command.
 
 ### Added
 
+- **It can now tell you when its own advice got old.** A repository
+  configured six months ago carries a shape that was a good practice and is no
+  longer one, and nothing said so. `check` answers a different question —
+  whether a configuration still matches its source — and answering it well does
+  not answer this one at all.
+
+  So the norms this CLI applies are **data** now, not numbers typed into
+  conditions: each carries its bound, its source and **the day that source was
+  read**. The description and body bounds the context budget reports, the body
+  length `check` enforces and the name length every generator validates all
+  read from that one table, and the report prints the source and the date
+  beside the figure. The Agent Skills specification publishes neither a version
+  number nor a changelog, so a norm cannot be dated by its source — it is dated
+  at its consultation, which is the convention the hook registry formats
+  already followed.
+
+  `doctor` now opens with two lines: this CLI's version and the day it was cut,
+  and the day the embedded conventions were read. Past six months each becomes
+  an explicit notice naming the age and the remedy. The conventions age by the
+  **oldest** consultation in the table, never the most recent: a table
+  refreshed in one row and stale in six is as old as its oldest row.
+
+  Both dates are constants of the package. **No command opens a network
+  connection** — asking a registry would send the package name out of the
+  repository on an ordinary command — and two tests hold it rather than assert
+  it: one lays a trap where `fetch`, both DNS entry points and
+  `Socket.prototype.connect` throw, and runs `doctor`, `check` and the budget
+  through it; the other reads every source file and fails on any network API,
+  covering the code no run reaches.
+
+- **A meta-skill that judges the form, and says so in those words.** "These
+  five skills would be better merged" is an argument, not a count, so
+  `$review-form` joins the `creator` pack rather than the CLI. It confronts the
+  configuration with the dated norms and produces proposals that each quote the
+  norm, its source, the day it was read and the evidence found in this
+  repository — a proposal missing any of those is deleted.
+
+  The norms are not the agent's to recall: they ship rendered from the code
+  into `references/conventions.md` beside the skill, so a bump of the table
+  reaches installed repositories and `check` reports it if it does not.
+
+  It answers one question. A configuration can be asked four — has it
+  **drifted** (`check`), does it **serve** (`$review-usage`), what does it
+  **cost** (`doctor`), is its **form** still recommended (this) — and the skill
+  carries the table of all four with the command that answers each, because a
+  form problem said in the voice of a drift sends a team to `git diff` for
+  something that is not there. It writes into `.agents/output/form/`, sends
+  nothing anywhere, and applies nothing: the tool proposes, the team decides.
+
 - **And it can now find out whether that cost buys anything.** The `usage`
   pack observed; it now concludes. `$review-usage` turns the journal into a
   review saying three things, and the third is the one nobody else writes:

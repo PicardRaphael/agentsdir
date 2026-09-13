@@ -20,6 +20,13 @@ import {
   type ContextBudget,
   type WhenPaid,
 } from "../core/context-budget.js";
+import {
+  citeSource,
+  CONVENTIONS_CONSULTED,
+  monthsSince,
+  NORMS,
+  STALE_AFTER_MONTHS,
+} from "../core/conventions-dates.js";
 import { asUserFacingError } from "../core/errors.js";
 import {
   MANIFEST_SCHEMA,
@@ -30,6 +37,7 @@ import {
 } from "../core/manifest.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
+import { CLI_RELEASED, CLI_VERSION } from "../version.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -53,6 +61,8 @@ export interface DoctorProbes {
   gitSymlinks: () => Promise<GitSymlinksInfo>;
   developerMode: () => Promise<DeveloperMode>;
   machineHarnesses: () => Promise<string[]>;
+  /** Injected so a test can age the clock instead of waiting six months. */
+  today: () => Date;
 }
 
 export interface DoctorResult {
@@ -80,9 +90,10 @@ export async function runDoctor(
     gitSymlinks: () => detectGitSymlinks(root),
     developerMode: () => detectWindowsDeveloperMode(),
     machineHarnesses: () => detectHarnessesOnPath(),
+    today: () => new Date(),
     ...overrides,
   };
-  const findings: DoctorFinding[] = [];
+  const findings: DoctorFinding[] = [...practiceAgeFindings(probes.today())];
   const support = await probes.symlinkSupport();
   const git = await probes.gitSymlinks();
   findings.push({
@@ -174,6 +185,55 @@ export async function runDoctor(
     findings.push(contextBudgetFinding(context));
   }
   return { findings, mode, context, exitCode: EXIT_CODES.ok };
+}
+
+/**
+ * How old the advice in this report is, said before anything it supports: a
+ * bound quoted without its vintage reads as timeless, and none of them are.
+ * Both dates are printed at every run — the notice only changes the tone.
+ *
+ * Neither is fetched. The CLI carries the day it was cut, the norms carry the
+ * day they were read, and `doctor` opens no connection to confirm either.
+ */
+function practiceAgeFindings(today: Date): DoctorFinding[] {
+  return [
+    ageFinding(
+      "cli-age",
+      `this CLI is ${CLI_VERSION}, dated ${CLI_RELEASED}`,
+      CLI_RELEASED,
+      today,
+      "install a newer agentsdir to pick up newer conventions",
+    ),
+    ageFinding(
+      "conventions-age",
+      `the embedded conventions were read on ${CONVENTIONS_CONSULTED}`,
+      CONVENTIONS_CONSULTED,
+      today,
+      "re-read the sources listed in docs/conventions.md §13 before trusting a bound",
+    ),
+  ];
+}
+
+/**
+ * One age, one verdict. The date is stated whatever the age — the point is that
+ * the reader sees the vintage, not only that they are warned about it.
+ */
+function ageFinding(
+  rule: string,
+  head: string,
+  since: string,
+  today: Date,
+  remedy: string,
+): DoctorFinding {
+  const months = monthsSince(since, today);
+  return {
+    rule,
+    severity: months > STALE_AFTER_MONTHS ? "warn" : "ok",
+    message:
+      months > STALE_AFTER_MONTHS
+        ? `${head}, ${months} months ago — past ${STALE_AFTER_MONTHS}, the practices it applies may have moved; ${remedy}.`
+        : `${head}, ${months} month(s) ago.`,
+  };
 }
 
 /**
@@ -433,11 +493,11 @@ export function renderContextBudget(budget: ContextBudget): string {
   lines.push("");
   if (budget.bounds.length === 0) {
     lines.push(
-      `  Agent Skills bounds — none exceeded (description up to ${MAX_DESCRIPTION_CHARS} characters, body up to ~${MAX_BODY_TOKENS} tokens).`,
+      `  Agent Skills bounds — none exceeded (description up to ${MAX_DESCRIPTION_CHARS} characters, body up to ~${MAX_BODY_TOKENS} tokens). Bounds from ${citeSource(NORMS["skill-description-length"].source)}; see docs/conventions.md §13.`,
     );
   } else {
     lines.push(
-      "  Agent Skills bounds exceeded — informational; `agentsdir check` does not fail on a budget.",
+      `  Agent Skills bounds exceeded — informational; \`agentsdir check\` does not fail on a budget. Bounds from ${citeSource(NORMS["skill-description-length"].source)}; see docs/conventions.md §13.`,
     );
     for (const bound of budget.bounds) {
       lines.push(`    ${bound.path} · ${bound.message}`);
@@ -511,6 +571,7 @@ function machineContext(budget: ContextBudget | null): unknown {
     bounds: {
       maxDescriptionChars: MAX_DESCRIPTION_CHARS,
       maxBodyTokens: MAX_BODY_TOKENS,
+      source: citeSource(NORMS["skill-description-length"].source),
       exceeded: budget.bounds,
     },
     totals: budget.totals,

@@ -535,6 +535,11 @@ npx agentsdir doctor [--json]
 
 Read-only. Diagnoses the machine and the clone, not the content:
 
+- the **age of the advice** it is about to give: the version of the CLI and the
+  day it was cut, and the day the conventions it embeds were read. Past six
+  months, each becomes an explicit notice. Both dates are constants of the
+  package: no command of this CLI opens a network connection, and two tests
+  hold it (see [conventions.md](conventions.md) §13);
 - real symlink support (trial creation) and `git config core.symlinks`;
 - on Windows: developer mode enabled or administrator rights;
 - state of the existing links (real, or materialized as text files by a
@@ -566,8 +571,10 @@ calibrated once and printed with a `~`. The terminal shows the heaviest twelve
 items per block, `--json` carries every one. The Agent Skills bounds
 (`description` up to 1024 characters, body under ~5000 tokens) are checked and
 reported — as information: `doctor` exits `0` whatever the budget says, and
-`check` never fails on it. Full contract, calibration and cost of the measure:
-[conventions.md](conventions.md) §10.
+`check` never fails on it. Those bounds are not written into the code: they are
+read from the dated table of [conventions.md](conventions.md) §13, and the
+report prints their source and the day it was read beside them. Full contract,
+calibration and cost of the measure: [conventions.md](conventions.md) §10.
 
 ### Exit codes
 

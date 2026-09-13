@@ -57,6 +57,10 @@ verte) est collée dans le message de commit qui l'introduit.
 
 | Garde | Test | Ce que la mutation retire |
 | --- | --- | --- |
+| Aucune commande n'ouvre de connexion réseau, `doctor` compris | `src/core/__tests__/no-network.test.ts` | le piège posé sur `fetch`, `dns.lookup`, `dns.promises.lookup` et `Socket.prototype.connect`, et le balayage de `src/` qui couvre le code qu'aucune exécution n'atteint |
+| Une borne de la spec n'est jamais recopiée dans une condition | `src/core/__tests__/conventions-dates.test.ts` | la dérivation depuis `NORMS` dans `context-budget.ts`, `validate.ts`, `lock.ts`, `mcp.ts` et `add-common.ts` |
+| Les conventions embarquées vieillissent par la consultation la plus ancienne | `src/core/__tests__/conventions-dates.test.ts` | le sens de la comparaison dans `oldestConsulted` — prouvé sur des normes fabriquées, les sources livrées partageant aujourd'hui une seule date |
+| `$review-form` ne mélange jamais les quatre diagnostics et n'applique rien | `src/commands/__tests__/pack-creator-form.test.ts` | la table des quatre questions et la consigne « Apply nothing » du corps du skill |
 | Contrat `--json` en cas d'échec, pour les dix commandes qui exposent le drapeau | `src/commands/__tests__/json-failure-contract.test.ts` | la branche `if (json)` du `catch` de `check`, `sync`, `update`, `doctor` et `runGeneratorCli` |
 | Marqueurs de commentaire neutralisés dans la première ligne d'une règle | `src/commands/__tests__/rules-index-injection.test.ts` | `sanitizeHook` (`src/templates/agents-md.ts`) |
 | Clé de `skills-lock.json` refusée comme segment de chemin | `src/core/__tests__/lock-key-escape.test.ts` | le filtre `NAME_SPEC` sur la clé (`src/core/validate.ts`) |

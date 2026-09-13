@@ -1,6 +1,7 @@
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { CLI_VERSION } from "../version.js";
+import { NORMS } from "./conventions-dates.js";
 import { CliError } from "./errors.js";
 import { writeFileAtomic } from "./fs-utils.js";
 import { computeSkillHash } from "./skill-hash.js";
@@ -60,7 +61,9 @@ export interface LockDelta {
 }
 
 /** Skill-name grammar; a key becomes a path segment, so it is checked twice. */
-const NAME_SPEC = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const NAME_SPEC = new RegExp(
+  `^[a-z0-9](?:[a-z0-9-]{0,${NORMS["skill-name-length"].bound.value - 2}}[a-z0-9])?$`,
+);
 
 /**
  * The parsed lock, or undefined when there is none. A malformed one is a

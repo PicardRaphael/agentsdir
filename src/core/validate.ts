@@ -1,3 +1,4 @@
+import { NORMS } from "./conventions-dates.js";
 import { pathExists, readdirEntriesOrEmpty } from "./fs-utils.js";
 import { HARNESSES, hasFileProjections } from "./harnesses.js";
 import { readFile } from "node:fs/promises";
@@ -271,7 +272,7 @@ function validateSubAgentFields(
     violations.push({
       path,
       rule: "agent-name-spec",
-      message: `agent name "${name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      message: `agent name "${name}" must be 1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -, without a leading or trailing dash.`,
       severity: "error",
     });
   } else if (name !== file.slice(0, -".md".length)) {
@@ -340,8 +341,17 @@ async function validateProjections(
   }));
 }
 
-/** Agent Skills name spec, shared with the `add` generators. */
-export const NAME_SPEC = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+/**
+ * Agent Skills name spec, shared with the `add` generators.
+ *
+ * The grammar — lowercase, digits and dashes, no dash at either end — is
+ * agentsdir's; the LENGTH is the spec's, so it is read from the dated table
+ * instead of typed into the pattern. Two characters of the bound are spent on
+ * the first and last classes, which is why the middle repetition is short of it.
+ */
+export const NAME_SPEC = new RegExp(
+  `^[a-z0-9](?:[a-z0-9-]{0,${NORMS["skill-name-length"].bound.value - 2}}[a-z0-9])?$`,
+);
 const WRITE_TOOL = /^(\*$|Write|Edit|NotebookEdit|Bash)/;
 
 /** Check's validation pass on one skill folder; `add skill` runs it before concluding. */
@@ -467,7 +477,7 @@ async function validateSkill(
     violations.push({
       path: skillPath,
       rule: "skill-name-spec",
-      message: `skill name "${frontmatter.name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      message: `skill name "${frontmatter.name}" must be 1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -, without a leading or trailing dash.`,
       severity: "error",
     });
   }
@@ -523,11 +533,15 @@ async function validateSkill(
       severity: "error",
     });
   }
-  if (significantLines > 500) {
+  // the one spec bound this catalog enforces rather than reports: past it a
+  // SKILL.md stops being a procedure, and every generator here writes to
+  // references/ already — see docs/conventions.md §13
+  const maxBodyLines = NORMS["skill-body-lines"].bound.value;
+  if (significantLines > maxBodyLines) {
     violations.push({
       path: skillPath,
       rule: "skill-body-depth",
-      message: `body has ${significantLines} significant lines; keep it under 500 and move the depth into references/.`,
+      message: `body has ${significantLines} significant lines; keep it under ${maxBodyLines} and move the depth into references/.`,
       severity: "error",
     });
   }
@@ -610,7 +624,7 @@ function validateOpenSkill(
     violations.push({
       path: skillPath,
       rule: "skill-name-spec",
-      message: `skill name "${name}" must be 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      message: `skill name "${name}" must be 1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -, without a leading or trailing dash.`,
       severity: "error",
     });
   }
@@ -777,7 +791,7 @@ async function validateLock(root: string): Promise<Violation[]> {
       violations.push({
         path: "skills-lock.json",
         rule: "lock-invalid",
-        message: `lock entry "${name}" is not a valid skill name (1 to 64 characters of a-z, 0-9 and -) — a lock key is a folder name, never a path.`,
+        message: `lock entry "${name}" is not a valid skill name (1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -) — a lock key is a folder name, never a path.`,
         severity: "error",
       });
       continue;

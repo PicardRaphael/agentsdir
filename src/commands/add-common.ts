@@ -6,6 +6,7 @@ import {
   CLAUDE_SETTINGS_FILE,
   planClaudePermissions,
 } from "../core/claude-permissions.js";
+import { NORMS } from "../core/conventions-dates.js";
 import { asUserFacingError, CliError } from "../core/errors.js";
 import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
 import { packScriptPaths } from "../packs/index.js";
@@ -163,7 +164,7 @@ export async function ensureWritable(
 export function ensureValidName(kind: string, name: string): void {
   if (!NAME_SPEC.test(name)) {
     throw new CliError(
-      `Invalid ${kind} name "${name}" — use kebab-case: 1 to 64 characters of a-z, 0-9 and -, without a leading or trailing dash.`,
+      `Invalid ${kind} name "${name}" — use kebab-case: 1 to ${NORMS["skill-name-length"].bound.value} characters of a-z, 0-9 and -, without a leading or trailing dash.`,
     );
   }
 }

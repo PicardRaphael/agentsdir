@@ -36,6 +36,13 @@
       "skillPath": ".agents/skills/propose-setup/SKILL.md",
       "computedHash": "5218deeac19c166020b9f40f6f4730ada904f083054ee3cc68baa4d47eaf2594"
     },
+    "review-form": {
+      "source": "agentsdir",
+      "sourceType": "agentsdir",
+      "installedVersion": "1.0.0",
+      "skillPath": ".agents/skills/review-form/SKILL.md",
+      "computedHash": "a7f67159df2d226b15d912fe00ae3c55f4dceb7b43540d005b9c5e4929069ba9"
+    },
     "setup-context": {
       "source": "agentsdir",
       "sourceType": "agentsdir",

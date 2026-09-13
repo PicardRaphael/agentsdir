@@ -130,6 +130,15 @@ Installed by `init` (checked by default), it contains:
 - `$create-skill`, `$create-hook`, `$create-rule`, `$create-agent` — one meta-skill per artifact, applying the protocol above and calling the stage 1 generators.
 - `$setup-context` — the assisted creation of AGENTS.md: repo inventory by the agent (real commands, conventions, key files, competing configs to import), pre-drafting of the stack/product sections, validation interview, line-by-line critique, writing through the managed blocks. This is `/init`, multi-harness and with mechanical validation.
 - `$propose-setup` — the whole-repo proposal that fills the structure `init` installs: repo analysis, then a table of the hooks, rules and sub-agents that earn their place *here*, each accepted, refused or amended on its own line. See [The whole-repo proposal](#the-whole-repo-proposal) below.
+- `$review-form` — confronts the **form** of the installed configuration with
+  the norms this CLI embeds, each dated at the day its source was read
+  ([conventions.md](conventions.md) §13). Its discipline is that the norms are
+  not the agent's to recall: they are rendered into
+  `.agents/skills/review-form/references/conventions.md` from the code, and
+  every proposal quotes the norm, its source and its date, plus the evidence
+  found in this repository. It answers the form question alone — drift, usage
+  and cost have their own commands and are never mixed into it — and it applies
+  nothing.
 
 Constraints: these meta-skills themselves follow all the conventions ([conventions.md](conventions.md)) — `disable-model-invocation: true` (they write), body < 500 lines, rubrics and question banks in `references/`.
 

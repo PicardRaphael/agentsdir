@@ -1,3 +1,4 @@
+import { formSkillFiles, FORM_SKILL } from "./creator-form.js";
 import type { PackContent, PackFile } from "./index.js";
 
 /**
@@ -6,9 +7,11 @@ import type { PackContent, PackFile } from "./index.js";
  * the structure; these meta-skills guide the harness agent to produce the
  * CONTENT, through the six-step protocol: inventory → targeted interview →
  * routing → draft + critique → generate then write → mandatory `check`.
- * Four artifact creators, `$setup-context` (the AGENTS.md entry point) and
+ * Four artifact creators, `$setup-context` (the AGENTS.md entry point),
  * `$propose-setup` (the whole-repo proposal that fills the structure `init`
- * installs). Written in English (product content, not design documentation).
+ * installs) and `$review-form` (the judgement on the form of what ended up
+ * installed, against the dated norms). Written in English (product content, not
+ * design documentation).
  */
 export function creatorPack(): PackContent {
   const files: PackFile[] = [];
@@ -35,6 +38,7 @@ export function creatorPack(): PackContent {
       },
     );
   }
+  files.push(...formSkillFiles());
   return {
     name: "creator",
     files,
@@ -45,6 +49,7 @@ export function creatorPack(): PackContent {
       "create-agent",
       "setup-context",
       "propose-setup",
+      FORM_SKILL,
     ],
     rules: [],
     keepExisting: [],

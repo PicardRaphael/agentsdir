@@ -1,0 +1,10 @@
+interface:
+  display_name: "Review Form"
+  short_description: "Reviews whether the configuration form still fits"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#0369A1"
+  default_prompt: "Use $review-form to review whether this repo's agent configuration still has the recommended form."
+
+policy:
+  allow_implicit_invocation: false
