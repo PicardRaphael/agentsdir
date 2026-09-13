@@ -4,7 +4,7 @@ import {
   pathExists,
   writeFileAtomic,
 } from "../core/fs-utils.js";
-import { HARNESSES } from "../core/harnesses.js";
+import { HARNESSES, hasFileProjections } from "../core/harnesses.js";
 import {
   collectAnswers,
   type InitAnswers,
@@ -85,7 +85,7 @@ export async function runInit(
   if (await pathExists(join(root, MANIFEST_FILE))) {
     return { exitCode: EXIT_CODES.ok, alreadyInitialized: true, changes: [] };
   }
-  if (answers.harnesses.includes("claude")) {
+  if (hasFileProjections(answers.harnesses)) {
     // preflight: a foreign projection target aborts before any write
     await project(root, { mode: answers.mode, dryRun: true });
   }
@@ -94,7 +94,7 @@ export async function runInit(
     await applyPlan(root, changes);
   }
   let hashes: Record<string, string> = {};
-  if (answers.harnesses.includes("claude")) {
+  if (hasFileProjections(answers.harnesses)) {
     const projection = await project(root, {
       mode: answers.mode,
       dryRun: options.dryRun,
@@ -471,7 +471,7 @@ async function buildPlan(
     blockContent: renderGitattributesContent(),
     style: "hash",
   });
-  if (answers.harnesses.includes("claude")) {
+  if (hasFileProjections(answers.harnesses)) {
     // the allowlist covering the scripts the selected packs tell an agent to
     // run — without it, every run of one asks for permission
     const scripts = packScriptPaths(answers.packs);

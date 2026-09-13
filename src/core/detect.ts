@@ -1,4 +1,5 @@
 import { isDirectory, isFile } from "./fs-utils.js";
+import { HARNESS_DIRS, HARNESSES, type Harness } from "./harnesses.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstat, readFile, rm, symlink } from "node:fs/promises";
@@ -310,24 +311,37 @@ async function readGemfileGems(path: string): Promise<Set<string>> {
 }
 
 export interface HarnessesInfo {
-  claudeDir: boolean;
-  codexDir: boolean;
-  cursorDir: boolean;
+  /** Harnesses whose configuration directory is present, in declaration order. */
+  dirs: Harness[];
   claudeMd: boolean;
   agentsMd: boolean;
 }
 
-/** Detects harness material already present — raw input for doctor and, later, migrate. */
+/**
+ * Harness material already present — raw input for doctor and, later, migrate.
+ *
+ * The probes are derived from `HARNESS_DIRS`, not enumerated: a fourth harness
+ * is detected by declaring it, and cannot be forgotten here.
+ */
 export async function detectHarnesses(dir: string): Promise<HarnessesInfo> {
-  const [claudeDir, codexDir, cursorDir, claudeMd, agentsMd] =
-    await Promise.all([
-      isDirectory(join(dir, ".claude")),
-      isDirectory(join(dir, ".codex")),
-      isDirectory(join(dir, ".cursor")),
-      isFile(join(dir, "CLAUDE.md")),
-      isFile(join(dir, "AGENTS.md")),
-    ]);
-  return { claudeDir, codexDir, cursorDir, claudeMd, agentsMd };
+  const present = await Promise.all(
+    HARNESSES.map(async (harness) =>
+      (await isDirectory(join(dir, HARNESS_DIRS[harness])))
+        ? harness
+        : undefined,
+    ),
+  );
+  const [claudeMd, agentsMd] = await Promise.all([
+    isFile(join(dir, "CLAUDE.md")),
+    isFile(join(dir, "AGENTS.md")),
+  ]);
+  return {
+    dirs: present.filter(
+      (harness): harness is Harness => harness !== undefined,
+    ),
+    claudeMd,
+    agentsMd,
+  };
 }
 
 async function isGitRepo(dir: string): Promise<boolean> {

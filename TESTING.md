@@ -111,6 +111,9 @@ verte) est collée dans le message de commit qui l'introduit.
 | `add hook` interrompu laisse un etat que `check` voit et que `sync` repare | `src/core/__tests__/interrupted-sequence.test.ts` | l'invariant 17 (`hook-registration-drift`) et le replanificateur de `sync` |
 | Aucune commande n'ecrit hors de `writeFileAtomic` | `src/core/__tests__/interrupted-sequence.test.ts` | balayage de `src/commands/` |
 | Un registre tronque fait refuser `sync` sans rien ecrire | `src/core/__tests__/interrupted-sequence.test.ts` | `hook-registry-invalid`, verifie avant la premiere ecriture |
+| Le support d'evenement derive des declarations reproduit exactement l'ancienne table, evenement par evenement | `src/core/__tests__/harness-declaration.test.ts` | `harnessEventKey` (`src/core/harnesses.ts`) |
+| Aucun module ne decide d'un comportement en nommant un harness | `src/core/__tests__/harness-declaration.test.ts` | balayage de `src/`, apres le remplacement des gardes `includes("claude")` |
+| Les douze evenements ne portent plus rien par harness | `src/core/__tests__/harness-declaration.test.ts` | `HOOK_EVENTS` reduit au nom canonique |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

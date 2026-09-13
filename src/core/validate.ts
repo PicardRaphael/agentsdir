@@ -1,4 +1,5 @@
 import { pathExists } from "./fs-utils.js";
+import { hasFileProjections } from "./harnesses.js";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
@@ -57,7 +58,7 @@ export async function validateRepo(
   options: ValidateOptions = {},
 ): Promise<Violation[]> {
   const violations: Violation[] = [];
-  if (manifest.harness.enabled.includes("claude")) {
+  if (hasFileProjections(manifest.harness.enabled)) {
     violations.push(...(await validateProjections(root, manifest)));
   } else {
     violations.push(...(await validateDisabledHarness(root, manifest)));

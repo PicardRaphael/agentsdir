@@ -1,4 +1,9 @@
-import { HARNESSES, type Harness } from "./harnesses.js";
+import {
+  HARNESS_SPECS,
+  HARNESSES,
+  harnessEventKey,
+  type Harness,
+} from "./harnesses.js";
 import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -29,45 +34,43 @@ import { CliError } from "./errors.js";
 export interface HookEventSpec {
   /** Canonical event name (Claude Code / Codex casing). */
   name: string;
-  claude: boolean;
-  codex: boolean;
-  /** Cursor event key (lowerCamelCase, sometimes renamed); undefined = unsupported. */
-  cursor: string | undefined;
 }
 
+/**
+ * The events, by canonical name and nothing else.
+ *
+ * Each used to carry one boolean or key field per harness, so adding a fourth
+ * meant editing all twelve. What a harness supports, and how it spells it, is
+ * now declared once by the harness itself (`core/harnesses.ts`) and derived
+ * here — the derivation was checked against the previous table, event by
+ * event, before the fields were removed.
+ */
 export const HOOK_EVENTS: readonly HookEventSpec[] = [
-  { name: "PreToolUse", claude: true, codex: true, cursor: "preToolUse" },
-  { name: "PostToolUse", claude: true, codex: true, cursor: "postToolUse" },
-  {
-    name: "UserPromptSubmit",
-    claude: true,
-    codex: true,
-    cursor: "beforeSubmitPrompt",
-  },
-  { name: "Stop", claude: true, codex: true, cursor: "stop" },
-  { name: "SessionStart", claude: true, codex: true, cursor: "sessionStart" },
-  { name: "SessionEnd", claude: true, codex: true, cursor: "sessionEnd" },
-  { name: "SubagentStart", claude: true, codex: true, cursor: "subagentStart" },
-  { name: "SubagentStop", claude: true, codex: true, cursor: "subagentStop" },
-  { name: "PreCompact", claude: true, codex: true, cursor: "preCompact" },
-  { name: "PostCompact", claude: true, codex: true, cursor: undefined },
-  {
-    name: "PermissionRequest",
-    claude: true,
-    codex: true,
-    cursor: undefined,
-  },
-  { name: "Notification", claude: true, codex: false, cursor: undefined },
+  { name: "PreToolUse" },
+  { name: "PostToolUse" },
+  { name: "UserPromptSubmit" },
+  { name: "Stop" },
+  { name: "SessionStart" },
+  { name: "SessionEnd" },
+  { name: "SubagentStart" },
+  { name: "SubagentStop" },
+  { name: "PreCompact" },
+  { name: "PostCompact" },
+  { name: "PermissionRequest" },
+  { name: "Notification" },
 ];
 
 export const HOOK_HARNESSES = HARNESSES;
 export type HookHarness = Harness;
 
-export const HOOK_REGISTRY_PATHS: Record<HookHarness, string> = {
-  claude: ".claude/settings.json",
-  codex: ".codex/hooks.json",
-  cursor: ".cursor/hooks.json",
-};
+/** Registry path of each harness, derived from its declaration. */
+export const HOOK_REGISTRY_PATHS: Record<HookHarness, string> =
+  Object.fromEntries(
+    HOOK_HARNESSES.map((harness) => [
+      harness,
+      HARNESS_SPECS[harness].hookRegistry ?? "",
+    ]),
+  ) as Record<HookHarness, string>;
 
 export const HOOKS_DIR = ".agents/hooks";
 
@@ -82,13 +85,7 @@ export function supportedHarnesses(event: HookEventSpec): HookHarness[] {
 }
 
 function supports(harness: HookHarness, event: HookEventSpec): boolean {
-  if (harness === "claude") {
-    return event.claude;
-  }
-  if (harness === "codex") {
-    return event.codex;
-  }
-  return event.cursor !== undefined;
+  return harnessEventKey(harness, event.name) !== undefined;
 }
 
 /**
@@ -475,19 +472,20 @@ function mergeFlatEvents(
   attributable: Set<string>,
 ): void {
   for (const spec of HOOK_EVENTS) {
-    if (spec.cursor === undefined) {
+    const key = harnessEventKey("cursor", spec.name);
+    if (key === undefined) {
       continue;
     }
     removeManagedEntries(
       container,
-      spec.cursor,
+      key,
       scriptFiles,
       attributable,
       ownedFlatFile,
     );
   }
   for (const registration of expectedHere) {
-    const key = registration.event.cursor;
+    const key = harnessEventKey("cursor", registration.event.name);
     if (key === undefined) {
       continue;
     }

@@ -68,4 +68,21 @@ flowchart LR
 **Other AGENTS.md readers** (opencode, Gemini CLI, Copilot…)
 - Nothing to generate: `AGENTS.md` and `.agents/skills/` are enough. This is the direct consequence of the "follow the standards" choice: every new conformant harness is covered for free.
 
+## 6. Adding a harness: what to declare
+
+Adding a fourth harness is a settled-decision change ([SPEC.md](SPEC.md)), not a casual edit — but once the decision is taken, it is **one entry in one table**. `HARNESS_SPECS` in `src/core/harnesses.ts` is the single declaration, and everything else derives from it: the detection probes, the hook registrations, the event keys, the permission allowlist and the decision to project files at all.
+
+| Field | What it says | Consequence if wrong |
+| --- | --- | --- |
+| `dir` | Configuration directory at the repository root | The harness is never detected in a repo, and `doctor` reports it as enabled but found nowhere |
+| `hookRegistry` | Where its hook registrations live, or `undefined` when it takes none | Hooks are registered nowhere, so no harness runs them — `check` reports `hook-registration-drift` |
+| `eventCase` | `canonical` keeps the Claude Code / Codex name, `lowerCamel` lowercases the first letter | Registrations land under a key the harness never reads; nothing fails, nothing runs |
+| `unsupportedEvents` | Canonical names of the events it does not support | `add hook` offers an event the harness will ignore |
+| `eventAliases` | Events it spells neither canonically nor by case | Same as above, for the one event that is renamed outright rather than recased |
+| `projectsFiles` | Whether agentsdir generates files in its directory | A harness with no projections would get a `.claude`-style mirror it never reads, and `check` would then hold it to invariants about files nobody loads |
+
+**What you do NOT have to edit**: the twelve entries of `HOOK_EVENTS`. They carry a canonical name and nothing else. Each used to hold one field per harness, which is what made a fourth harness the most expensive change in the CLI — and the reason this was task 19.
+
+Two things still need a human decision, because no declaration can infer them: whether the harness reads `AGENTS.md` as is (most do, and then there is nothing to project), and the exact shape of its hook registry file if it differs from the two already supported — Claude Code's matcher groups and Cursor's flat entries are the two shapes implemented in `core/hook-registries.ts`.
+
 See also: [architecture.md](architecture.md) (projection engine), [commandes.md](commandes.md) (`init`, `sync`, `check`, `add hook`), [roadmap.md](roadmap.md) (v1 scope).

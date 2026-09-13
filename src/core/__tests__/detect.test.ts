@@ -96,9 +96,7 @@ describe("02 - environment detection: detectHarnesses", () => {
     await mkdir(join(dir, ".claude"));
     await writeFile(join(dir, "AGENTS.md"), "# AGENTS\n", "utf8");
     await expect(detectHarnesses(dir)).resolves.toEqual({
-      claudeDir: true,
-      codexDir: false,
-      cursorDir: false,
+      dirs: ["claude"],
       claudeMd: false,
       agentsMd: true,
     });
@@ -108,6 +106,6 @@ describe("02 - environment detection: detectHarnesses", () => {
     const dir = await makeTempDir("detect");
     await writeFile(join(dir, ".claude"), "", "utf8");
     const result = await detectHarnesses(dir);
-    expect(result.claudeDir).toBe(false);
+    expect(result.dirs).toEqual([]);
   });
 });

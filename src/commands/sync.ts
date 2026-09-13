@@ -1,4 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
+import { hasFileProjections } from "../core/harnesses.js";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { renderOpenAiYaml, renderSkillIcon } from "../core/codex-metadata.js";
@@ -134,8 +135,8 @@ export async function runSync(
   }
   let projectionHashes: Record<string, string>;
   let removed: string[];
-  const claudeEnabled = manifest.harness.enabled.includes("claude");
-  if (claudeEnabled) {
+  const projecting = hasFileProjections(manifest.harness.enabled);
+  if (projecting) {
     const plan = await refreshProjections(root, {
       mode,
       previousMode,
@@ -225,7 +226,7 @@ export async function runSync(
         await applyPlannedFile(root, file);
       }
     }
-    if (claudeEnabled) {
+    if (projecting) {
       await refreshProjections(root, {
         mode,
         previousMode,
@@ -399,7 +400,7 @@ async function planClaudeSettings(
   const onDisk = await readSettings(root, CLAUDE_SETTINGS_FILE);
   // what the registration plan would write, or the file as it stands
   const base = registry?.content ?? onDisk;
-  const scripts = manifest.harness.enabled.includes("claude")
+  const scripts = hasFileProjections(manifest.harness.enabled)
     ? packScriptPaths(manifest.packs.installed)
     : [];
   const merged = applyPermissions(base, scripts) ?? base;

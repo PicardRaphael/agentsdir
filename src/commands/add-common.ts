@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { hasFileProjections } from "../core/harnesses.js";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import {
@@ -57,7 +58,7 @@ export async function resyncProjections(
     overlay?: Record<string, string>;
   },
 ): Promise<GeneratorChange[]> {
-  if (!manifest.harness.enabled.includes("claude")) {
+  if (!hasFileProjections(manifest.harness.enabled)) {
     return [];
   }
   const mode = manifest.projections.mode;
@@ -111,7 +112,7 @@ export async function syncClaudePermissions(
   manifest: Manifest,
   options: { dryRun: boolean },
 ): Promise<GeneratorChange[]> {
-  const scripts = manifest.harness.enabled.includes("claude")
+  const scripts = hasFileProjections(manifest.harness.enabled)
     ? packScriptPaths(manifest.packs.installed)
     : [];
   const plan = await planClaudePermissions(root, scripts);

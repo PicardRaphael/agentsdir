@@ -243,19 +243,16 @@ async function harnessesFinding(
   onPath: string[],
 ): Promise<DoctorFinding> {
   const material = await detectHarnesses(root);
-  const inRepo: string[] = [];
-  if (material.claudeDir || material.claudeMd) {
-    inRepo.push("claude");
-  }
-  if (material.codexDir) {
-    inRepo.push("codex");
-  }
-  if (material.cursorDir) {
-    inRepo.push("cursor");
+  // derived from the declarations, never enumerated: a fourth harness is
+  // detected by declaring it. CLAUDE.md counts as Claude Code material even
+  // without a `.claude/` directory, which is the bridge a copy-mode repo has.
+  const inRepo = new Set<string>(material.dirs);
+  if (material.claudeMd) {
+    inRepo.add("claude");
   }
   const enabled = manifest?.harness.enabled ?? [];
   const invisible = enabled.filter(
-    (harness) => !inRepo.includes(harness) && !onPath.includes(harness),
+    (harness) => !inRepo.has(harness) && !onPath.includes(harness),
   );
   const describe = (list: string[]): string =>
     list.length === 0 ? "none" : list.join(", ");
@@ -263,7 +260,7 @@ async function harnessesFinding(
     rule: "harnesses",
     severity: invisible.length === 0 ? "ok" : "info",
     message:
-      `enabled: ${describe(enabled)}; detected in repo: ${describe(inRepo)}; found on PATH: ${describe(onPath)}.` +
+      `enabled: ${describe(enabled)}; detected in repo: ${describe([...inRepo].sort())}; found on PATH: ${describe(onPath)}.` +
       (invisible.length === 0
         ? ""
         : ` ${invisible.join(", ")} enabled but detected nowhere — projections are still generated; remove it from [harness] enabled in .agents.toml if unused.`),
