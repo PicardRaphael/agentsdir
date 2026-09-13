@@ -33,6 +33,11 @@ import {
   writeFileAtomic,
 } from "../core/fs-utils.js";
 import {
+  planMcpProjections,
+  readMcpSource,
+  type McpServer,
+} from "../core/mcp.js";
+import {
   ensureNoLinkedParent,
   refreshProjections,
   unproject,
@@ -79,6 +84,9 @@ const REPAIRABLE_RULES = new Set([
   // sync is what recomputes the registrations, so its own drift must not
   // block it — otherwise check tells you to run sync, and sync refuses
   "hook-registration-drift",
+  // same reason for the MCP projections: the plan sync applies is the very
+  // one check compares against
+  "mcp-projection-drift",
 ]);
 
 /** A rule of the source of truth, as the overlay keys spell it. */
@@ -207,6 +215,24 @@ export async function runSync(
   if (claudeSettings !== undefined) {
     planned.push(claudeSettings);
   }
+  // MCP servers: the same contract as the hook registrations, applied to a
+  // fourth object. A server dropped from .agents/mcp.toml is removed from the
+  // three harness files here, which is what the manifest records them for.
+  const mcpServers = (await readMcpSource(root)) ?? [];
+  for (const projection of await planMcpProjections(
+    root,
+    manifest.harness.enabled,
+    mcpServers,
+    manifest.mcp?.servers ?? [],
+  )) {
+    planned.push({
+      path: projection.path,
+      action: projection.action,
+      ...(projection.content !== undefined
+        ? { content: Buffer.from(projection.content, "utf8") }
+        : {}),
+    });
+  }
   const lock = await planLock(root, { relockVendored: overlay });
   if (lock !== undefined && lock.action !== "removed") {
     planned.push({
@@ -222,6 +248,7 @@ export async function runSync(
     manifest,
     mode,
     projectionHashes,
+    mcpServers,
   );
   planned.push(manifestPlan);
   if (!options.dryRun) {
@@ -498,6 +525,7 @@ async function planManifest(
   manifest: Manifest,
   mode: ProjectionMode,
   hashes: Record<string, string>,
+  mcpServers: readonly McpServer[],
 ): Promise<PlannedFile> {
   const next: Manifest = {
     // everything the manifest already holds is carried forward by spreading
@@ -515,6 +543,14 @@ async function planManifest(
     cliVersion: CLI_VERSION,
     projections: { mode, hashes },
   };
+  // the names projected this run, so the next one can tell a server it removed
+  // from a server the user added to .mcp.json by hand. Nothing declared means
+  // nothing recorded: the section disappears rather than lingering empty.
+  if (mcpServers.length > 0) {
+    next.mcp = { servers: mcpServers.map((server) => server.name) };
+  } else {
+    delete next.mcp;
+  }
   const plan = await planManifestFile(root, next);
   return plan.action === "ok"
     ? { path: plan.path, action: "ok" }

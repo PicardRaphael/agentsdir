@@ -217,6 +217,29 @@ resolved, on the first ordinary command.
   `Bash(node <path under .agents/> *)` — and everything else in the file is
   preserved, in place and in order.
 
+### Added
+
+- **MCP servers are declared once and projected to every harness.** A repository
+  that uses MCP had to describe its servers three times — `.mcp.json` for Claude
+  Code, `.cursor/mcp.json` for Cursor, `.codex/config.toml` for Codex — in three
+  formats, kept in step by hand. `.agents/mcp.toml` declares them once, `sync`
+  projects them, `check` reports any drift and names the fix, and a server
+  dropped from the declaration leaves all three files on the next `sync`. The
+  three formats were validated against their official documentation on
+  2026-09-13 and the matrix is in `docs/harness.md`; the differences are real
+  and are honoured rather than averaged out — Codex interpolates nothing and
+  gets `env_vars` and `env_http_headers`, Cursor has no `type` field and its own
+  `${env:VAR}` syntax.
+
+  Two guarantees come with it. **Servers you added by hand are never touched**:
+  ownership is by name, and everything else in those files is yours, including
+  an entry holding a literal token. And **no secret value can enter a versioned
+  file**: the declaration carries the *names* of environment variables, each
+  harness resolves a name its own way at run time, and `check` fails on anything
+  written where a name belongs. In `.codex/config.toml` — a file that holds your
+  whole Codex configuration — agentsdir keeps a managed block at the end and
+  leaves every other byte alone.
+
 ### Fixed
 
 - **`check` passed green on a repository it could not read.** An unreadable

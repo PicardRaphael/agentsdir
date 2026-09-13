@@ -113,6 +113,7 @@ Exhaustive list:
 17. **Hook registrations in step**: those registries hold exactly what the scripts of `.agents/hooks/` imply. A script added without a `sync` is registered nowhere and no harness would ever run it; a deleted script leaves registrations the harnesses would still try to execute. Both are drift (`hook-registration-drift`), and `sync` repairs them.
 18. **Nothing loaded that agentsdir cannot see**: a skill folder of `.agents/skills/` or a file of `.agents/agents/` that is a symlink is refused. The harness follows it and loads what it points at, which this CLI can neither validate nor project.
 19. **Hook metadata that cannot be read**: a script carrying an `agentsdir:hook` comment whose JSON is malformed, whose `event` key is missing, or which names an unknown event is reported (`hook-metadata-invalid`) instead of silently falling back to the file-name convention. The author declared an event; when the declaration cannot be read the script ends up registered under whatever its file name implies, or nowhere at all, and nothing said why. An **absent** comment is not a problem — the `<event>-<slug>.mjs` name is a documented way to declare the event.
+20. **MCP servers in step**: `.agents/mcp.toml` parses, carries the name of an environment variable everywhere a secret could be written (`mcp-secret-value`), and the file each enabled harness reads holds exactly the servers it declares (`mcp-projection-drift`). A harness dropped from `[harness] enabled` that still declares them is the same drift: it would keep starting the servers. In `.codex/config.toml` the managed block must stay last, because TOML attaches any key written below it to the server table above (`mcp-block-not-last`). Detailed in §12.
 
 ## 5. Rule format
 
@@ -359,5 +360,45 @@ Given `agentsdir doctor --json` through `--doctor <file>`, the review crosses wh
 ### What the review never does
 
 It deletes nothing and runs no `pack remove`. Every removal is a proposal carrying the data that motivates it — sessions observed, last occurrence, cost per session — and the decision is the team's. The review is written to `.agents/output/usage/`, which git ignores: it summarizes the journal and carries the same sensitivity.
+
+## 12. MCP servers
+
+`.agents/mcp.toml` declares the MCP servers of the repository once; `sync` projects them into the file each enabled harness reads, and `check` reports any drift. The three formats and the reasons behind them are in [harness.md §4](harness.md); what follows is the contract of the source.
+
+```toml
+[servers.context7]
+type = "stdio"                            # stdio | http | sse
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+env = ["CONTEXT7_API_KEY"]                # variable NAMES, never values
+
+[servers.figma]
+type = "http"
+url = "https://mcp.figma.com/mcp"
+headers = { "X-Figma-Token" = "FIGMA_OAUTH_TOKEN" }   # header -> variable NAME
+```
+
+- `type` is required and decides which other keys are: `command` for `stdio`, `url` for `http` and `sse`. `args` and `env` apply to `stdio`, `headers` to the two remote transports.
+- A server name follows the skill grammar — 1 to 64 characters of `a-z`, `0-9` and `-`, no leading or trailing dash. It becomes a JSON key and a TOML table segment.
+- The file is optional. A repository that declares no server gets no projection: no empty `.mcp.json` appears in anyone's diff.
+
+### Names, never values
+
+`.agents/` is committed and pushed, and an MCP server is usually configured with a token. So `env` is a **list of variable names** and `headers` maps a header to a **variable name** — a shape in which a secret cannot be expressed by accident. Each harness resolves a name into a value its own way at run time, and `check` fails with `mcp-secret-value` on anything that does not match `^[A-Z_][A-Z0-9_]*$`. The diagnostic truncates what it found: a report a user may paste into an issue must not carry the secret it is warning about.
+
+### Ownership, and clean removal
+
+A server declared in the source is ours and is rewritten at each `sync`; every other entry of `.mcp.json` or `.cursor/mcp.json` belongs to the user and is never touched — including one carrying a literal token they typed themselves.
+
+Ownership is by **name**, not by content. Matching on content — the rule the hook registries use, where a registration never changes — would make a server untouchable the moment its `args` were edited, leaving the stale version configured for good. Removal then needs a memory: `[mcp] servers` in `.agents.toml` records the names projected by the last run, so a name dropped from the source is still recognised as ours for exactly one `sync`, which removes it from the three files. A harness dropped from `[harness] enabled` is deprojected the same way, never merely skipped: a skipped harness would keep starting the servers.
+
+### The invariants
+
+| Rule | What it catches |
+| --- | --- |
+| `mcp-source-invalid` | `.agents/mcp.toml` does not parse, or a key has the wrong shape |
+| `mcp-secret-value` | a value written where a variable name belongs |
+| `mcp-projection-drift` | a harness file differs from the declaration, or still holds servers of a disabled harness |
+| `mcp-block-not-last` | a key was written after the managed block of `.codex/config.toml`, where TOML attaches it to the server table above |
 
 See also: [architecture.md](architecture.md) (engine and projections), [commandes.md](commandes.md) (command specification), [roadmap.md](roadmap.md) (milestones).

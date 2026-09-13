@@ -38,6 +38,16 @@ export interface Manifest {
    * each (the scripts carry a minimal reader, not a TOML parser).
    */
   usage?: { enabled: boolean; exclude: string[] };
+  /**
+   * Names of the MCP servers this CLI has projected into the harness files.
+   * Optional — absent until a repository declares one in `.agents/mcp.toml`.
+   *
+   * It is what makes a clean removal possible. Ownership of an entry in
+   * `.mcp.json` is by name, and a name dropped from the source would otherwise
+   * become indistinguishable from one the user added by hand: recorded here,
+   * it stays recognisably ours for exactly one `sync`, which removes it.
+   */
+  mcp?: { servers: string[] };
   projections: { mode: ProjectionMode; hashes: Record<string, string> };
 }
 
@@ -179,6 +189,9 @@ export function renderManifest(manifest: Manifest): string {
           },
         }
       : {}),
+    ...(manifest.mcp !== undefined
+      ? { mcp: { servers: manifest.mcp.servers } }
+      : {}),
     ...(manifest.usage !== undefined
       ? {
           usage: {
@@ -238,6 +251,11 @@ function validateManifest(data: unknown): Manifest {
       exclude: optionalStringArray(table, "exclude", "`[usage].exclude`"),
     };
   }
+  let mcp: { servers: string[] } | undefined;
+  if (root["mcp"] !== undefined) {
+    const table = asTable(root["mcp"], "[mcp]");
+    mcp = { servers: optionalStringArray(table, "servers", "`[mcp].servers`") };
+  }
   const mode = projections["mode"];
   if (mode !== "symlink" && mode !== "copy") {
     throw new ManifestError(
@@ -259,6 +277,7 @@ function validateManifest(data: unknown): Manifest {
     },
     ...(worktrees !== undefined ? { worktrees } : {}),
     ...(usage !== undefined ? { usage } : {}),
+    ...(mcp !== undefined ? { mcp } : {}),
     projections: {
       mode,
       hashes: readHashes(projections["hashes"]),

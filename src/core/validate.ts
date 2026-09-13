@@ -30,6 +30,13 @@ import {
 import type { Manifest } from "./manifest.js";
 import { USAGE_JOURNAL_DIR } from "./usage-journal.js";
 import { isProjectionPath, unproject, verify } from "./projections.js";
+import {
+  MCP_PROJECTIONS,
+  MCP_SOURCE,
+  mcpSecretProblems,
+  planMcpProjections,
+  readMcpSource,
+} from "./mcp.js";
 
 export interface Violation {
   /** Repo-relative path of the offending file or folder. */
@@ -72,6 +79,7 @@ export async function validateRepo(
   violations.push(...(await validateHookMetadata(root)));
   violations.push(...(await validateHookProtocol(root, options.hooks)));
   violations.push(...(await validateUsageJournal(root, manifest)));
+  violations.push(...(await validateMcp(root, manifest)));
   return violations;
 }
 
@@ -951,6 +959,131 @@ export { computeSkillHash, hashSkillFiles };
  * reopened the very gap this pass exists to close — a malformed registry of a
  * removed harness passed `check` with exit 0 and failed `sync` with exit 1.
  */
+/**
+ * Invariant 20 — the MCP declaration and its three projections.
+ *
+ * Three things can go wrong, and they are reported in that order because each
+ * makes the next unreadable: the declaration itself may not parse, it may carry
+ * a secret where a variable name belongs, and the harness files may have
+ * drifted from it. The drift comparison reuses the very plan `sync` applies, so
+ * `check` can never disagree with the command that repairs it.
+ */
+async function validateMcp(
+  root: string,
+  manifest: Manifest,
+): Promise<Violation[]> {
+  let servers;
+  try {
+    servers = await readMcpSource(root);
+  } catch (error) {
+    return [
+      {
+        path: MCP_SOURCE,
+        rule: "mcp-source-invalid",
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      },
+    ];
+  }
+  const recorded = manifest.mcp?.servers ?? [];
+  if (servers === undefined && recorded.length === 0) {
+    return [];
+  }
+  const declared = servers ?? [];
+  const secrets = mcpSecretProblems(declared).map((problem): Violation => ({
+    path: problem.path,
+    rule: problem.rule,
+    message: problem.message,
+    severity: "error",
+  }));
+  // a declaration holding a secret is never projected: reporting the drift too
+  // would invite the user to run `sync` and publish it
+  if (secrets.length > 0) {
+    return secrets;
+  }
+  const violations: Violation[] = [];
+  // a key written below the managed block joins the last server table, which
+  // silently changes the user's Codex configuration instead of ours
+  const trailing = await codexKeysAfterBlock(root);
+  if (trailing !== undefined) {
+    violations.push({
+      path: MCP_PROJECTIONS.codex,
+      rule: "mcp-block-not-last",
+      message: `${trailing} is written after the agentsdir block; in TOML it belongs to the server table above it. Move it before the block — agentsdir keeps its block last on purpose.`,
+      severity: "error",
+    });
+    return violations;
+  }
+  let plans;
+  try {
+    plans = await planMcpProjections(
+      root,
+      manifest.harness.enabled,
+      declared,
+      recorded,
+    );
+  } catch (error) {
+    return [
+      {
+        path: MCP_SOURCE,
+        rule: "mcp-source-invalid",
+        message: error instanceof Error ? error.message : String(error),
+        severity: "error",
+      },
+    ];
+  }
+  for (const plan of plans) {
+    if (plan.action === "ok") {
+      continue;
+    }
+    violations.push({
+      path: plan.path,
+      rule: "mcp-projection-drift",
+      message:
+        plan.deprojects === true
+          ? `this harness is no longer in \`[harness] enabled\`, yet it still declares MCP servers from ${MCP_SOURCE} — run \`agentsdir sync\` to remove them.`
+          : `differs from ${MCP_SOURCE} — run \`agentsdir sync\` to regenerate it.`,
+      severity: "error",
+    });
+  }
+  return violations;
+}
+
+/**
+ * The first key written after the managed block of `.codex/config.toml`, if
+ * any. Only a top-level assignment matters: a `[table]` header of its own ends
+ * the last server table and is perfectly safe.
+ */
+async function codexKeysAfterBlock(root: string): Promise<string | undefined> {
+  let raw: string;
+  try {
+    raw = await readFile(
+      join(root, ...MCP_PROJECTIONS.codex.split("/")),
+      "utf8",
+    );
+  } catch {
+    return undefined;
+  }
+  const end = raw.indexOf("# agentsdir:end mcp");
+  if (end === -1) {
+    return undefined;
+  }
+  for (const line of raw.slice(end).split("\n").slice(1)) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) {
+      continue;
+    }
+    if (trimmed.startsWith("[")) {
+      return undefined;
+    }
+    const key = trimmed.split("=")[0]?.trim();
+    if (key !== undefined && key !== "") {
+      return `\`${key}\``;
+    }
+  }
+  return undefined;
+}
+
 async function validateHookRegistries(
   root: string,
   manifest: Manifest,
