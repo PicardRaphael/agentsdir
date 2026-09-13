@@ -1,7 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify, TomlError } from "smol-toml";
 import { CliError } from "./errors.js";
+import { writeFileAtomic } from "./fs-utils.js";
 
 export const MANIFEST_FILE = ".agents.toml";
 export const MANIFEST_SCHEMA = 2;
@@ -80,12 +81,73 @@ export async function readManifest(dir: string): Promise<Manifest> {
   return validateManifest(data);
 }
 
-/** Writes the manifest; the output is deterministic byte for byte for a given state. */
+export interface ManifestPlan {
+  /** Always `.agents.toml`; carried so a caller can report it like any file. */
+  path: string;
+  action: "created" | "updated" | "ok";
+  content: string;
+}
+
+/**
+ * What writing this manifest would do, without writing it.
+ *
+ * The single place the manifest is rendered and compared to disk. `--dry-run`
+ * and the real run read the same answer here, so a plan can never announce
+ * something other than what happens — and no command renders the manifest on
+ * its own any more. Four of them used to, and they drifted: one rebuilt the
+ * manifest field by field and quietly dropped the `[usage]` section, taking a
+ * user's `enabled = false` and their privacy `exclude` globs with it.
+ */
+export async function planManifest(
+  dir: string,
+  manifest: Manifest,
+): Promise<ManifestPlan> {
+  const content = renderManifest(manifest);
+  let current: string | undefined;
+  try {
+    current = await readFile(join(dir, MANIFEST_FILE), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+  if (current === content) {
+    return { path: MANIFEST_FILE, action: "ok", content };
+  }
+  return {
+    path: MANIFEST_FILE,
+    action: current === undefined ? "created" : "updated",
+    content,
+  };
+}
+
+/**
+ * Applies a plan produced above — the **only** function in this CLI that
+ * writes `.agents.toml`, which is what `docs/architecture.md` has always
+ * claimed. Atomic, like every other write: an interrupted run leaves the old
+ * manifest or the new one, never half of either.
+ */
+export async function applyManifestPlan(
+  dir: string,
+  plan: ManifestPlan,
+  options: { exclusive?: boolean } = {},
+): Promise<void> {
+  if (plan.action === "ok") {
+    return;
+  }
+  // `init` creates: the target must not exist, symlink included, so the CLI
+  // cannot write through a link and escape the repository it resolved
+  await writeFileAtomic(join(dir, MANIFEST_FILE), plan.content, {
+    exclusive: options.exclusive === true,
+  });
+}
+
+/** Plan and apply in one step, for callers with nothing to report. */
 export async function writeManifest(
   dir: string,
   manifest: Manifest,
 ): Promise<void> {
-  await writeFile(join(dir, MANIFEST_FILE), renderManifest(manifest), "utf8");
+  await applyManifestPlan(dir, await planManifest(dir, manifest));
 }
 
 /**

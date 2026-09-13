@@ -219,6 +219,16 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **`sync` silently deleted the `[usage]` section of the manifest.** A
+  repository that had suspended collection (`enabled = false`) or configured
+  privacy exclusions (`exclude`) lost both on the next `sync`: collection
+  resumed on its own, and the paths the user had deliberately kept out of the
+  journal started being recorded again. The cause was structural — `sync`
+  rebuilt the manifest field by field, and the section added later was never
+  added to that list. Manifest state is now carried forward wholesale, and one
+  gate renders and writes the file for every command.
+
+
 - **`update` now installs content a pack gained after you installed it.** It
   walked `skills-lock.json` and nothing else, so an artifact the pack did not
   carry at install time was named by no entry and was never installed: a

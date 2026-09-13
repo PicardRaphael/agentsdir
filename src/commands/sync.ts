@@ -21,7 +21,7 @@ import {
   MANIFEST_FILE,
   parseMode,
   readManifest,
-  renderManifest,
+  planManifest as planManifestFile,
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
@@ -549,6 +549,12 @@ async function planManifest(
   hashes: Record<string, string>,
 ): Promise<PlannedFile> {
   const next: Manifest = {
+    // everything the manifest already holds is carried forward by spreading
+    // it, never by listing its fields: enumerating them is how the `[usage]`
+    // section was silently dropped on every sync, taking a user's
+    // `enabled = false` and their privacy `exclude` globs with it. Only what
+    // this run computed is overridden below.
+    ...manifest,
     // the schema is preserved, never recomputed: advancing it is `update` and
     // nothing else. Stamping MANIFEST_SCHEMA here would have `sync` declare a
     // migration it never ran — the same silent recompute the manifest forbids
@@ -556,24 +562,16 @@ async function planManifest(
     // migrate on a repository that had merely been synced.
     schema: manifest.schema,
     cliVersion: CLI_VERSION,
-    project: manifest.project,
-    harness: manifest.harness,
-    packs: manifest.packs,
-    ...(manifest.worktrees !== undefined
-      ? { worktrees: manifest.worktrees }
-      : {}),
     projections: { mode, hashes },
   };
-  const rendered = renderManifest(next);
-  const current = await readFile(join(root, MANIFEST_FILE), "utf8");
-  if (rendered === current) {
-    return { path: MANIFEST_FILE, action: "ok" };
-  }
-  return {
-    path: MANIFEST_FILE,
-    action: "updated",
-    content: Buffer.from(rendered, "utf8"),
-  };
+  const plan = await planManifestFile(root, next);
+  return plan.action === "ok"
+    ? { path: plan.path, action: "ok" }
+    : {
+        path: plan.path,
+        action: "updated",
+        content: Buffer.from(plan.content, "utf8"),
+      };
 }
 
 /**

@@ -11,7 +11,7 @@ import { CliError } from "../core/errors.js";
 import {
   MANIFEST_FILE,
   readManifest,
-  renderManifest,
+  writeManifest,
   type Manifest,
 } from "../core/manifest.js";
 import {
@@ -179,11 +179,7 @@ export async function runPackAdd(
     // back from disk: the registrations land first, the allowlist merges onto
     // them, and neither write clobbers the other
     await applyRegistries(root, registries);
-    await writeFile(
-      join(root, MANIFEST_FILE),
-      renderManifest(nextManifest),
-      "utf8",
-    );
+    await writeManifest(root, nextManifest);
   }
   return {
     changes: sortChanges([
@@ -375,11 +371,7 @@ export async function runPackRemove(
         await writeFile(join(root, "skills-lock.json"), lock.content, "utf8");
       }
     }
-    await writeFile(
-      join(root, MANIFEST_FILE),
-      renderManifest(nextManifest),
-      "utf8",
-    );
+    await writeManifest(root, nextManifest);
   }
   return {
     changes: sortChanges([

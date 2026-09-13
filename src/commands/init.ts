@@ -18,7 +18,8 @@ import { upsertBlock } from "../core/managed-blocks.js";
 import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
-  renderManifest,
+  applyManifestPlan,
+  planManifest,
   type Manifest,
 } from "../core/manifest.js";
 import { ensureNoLinkedParent, project } from "../core/projections.js";
@@ -124,14 +125,17 @@ export async function runInit(
       : {}),
     projections: { mode: answers.mode, hashes },
   };
-  const manifestWrite: PlannedWrite = {
+  const manifestPlan = await planManifest(root, manifest);
+  changes.push({
     path: MANIFEST_FILE,
     action: "create",
-    content: renderManifest(manifest),
-  };
-  changes.push(manifestWrite);
+    content: manifestPlan.content,
+  });
   if (!options.dryRun) {
-    await applyPlan(root, [manifestWrite]);
+    // through the one gate, exclusively: `init` creates the manifest, and the
+    // target must not already exist — a symlink there would take the write
+    // outside the repository
+    await applyManifestPlan(root, manifestPlan, { exclusive: true });
   }
   return { exitCode: EXIT_CODES.ok, alreadyInitialized: false, changes };
 }

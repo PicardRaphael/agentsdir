@@ -9,7 +9,7 @@ import {
   MANIFEST_FILE,
   MANIFEST_SCHEMA,
   readManifest,
-  renderManifest,
+  writeManifest,
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
@@ -255,11 +255,7 @@ export async function runUpdate(
       await writeFile(join(root, "skills-lock.json"), lock, "utf8");
     }
     if (migrations.length > 0) {
-      await writeFile(
-        join(root, MANIFEST_FILE),
-        renderManifest(nextManifest),
-        "utf8",
-      );
+      await writeManifest(root, nextManifest);
     }
     sync = await runSync(root, { dryRun: false });
     if (sync.violations.length > 0) {

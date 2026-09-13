@@ -101,6 +101,9 @@ verte) est collée dans le message de commit qui l'introduit.
 | `doctor` diagnostique un manifeste illisible au lieu de sortir en 2 | `src/core/__tests__/exact-diagnostics.test.ts` | le `ManifestError` que `runDoctor` sait rapporter |
 | Une cible de projection illisible n'est pas ecrasee comme si elle etait absente | `src/core/__tests__/exact-diagnostics.test.ts` | `unreadableTarget` dans `classifyCopyTarget`/`classifyLinkTarget` |
 | Une metadonnee `agentsdir:hook` cassee est nommee, pas ignoree | `src/core/__tests__/exact-diagnostics.test.ts` | `hookMetadataProblem` et la regle `hook-metadata-invalid` |
+| Aucun module hors `core/manifest.ts` ne rend ni n'ecrit `.agents.toml` | `src/core/__tests__/manifest-gate.test.ts` | balayage des sources, comme `layering.test.ts` |
+| Aucune section optionnelle du manifeste n'est perdue par `sync`, `pack add` ou `pack remove` | `src/core/__tests__/manifest-gate.test.ts` | le `...manifest` de `planManifest` (`src/commands/sync.ts`), au lieu d'une liste de champs |
+| Le plan `--dry-run` du manifeste annonce ce que l'execution reelle ecrit, y compris "rien" | `src/core/__tests__/manifest-gate.test.ts` | `planManifest` (`src/core/manifest.ts`), partage par les deux chemins |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve
