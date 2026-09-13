@@ -229,7 +229,7 @@ resolved, on the first ordinary command.
   tell an absent directory from an unreadable one missed five call sites;
   every directory read now goes through the same helper, which returns nothing
   for an absent directory and refuses on any other error, and a test refuses a
-  new bare `readdir` anywhere outside it. `doctor` reports the refusal as a
+  new bare `readdir` outside a named handful, each listed with its reason. `doctor` reports the refusal as a
   finding instead of failing, so it stays usable on the broken repository it is
   run to diagnose.
 - **`sync` silently deleted the `[usage]` section of the manifest.** A
