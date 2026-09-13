@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Dirent } from "node:fs";
 import { lstat, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
@@ -58,14 +59,30 @@ export async function isFile(path: string): Promise<boolean> {
  * Anything other than ENOENT is therefore raised, never swallowed.
  */
 export async function readdirOrEmpty(path: string): Promise<string[]> {
+  return (await readdirEntriesOrEmpty(path)).map((entry) => entry.name);
+}
+
+/**
+ * The same answer with the `Dirent` kept, for the callers that need to tell a
+ * file from a directory from a symlink.
+ *
+ * `unreadable` is the tail of the refusal message: what reading this directory
+ * as empty would cost the user. It is a required argument on purpose — every
+ * caller of this helper has already declared that absence is normal, and the
+ * one thing left to say is why the other errors are not.
+ */
+export async function readdirEntriesOrEmpty(
+  path: string,
+  unreadable = "refusing to treat an unreadable directory as an empty one",
+): Promise<Dirent[]> {
   try {
-    return await readdir(path);
+    return await readdir(path, { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return [];
     }
     throw new CliError(
-      `Cannot read ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to treat an unreadable directory as an empty one.`,
+      `Cannot read ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — ${unreadable}.`,
       EXIT_CODES.environmentOrUsage,
     );
   }

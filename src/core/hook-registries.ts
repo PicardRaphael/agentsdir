@@ -4,11 +4,11 @@ import {
   harnessEventKey,
   type Harness,
 } from "./harnesses.js";
-import type { Dirent } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { CliError } from "./errors.js";
+import { readdirEntriesOrEmpty } from "./fs-utils.js";
 
 /**
  * Exact registration matrix of the three harnesses — the part most likely to
@@ -297,19 +297,11 @@ async function listHookScripts(
   const hooksDir = join(root, ".agents", "hooks");
   // no hooks directory is normal; one that cannot be listed is not — reading it
   // as empty would deregister every hook from all three registries, silently
-  // Dirent explicitly: `ReturnType<typeof readdir>` picks the Buffer overload
-  let entries: Dirent[] | undefined;
-  try {
-    entries = await readdir(hooksDir, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new CliError(
-        `Cannot read ${HOOKS_DIR} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to deregister hooks it cannot see.`,
-        EXIT_CODES.environmentOrUsage,
-      );
-    }
-  }
-  for (const entry of entries ?? []) {
+  const entries = await readdirEntriesOrEmpty(
+    hooksDir,
+    "refusing to deregister hooks it cannot see",
+  );
+  for (const entry of entries) {
     if (entry.isFile() && isRegistrableScript(entry.name)) {
       sources.set(
         entry.name,

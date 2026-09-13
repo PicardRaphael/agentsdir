@@ -1,10 +1,12 @@
-import { readdir, readFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   parseOpenSkillMarkdown,
   readAgentFrontmatter,
   frontmatterBlockLength,
 } from "./frontmatter.js";
+import { readdirEntriesOrEmpty } from "./fs-utils.js";
 import { listRuleFiles } from "./rules-index.js";
 
 /**
@@ -396,12 +398,15 @@ async function listFilesDeep(dir: string, prefix = ""): Promise<string[]> {
   return found.sort(compare);
 }
 
-async function readdirIfPresent(
-  dir: string,
-): Promise<import("node:fs").Dirent[]> {
-  try {
-    return await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+/**
+ * The budget is a report, and a report that cannot read a directory must say
+ * so rather than bill it at zero: an under-counted budget is exactly the number
+ * a user would act on. `doctor` catches the refusal and shows it as a finding,
+ * the way it already does for an unreadable manifest.
+ */
+async function readdirIfPresent(dir: string): Promise<Dirent[]> {
+  return readdirEntriesOrEmpty(
+    dir,
+    "refusing to bill a directory it cannot read at zero",
+  );
 }

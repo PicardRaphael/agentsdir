@@ -1,6 +1,6 @@
-import { pathExists } from "./fs-utils.js";
+import { pathExists, readdirEntriesOrEmpty } from "./fs-utils.js";
 import { hasFileProjections } from "./harnesses.js";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { renderOpenAiYaml, renderSkillIcon } from "./codex-metadata.js";
 import { detectGitSymlinks, listTrackedUnder } from "./detect.js";
@@ -187,12 +187,13 @@ async function validateHookProtocol(
  */
 async function validateSubAgents(root: string): Promise<Violation[]> {
   const agentsDir = join(root, ".agents", "agents");
-  let entries;
-  try {
-    entries = await readdir(agentsDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+  // no sub-agents is a normal repository; sub-agents that cannot be listed are
+  // not — reading them as none is how `check` used to pass green on a repo
+  // whose agents it never saw
+  const entries = await readdirEntriesOrEmpty(
+    agentsDir,
+    "refusing to validate sub-agents it cannot list",
+  );
   const violations: Violation[] = [];
   for (const entry of entries) {
     // same blind spot as skill folders: a symlink is neither a file nor a
@@ -345,12 +346,10 @@ export async function validateSkillFolder(
 
 async function validateSkills(root: string): Promise<Violation[]> {
   const skillsDir = join(root, ".agents", "skills");
-  let entries;
-  try {
-    entries = await readdir(skillsDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+  const entries = await readdirEntriesOrEmpty(
+    skillsDir,
+    "refusing to validate skills it cannot list",
+  );
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const violations: Violation[] = [];
   for (const entry of entries) {

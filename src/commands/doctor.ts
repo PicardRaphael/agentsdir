@@ -151,8 +151,25 @@ export async function runDoctor(
     findings.push(symlinkHealthFinding(git));
   }
   findings.push(await gitattributesFinding(root));
-  const budget = await measureContextBudget(root);
-  const context = budget.items.length === 0 ? null : budget;
+  // a directory the budget cannot read is reported, never billed at zero:
+  // `doctor` is the command a user runs *because* the repository is broken, so
+  // it describes the fault the way it already does for an unreadable manifest
+  let budget: ContextBudget | undefined;
+  try {
+    budget = await measureContextBudget(root);
+  } catch (error) {
+    const known = asUserFacingError(error);
+    if (known === undefined) {
+      throw error;
+    }
+    findings.push({
+      rule: "context-budget",
+      severity: "error",
+      message: known.message,
+    });
+  }
+  const context =
+    budget === undefined || budget.items.length === 0 ? null : budget;
   if (context !== null) {
     findings.push(contextBudgetFinding(context));
   }

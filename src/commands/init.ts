@@ -2,6 +2,7 @@ import {
   entryExists,
   isDirectory,
   pathExists,
+  readdirEntriesOrEmpty,
   writeFileAtomic,
 } from "../core/fs-utils.js";
 import { HARNESSES, hasFileProjections } from "../core/harnesses.js";
@@ -10,7 +11,7 @@ import {
   type InitAnswers,
   type InitFlags,
 } from "./init-interview.js";
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { asUserFacingError, CliError } from "../core/errors.js";
@@ -597,11 +598,17 @@ function actionLabel(action: PlannedAction): string {
 }
 
 async function isEmptyOrMissingDir(path: string): Promise<boolean> {
-  try {
-    return (await readdir(path)).length === 0;
-  } catch {
-    return true;
-  }
+  // absent counts as empty — that is the whole point of the question — but a
+  // directory that exists and cannot be listed is not empty, it is unknown,
+  // and `init` decides what to create from this answer
+  return (
+    (
+      await readdirEntriesOrEmpty(
+        path,
+        "refusing to treat a directory it cannot list as an empty one",
+      )
+    ).length === 0
+  );
 }
 
 // the interview is the other half of this command; callers import both here

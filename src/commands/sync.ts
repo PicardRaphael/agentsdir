@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { hasFileProjections } from "../core/harnesses.js";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
@@ -27,7 +27,11 @@ import {
   type Manifest,
   type ProjectionMode,
 } from "../core/manifest.js";
-import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
+import {
+  entryExists,
+  readdirEntriesOrEmpty,
+  writeFileAtomic,
+} from "../core/fs-utils.js";
 import {
   ensureNoLinkedParent,
   refreshProjections,
@@ -426,12 +430,10 @@ async function planCodexArtifacts(
   sourceOverlay: Record<string, Buffer>,
 ): Promise<PlannedFile[]> {
   const skillsDir = join(root, ".agents", "skills");
-  let entries;
-  try {
-    entries = await readdir(skillsDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+  const entries = await readdirEntriesOrEmpty(
+    skillsDir,
+    "refusing to plan Codex artifacts for skills it cannot list",
+  );
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const planned: PlannedFile[] = [];
   for (const entry of entries) {

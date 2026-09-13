@@ -219,6 +219,19 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **`check` passed green on a repository it could not read.** An unreadable
+  `.agents/agents` — a permission change, a broken checkout, a path replaced by
+  a file — was read as "this repository has no sub-agents", so every sub-agent
+  invariant validated an empty set and the CI gate went green on a repository
+  it never saw. `.agents/skills` had the same hole, hidden behind the lock
+  whenever one existed, and `doctor` billed both directories at zero in the
+  context budget it reports. The 1.0.0 fix that taught the projection engine to
+  tell an absent directory from an unreadable one missed these four call sites;
+  every directory read now goes through the same helper, which returns nothing
+  for an absent directory and refuses on any other error, and a test refuses a
+  new bare `readdir` anywhere outside it. `doctor` reports the refusal as a
+  finding instead of failing, so it stays usable on the broken repository it is
+  run to diagnose.
 - **`sync` silently deleted the `[usage]` section of the manifest.** A
   repository that had suspended collection (`enabled = false`) or configured
   privacy exclusions (`exclude`) lost both on the next `sync`: collection

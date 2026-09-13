@@ -9,7 +9,7 @@ export default defineConfig({
       // parse. No threshold: TESTING.md rules a blocking percentage out on
       // purpose — the acceptance criteria of the tasks are the bar, and a
       // number would be gamed by tests that execute lines without asserting.
-      reporter: ["text", "json-summary"],
+      reporter: ["text", "json-summary", "json"],
       reportsDirectory: "coverage",
       include: ["src/**/*.ts"],
       exclude: [
