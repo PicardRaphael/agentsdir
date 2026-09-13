@@ -16,7 +16,8 @@ import {
   CLAUDE_SETTINGS_FILE,
   readSettings,
 } from "../core/claude-permissions.js";
-import { packScriptPaths, renderLock } from "../packs/index.js";
+import { packScriptPaths } from "../packs/index.js";
+import { planLock } from "../core/lock.js";
 import {
   MANIFEST_FILE,
   parseMode,
@@ -33,8 +34,7 @@ import {
 } from "../core/projections.js";
 import { planRulesIndex } from "../core/rules-index.js";
 import { resolveRepoRoot } from "../core/repo.js";
-import { computeSkillHash } from "../core/skill-hash.js";
-import { NAME_SPEC, validateRepo, type Violation } from "../core/validate.js";
+import { validateRepo, type Violation } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import { CLI_VERSION } from "../version.js";
 
@@ -202,9 +202,15 @@ export async function runSync(
   if (claudeSettings !== undefined) {
     planned.push(claudeSettings);
   }
-  const lock = await planLock(root, overlay);
-  if (lock !== undefined) {
-    planned.push(lock);
+  const lock = await planLock(root, { relockVendored: overlay });
+  if (lock !== undefined && lock.action !== "removed") {
+    planned.push({
+      path: lock.path,
+      action: lock.action,
+      ...(lock.content !== undefined && lock.action !== "ok"
+        ? { content: Buffer.from(lock.content, "utf8") }
+        : {}),
+    });
   }
   const manifestPlan = await planManifest(
     root,
@@ -480,64 +486,6 @@ async function planRulesIndexFile(
     path: "AGENTS.md",
     action: "updated",
     content: Buffer.from(plan.next, "utf8"),
-  };
-}
-
-/**
- * skills-lock.json fingerprints: entries vendored from GitHub are re-locked to
- * the current folder state (the conscious local update `check` asks for);
- * `agentsdir` entries stay pinned to the installed version (protection of
- * `update`), never recomputed.
- */
-async function planLock(
-  root: string,
-  overlay: Record<string, Buffer>,
-): Promise<PlannedFile | undefined> {
-  let raw: string;
-  try {
-    raw = await readFile(join(root, "skills-lock.json"), "utf8");
-  } catch {
-    return undefined;
-  }
-  // shape guaranteed by validateRepo (lock-invalid blocks the run)
-  const data: unknown = JSON.parse(raw);
-  const skills = (data as { skills?: unknown }).skills as Record<
-    string,
-    unknown
-  >;
-  for (const [name, entryRaw] of Object.entries(skills)) {
-    const entry = entryRaw as Record<string, unknown>;
-    if (entry["sourceType"] === "agentsdir") {
-      continue;
-    }
-    // validateRepo already refused an invalid key; belt and braces, since this
-    // one builds a path that reads and hashes a directory
-    if (!NAME_SPEC.test(name)) {
-      continue;
-    }
-    const prefix = `.agents/skills/${name}/`;
-    const skillOverlay: Record<string, Buffer> = {};
-    for (const [key, content] of Object.entries(overlay)) {
-      if (key.startsWith(prefix)) {
-        skillOverlay[key.slice(prefix.length)] = content;
-      }
-    }
-    entry["computedHash"] = await computeSkillHash(
-      join(root, ".agents", "skills", name),
-      skillOverlay,
-    );
-  }
-  // through renderLock like every other writer: a lock whose tables were left
-  // in insertion order by an older CLI is normalised here rather than kept as
-  // a second rendering of one state
-  const rendered = renderLock(data as Record<string, unknown>);
-  if (rendered === raw) {
-    return { path: "skills-lock.json", action: "ok" };
-  }
-  return {
-    path: "skills-lock.json",
-    action: "updated",
-    content: Buffer.from(rendered, "utf8"),
   };
 }
 

@@ -104,6 +104,10 @@ verte) est collée dans le message de commit qui l'introduit.
 | Aucun module hors `core/manifest.ts` ne rend ni n'ecrit `.agents.toml` | `src/core/__tests__/manifest-gate.test.ts` | balayage des sources, comme `layering.test.ts` |
 | Aucune section optionnelle du manifeste n'est perdue par `sync`, `pack add` ou `pack remove` | `src/core/__tests__/manifest-gate.test.ts` | le `...manifest` de `planManifest` (`src/commands/sync.ts`), au lieu d'une liste de champs |
 | Le plan `--dry-run` du manifeste annonce ce que l'execution reelle ecrit, y compris "rien" | `src/core/__tests__/manifest-gate.test.ts` | `planManifest` (`src/core/manifest.ts`), partage par les deux chemins |
+| Aucun module hors `core/lock.ts` n'ecrit `skills-lock.json` | `src/core/__tests__/lock-gate.test.ts` | balayage des sources |
+| Une entree `agentsdir` reste epinglee, une entree `github` est re-verrouillee | `src/core/__tests__/lock-gate.test.ts` | `relockVendored` (`src/core/lock.ts`) |
+| Le meme etat declare donne les memes octets, atteint par `init` ou par `pack add` | `src/core/__tests__/lock-gate.test.ts` | `renderLock` et son tri par cle |
+| Un verrou malforme ou non-objet est refuse, jamais relu comme vide | `src/core/__tests__/lock-gate.test.ts` | `parseLock` |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

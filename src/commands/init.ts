@@ -37,7 +37,6 @@ import {
   packScriptPaths,
   packSkillHash,
   PACKS,
-  renderLockSeed,
 } from "../packs/index.js";
 import {
   deriveRuleHook,
@@ -56,6 +55,7 @@ import {
 import { renderMemoryRule, renderTasksRule } from "../templates/rules.js";
 import { CLI_VERSION } from "../version.js";
 import { listRuleFiles } from "../core/rules-index.js";
+import { LOCK_FILE, planLock } from "../core/lock.js";
 
 export type PlannedAction =
   "create" | "mkdir" | "update-block" | "skip-exists" | "link" | "project";
@@ -418,13 +418,14 @@ async function buildPlan(
       }
     }
   }
-  if (lockEntries.length > 0 || lockFileEntries.length > 0) {
-    await planCreate(
-      plan,
-      root,
-      "skills-lock.json",
-      renderLockSeed(lockEntries, lockFileEntries),
-    );
+  // through the shared planner, so the bytes `init` seeds and the bytes
+  // `pack add` would produce for the same state are the same bytes
+  const lockPlan = await planLock(root, {
+    add: lockEntries,
+    addFiles: lockFileEntries,
+  });
+  if (lockPlan?.content !== undefined) {
+    await planCreate(plan, root, LOCK_FILE, lockPlan.content);
   }
   const ruleEntries: RuleIndexEntry[] = [...ruleSources.keys()]
     .sort()

@@ -8,6 +8,7 @@ import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
+import { applyLockPlan, LOCK_FILE, planLock } from "../core/lock.js";
 import {
   MANIFEST_FILE,
   readManifest,
@@ -23,12 +24,8 @@ import { ensureNoLinkedParent } from "../core/projections.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import {
-  agentsdirFileLockEntry,
-  agentsdirLockEntry,
   getPackContent,
   INSTALLABLE_PACKS,
-  lockTable,
-  renderLock,
   packFileLockEntries,
   packInstallFiles,
   packSkillHash,
@@ -119,7 +116,7 @@ export async function runPackAdd(
   if (agentsMd !== undefined) {
     changes.push({ path: "AGENTS.md", action: "updated" });
   }
-  const lock = await planLockWith(root, {
+  const lock = await planLock(root, {
     add: pack.skills.map((skill) => ({
       skill,
       hash: packSkillHash(files, skill),
@@ -130,7 +127,9 @@ export async function runPackAdd(
     addFiles: packFileLockEntries(toWrite),
   });
   if (lock !== undefined) {
-    changes.push({ path: "skills-lock.json", action: lock.action });
+    if (lock.action !== "ok") {
+      changes.push({ path: LOCK_FILE, action: lock.action });
+    }
   }
   // A pack that ships hooks must have them registered by the install itself.
   // Until one did, `pack add` planned no registration at all, and the scripts
@@ -172,9 +171,7 @@ export async function runPackAdd(
     if (agentsMd !== undefined) {
       await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");
     }
-    if (lock !== undefined && lock.content !== undefined) {
-      await writeFile(join(root, "skills-lock.json"), lock.content, "utf8");
-    }
+    await applyLockPlan(root, lock);
     // before syncClaudePermissions below, which reads .claude/settings.json
     // back from disk: the registrations land first, the allowlist merges onto
     // them, and neither write clobbers the other
@@ -263,13 +260,15 @@ export async function runPackRemove(
   if (agentsMd !== undefined) {
     changes.push({ path: "AGENTS.md", action: "updated" });
   }
-  const lock = await planLockWith(root, {
+  const lock = await planLock(root, {
     add: [],
     remove: pack.skills,
     removeFiles: packFileLockEntries(files).map((entry) => entry.path),
   });
   if (lock !== undefined) {
-    changes.push({ path: "skills-lock.json", action: lock.action });
+    if (lock.action !== "ok") {
+      changes.push({ path: LOCK_FILE, action: lock.action });
+    }
   }
   // deregister the pack's hooks in the same plan as their removal: `omit`
   // hides the scripts that are about to disappear, so a dry run reports the
@@ -364,13 +363,7 @@ export async function runPackRemove(
     if (agentsMd !== undefined) {
       await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");
     }
-    if (lock !== undefined) {
-      if (lock.content === undefined) {
-        await rm(join(root, "skills-lock.json"), { force: true });
-      } else {
-        await writeFile(join(root, "skills-lock.json"), lock.content, "utf8");
-      }
-    }
+    await applyLockPlan(root, lock);
     await writeManifest(root, nextManifest);
   }
   return {
@@ -478,96 +471,6 @@ async function planRulesIndexWith(
   },
 ): Promise<string | undefined> {
   return (await planRulesIndex(root, delta))?.next;
-}
-
-/**
- * skills-lock.json with agentsdir entries added or removed. Returns undefined
- * when nothing changes; `content` undefined means "delete the emptied file".
- */
-async function planLockWith(
-  root: string,
-  delta: {
-    add: { skill: string; hash: string }[];
-    remove: string[];
-    /** Rules and shared scripts the install writes outside any skill folder. */
-    addFiles?: { path: string; hash: string }[];
-    removeFiles?: string[];
-  },
-): Promise<
-  { action: "created" | "updated" | "removed"; content?: string } | undefined
-> {
-  const addFiles = delta.addFiles ?? [];
-  const removeFiles = delta.removeFiles ?? [];
-  if (
-    delta.add.length === 0 &&
-    delta.remove.length === 0 &&
-    addFiles.length === 0 &&
-    removeFiles.length === 0
-  ) {
-    return undefined;
-  }
-  let raw: string | undefined;
-  try {
-    raw = await readFile(join(root, "skills-lock.json"), "utf8");
-  } catch {
-    raw = undefined;
-  }
-  if (raw === undefined && delta.add.length === 0 && addFiles.length === 0) {
-    return undefined;
-  }
-  let data: Record<string, unknown>;
-  if (raw === undefined) {
-    data = { version: 1, skills: {} };
-  } else {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      throw new CliError(
-        "skills-lock.json is not valid JSON — restore it from git history.",
-        EXIT_CODES.driftOrInvariant,
-      );
-    }
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      Array.isArray(parsed)
-    ) {
-      throw new CliError(
-        "skills-lock.json must contain a JSON object — restore it from git history.",
-        EXIT_CODES.driftOrInvariant,
-      );
-    }
-    data = parsed as Record<string, unknown>;
-  }
-  const skills = lockTable(data, "skills");
-  data["skills"] = skills;
-  for (const entry of delta.add) {
-    skills[entry.skill] = agentsdirLockEntry(entry.skill, entry.hash);
-  }
-  for (const skill of delta.remove) {
-    delete skills[skill];
-  }
-  const files = lockTable(data, "files");
-  for (const entry of addFiles) {
-    files[entry.path] = agentsdirFileLockEntry(entry.hash);
-  }
-  for (const path of removeFiles) {
-    delete files[path];
-  }
-  data["files"] = files;
-  if (Object.keys(skills).length === 0 && Object.keys(files).length === 0) {
-    return raw === undefined ? undefined : { action: "removed" };
-  }
-  // renderLock sorts both tables and drops an empty `files`
-  const rendered = renderLock(data);
-  if (rendered === raw) {
-    return undefined;
-  }
-  return {
-    action: raw === undefined ? "created" : "updated",
-    content: rendered,
-  };
 }
 
 function contentOf(files: PackFile[], path: string): string {

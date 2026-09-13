@@ -1,9 +1,17 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import * as prompts from "@clack/prompts";
 import { unifiedDiff } from "../core/diff.js";
 import { asUserFacingError, CliError } from "../core/errors.js";
+import {
+  agentsdirFileLockEntry,
+  agentsdirLockEntry,
+  applyLockPlan,
+  LOCK_FILE,
+  lockTable,
+  renderLock,
+} from "../core/lock.js";
 import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
 import {
   MANIFEST_FILE,
@@ -27,14 +35,10 @@ import {
 import { NAME_SPEC, type Violation } from "../core/validate.js";
 import { EXIT_CODES, type ExitCode } from "../exit-codes.js";
 import {
-  agentsdirFileLockEntry,
-  agentsdirLockEntry,
   getPackContent,
   isLockableFile,
-  lockTable,
   packInstallFiles,
   packSkillHash,
-  renderLock,
   type PackFile,
 } from "../packs/index.js";
 import { isInteractive } from "./add-common.js";
@@ -252,7 +256,11 @@ export async function runUpdate(
       await applyUpgrade(root, entry);
     }
     if (lock !== undefined) {
-      await writeFile(join(root, "skills-lock.json"), lock, "utf8");
+      await applyLockPlan(root, {
+        path: LOCK_FILE,
+        action: "updated",
+        content: lock,
+      });
     }
     if (migrations.length > 0) {
       await writeManifest(root, nextManifest);
