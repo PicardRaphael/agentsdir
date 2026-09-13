@@ -50,8 +50,14 @@ Four questions can be asked of an installed configuration. You answer one.
 - Read the repository the norms speak about first, in this order:
 
   ```bash
+  mkdir -p .agents/output/form
   agentsdir doctor --json > .agents/output/form/doctor.json
   ```
+
+- **Nothing creates that directory but you**, and the redirection will not
+  create it for you. Use whatever your shell spells it. `.agents/output/`
+  is in the managed `.gitignore` block, so nothing written there is
+  committed — which is how this report stays inside the repository.
 
 - The `context.bounds.exceeded` array of that file already lists the size
   bounds this repository crosses, measured exactly. **Take those figures;

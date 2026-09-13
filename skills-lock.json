@@ -41,7 +41,7 @@
       "sourceType": "agentsdir",
       "installedVersion": "1.0.0",
       "skillPath": ".agents/skills/review-form/SKILL.md",
-      "computedHash": "a7f67159df2d226b15d912fe00ae3c55f4dceb7b43540d005b9c5e4929069ba9"
+      "computedHash": "6474be0dba74ade5df44167cd18500e48c71be1b3ffbb771c655f439b2a5c427"
     },
     "setup-context": {
       "source": "agentsdir",

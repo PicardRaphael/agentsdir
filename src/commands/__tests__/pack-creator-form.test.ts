@@ -84,6 +84,9 @@ describe("Given the creator pack", () => {
   it("When the skill runs, Then nothing it produces leaves the repository", () => {
     const body = packFile(`${DIR}/SKILL.md`);
     expect(body).toContain(".agents/output/form/");
+    // the redirection would fail on a fresh repo: nothing else creates it
+    expect(body).toContain("mkdir -p .agents/output/form");
+    expect(body).toContain("managed `.gitignore` block");
     expect(body).toContain("no upload, no issue, no paste into a third-party");
     expect(body).toContain("no query to a registry");
   });
