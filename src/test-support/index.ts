@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,6 +81,35 @@ export function initAnswers(overrides: Partial<InitAnswers> = {}): InitAnswers {
     mode: "copy",
     stacks: [],
     ...overrides,
+  };
+}
+
+/**
+ * Makes `path` unreadable-as-a-directory, on every platform.
+ *
+ * `chmod` is the obvious move and it does nothing on Windows, where the CI
+ * also runs — a guard proven on one platform is not proven. Putting a regular
+ * file where the directory belongs makes `readdir` fail with ENOTDIR
+ * everywhere, which is the case these guards exist for: a path that is there
+ * and cannot be listed, never a path that is absent.
+ *
+ * Returns the undo, so a test can prove the repository is healthy again once
+ * the cause is removed.
+ */
+export async function makeUnreadable(
+  path: string,
+): Promise<() => Promise<void>> {
+  const moved = `${path}-moved-by-test`;
+  const existed = await pathExists(path);
+  if (existed) {
+    await rename(path, moved);
+  }
+  await writeFile(path, "", "utf8");
+  return async () => {
+    await rm(path, { force: true });
+    if (existed) {
+      await rename(moved, path);
+    }
   };
 }
 

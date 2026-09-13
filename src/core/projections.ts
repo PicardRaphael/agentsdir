@@ -1,4 +1,9 @@
-import { entryExists, resolveInsideRepo, writeFileAtomic } from "./fs-utils.js";
+import {
+  entryExists,
+  resolveInsideRepo,
+  walkFiles,
+  writeFileAtomic,
+} from "./fs-utils.js";
 import { createHash } from "node:crypto";
 import {
   lstat,
@@ -10,7 +15,7 @@ import {
   symlink,
   unlink,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { EXIT_CODES } from "../exit-codes.js";
 import { detectGitSymlinks } from "./detect.js";
 import { CliError } from "./errors.js";
@@ -244,7 +249,7 @@ async function ownedCopies(
     if (spec.kind !== "dir") {
       continue;
     }
-    for (const file of await walkFiles(
+    for (const file of await walkProjected(
       toAbsolute(root, spec.target),
       spec.target,
     )) {
@@ -334,7 +339,7 @@ async function removeIfNoFilesLeft(root: string, path: string): Promise<void> {
     // the shared walk decides: no file at any depth, and the directory goes —
     // which is what makes a mode switch find a clean slate instead of a shell
     // of empty folders it would classify as a foreign target
-    if ((await walkFiles(abs, path)).length === 0) {
+    if ((await walkProjected(abs, path)).length === 0) {
       await rm(abs, { recursive: true, force: true });
       return;
     }
@@ -383,7 +388,7 @@ async function willBeRemoved(
   if (kind !== "dir") {
     return false;
   }
-  const files = await walkFiles(toAbsolute(root, target), target);
+  const files = await walkProjected(toAbsolute(root, target), target);
   return files.length > 0 && files.every((file) => pending.has(file.rel));
 }
 
@@ -679,7 +684,7 @@ async function projectedFiles(root: string): Promise<string[]> {
     if (spec.kind !== "dir") {
       continue;
     }
-    for (const file of await walkFiles(
+    for (const file of await walkProjected(
       toAbsolute(root, spec.target),
       spec.target,
     )) {
@@ -715,7 +720,7 @@ async function expectedCopies(
     // copied into versioned projections
     await ensureNoLinkedParent(root, `${spec.source}/.`);
     const seenSources = new Set<string>();
-    for (const source of await walkFiles(
+    for (const source of await walkProjected(
       toAbsolute(root, spec.source),
       spec.target,
     )) {
@@ -775,36 +780,19 @@ function decorateMarkdown(source: string): string {
 }
 
 /** Recursive, sorted by name (code units) so every output is deterministic. */
-async function walkFiles(
+/**
+ * The projected tree under one mirror. An absent mirror is normal — nothing
+ * projected yet — but an unreadable one must never read as "empty": that is
+ * what once made a run delete live projections and exit 0.
+ */
+function walkProjected(
   absDir: string,
   relPrefix: string,
 ): Promise<{ rel: string; abs: string }[]> {
-  // an absent mirror is normal (nothing projected yet); an unreadable one is a
-  // fault, and must never read as "empty" — that would delete live projections
-  let entries;
-  try {
-    entries = await readdir(absDir, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return [];
-    }
-    throw new CliError(
-      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to treat an unreadable directory as an empty one.`,
-      EXIT_CODES.environmentOrUsage,
-    );
-  }
-  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const files: { rel: string; abs: string }[] = [];
-  for (const entry of entries) {
-    const rel = `${relPrefix}/${entry.name}`;
-    const abs = join(absDir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await walkFiles(abs, rel)));
-    } else if (entry.isFile()) {
-      files.push({ rel, abs });
-    }
-  }
-  return files;
+  return walkFiles(absDir, {
+    prefix: relPrefix,
+    unreadable: "refusing to treat an unreadable directory as an empty one",
+  });
 }
 
 async function classifyLinkTarget(

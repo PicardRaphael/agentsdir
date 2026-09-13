@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { walkFiles } from "./fs-utils.js";
 
 /**
  * The fingerprint of a skill folder, per the algorithm documented in
@@ -19,7 +20,7 @@ export async function computeSkillHash(
   dir: string,
   overlay: Record<string, Buffer> = {},
 ): Promise<string> {
-  const walked = await walkSorted(dir, "");
+  const walked = await skillFiles(dir);
   const files: Record<string, Buffer> = {};
   for (const rel of walked) {
     files[rel] = overlay[rel] ?? (await readFile(join(dir, ...rel.split("/"))));
@@ -38,7 +39,7 @@ export async function computeSkillHash(
  * eventually disagree on what belongs to the skill.
  */
 export function listSkillFiles(dir: string): Promise<string[]> {
-  return walkSorted(dir, "");
+  return skillFiles(dir);
 }
 
 /**
@@ -66,7 +67,7 @@ export function hashFileContent(content: Buffer | string): string {
 }
 
 /**
- * Segment-wise path order — the exact order `walkSorted` produces, so merging
+ * Segment-wise path order — the exact order the walk produces, so merging
  * overlay paths never reorders the fingerprint input of files already on disk.
  */
 function pathCompare(a: string, b: string): number {
@@ -83,24 +84,16 @@ function pathCompare(a: string, b: string): number {
   return left.length - right.length;
 }
 
-/** Recursive walk, sorted by name in code units — the determinism contract. */
-async function walkSorted(
-  absDir: string,
-  relPrefix: string,
-): Promise<string[]> {
-  const entries = await readdir(absDir, { withFileTypes: true });
-  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.name === ".git" || entry.name === "node_modules") {
-      continue;
-    }
-    const rel = relPrefix === "" ? entry.name : `${relPrefix}/${entry.name}`;
-    if (entry.isDirectory()) {
-      files.push(...(await walkSorted(join(absDir, entry.name), rel)));
-    } else if (entry.isFile()) {
-      files.push(rel);
-    }
-  }
-  return files;
+/**
+ * The files a skill folder contributes to its fingerprint: sorted, `.git` and
+ * `node_modules` excluded. An absent folder is NOT an empty one here — the
+ * caller asked for the fingerprint of something it believes exists, and an
+ * empty hash would silently certify a folder that is gone.
+ */
+function skillFiles(dir: string): Promise<string[]> {
+  return walkFiles(dir, { exclude: SKILL_HASH_EXCLUDED }).then((files) =>
+    files.map((file) => file.rel),
+  );
 }
+
+const SKILL_HASH_EXCLUDED = [".git", "node_modules"] as const;

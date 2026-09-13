@@ -71,6 +71,76 @@ export async function readdirOrEmpty(path: string): Promise<string[]> {
   }
 }
 
+export interface WalkedFile {
+  /** POSIX path relative to the walk root, carrying `prefix` when one was given. */
+  rel: string;
+  abs: string;
+}
+
+export interface WalkFilesOptions {
+  /** Entry names never returned and never descended into. */
+  exclude?: readonly string[];
+  /** Prepended to every `rel`; `""` (the default) yields bare relative paths. */
+  prefix?: string;
+  /**
+   * What an unreadable root means to the caller, as the tail of the message.
+   *
+   * Giving it also declares that an **absent** root is a normal answer, and
+   * the walk returns nothing. Leaving it out declares the opposite: the
+   * directory is expected to be there, and every error propagates untouched.
+   * The two always travel together — a caller that tolerates absence is
+   * exactly the one that must refuse to read unreadable as empty, which is how
+   * live projections once got deleted on exit 0.
+   */
+  unreadable?: string;
+}
+
+/**
+ * The one recursive directory walk of this CLI, sorted by name in **code
+ * units** — not by locale. Three copies of it used to coexist with three
+ * return shapes and three sets of exclusions, and the fingerprints of
+ * `skills-lock.json` depend on this order: a `localeCompare` here would
+ * re-order the hash input and invalidate every lock entry on a machine with
+ * another locale.
+ */
+export async function walkFiles(
+  absDir: string,
+  options: WalkFilesOptions = {},
+): Promise<WalkedFile[]> {
+  const prefix = options.prefix ?? "";
+  const exclude = options.exclude ?? [];
+  let entries;
+  try {
+    entries = await readdir(absDir, { withFileTypes: true });
+  } catch (error) {
+    if (options.unreadable === undefined) {
+      throw error;
+    }
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new CliError(
+      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — ${options.unreadable}.`,
+      EXIT_CODES.environmentOrUsage,
+    );
+  }
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const files: WalkedFile[] = [];
+  for (const entry of entries) {
+    if (exclude.includes(entry.name)) {
+      continue;
+    }
+    const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    const abs = join(absDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await walkFiles(abs, { ...options, prefix: rel })));
+    } else if (entry.isFile()) {
+      files.push({ rel, abs });
+    }
+  }
+  return files;
+}
+
 /**
  * Writes a file so it is never observed half-written: the bytes land in a
  * sibling temporary file, then a single rename puts them in place. An

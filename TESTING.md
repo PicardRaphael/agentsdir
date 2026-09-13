@@ -94,6 +94,9 @@ verte) est collée dans le message de commit qui l'introduit.
 | Des delegations sans nom d'agent sont signalees au lieu d'un zero trompeur | `src/commands/__tests__/pack-usage-review.test.ts` | `unnamedDelegations` et sa branche dans `renderLimits` |
 | Une ligne JSONL tronquee est ignoree, pas fatale | `src/commands/__tests__/pack-usage-review.test.ts` | le `catch` de `readJournal` |
 | Le script de revue n'ecrit rien | `src/commands/__tests__/pack-usage-review.test.ts` | empreinte de l'arbre avant/apres |
+| La traversee trie en unites de code, jamais par locale | `src/core/__tests__/walk-files.test.ts` | le comparateur de `walkFiles` (`src/core/fs-utils.ts`), dont depend l'ordre des empreintes |
+| Les exclusions d'empreinte viennent de l'appelant, pas d'un rappel en dur | `src/core/__tests__/walk-files.test.ts` | `SKILL_HASH_EXCLUDED` passe a `walkFiles` (`src/core/skill-hash.ts`) |
+| Un repertoire absent et un repertoire illisible ne se ressemblent pas, dans la traversee partagee | `src/core/__tests__/walk-files.test.ts` | la branche `options.unreadable` de `walkFiles` |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

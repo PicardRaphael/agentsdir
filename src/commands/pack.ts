@@ -2,8 +2,9 @@ import {
   entryExists,
   resolveInsideRepo,
   writeFileAtomic,
+  walkFiles as walkTree,
 } from "../core/fs-utils.js";
-import { readdir, readFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
@@ -587,34 +588,16 @@ function sortChanges(changes: GeneratorChange[]): GeneratorChange[] {
   );
 }
 
+/**
+ * Every file under a pack folder, relative to it. An unreadable directory read
+ * as empty would make `pack remove` delete without asking for `--force`, so it
+ * is a fault, never an emptiness.
+ */
 async function walkFiles(absDir: string): Promise<string[]> {
-  // this feeds the guard that spots locally modified pack files before a
-  // removal: reading an unreadable directory as empty would make `pack remove`
-  // delete without asking for --force
-  let entries;
-  try {
-    entries = await readdir(absDir, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return [];
-    }
-    throw new CliError(
-      `Cannot read ${absDir} (${(error as NodeJS.ErrnoException).code ?? "unknown error"}). Fix its permissions or restore it — refusing to remove files it cannot inspect.`,
-      EXIT_CODES.environmentOrUsage,
-    );
-  }
-  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      for (const rel of await walkFiles(join(absDir, entry.name))) {
-        files.push(`${entry.name}/${rel}`);
-      }
-    } else if (entry.isFile()) {
-      files.push(entry.name);
-    }
-  }
-  return files;
+  const files = await walkTree(absDir, {
+    unreadable: "refusing to remove files it cannot inspect",
+  });
+  return files.map((file) => file.rel);
 }
 
 /** Deletes the folder when only empty directories remain (our copies are gone). */
