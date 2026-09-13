@@ -334,7 +334,7 @@ export function skillNextSteps(
       // the path, not "the body": `.claude/` holds a copy of the same file, and
       // a reader given only "the body" has a one-in-two chance of editing the
       // generated one and losing the work at the next sync
-      why: "fill in the frontmatter description and the Objective, Procedure, Verification sections; the .claude/ copy of this skill is generated from it and is never edited by hand",
+      why: "fill in the frontmatter description and the Objective, Procedure, Verification sections; its agents/openai.yaml, its assets/icon.svg and its .claude/ copy are all generated from this file and never edited by hand",
     },
     ...(invocation === undefined ? [] : [invocation]),
     CHECK_STEP,

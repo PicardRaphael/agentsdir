@@ -50,7 +50,11 @@ describe("Given a generator that just created a skeleton", () => {
     // reader told only to edit "the body" can lose the work to the next sync
     expect(steps[0]?.action).toBe("write .agents/skills/demo-flow/SKILL.md");
     expect(rendered).toContain("Objective, Procedure, Verification");
-    expect(rendered).toContain("the .claude/ copy of this skill is generated");
+    expect(rendered).toContain("its .claude/ copy are all generated");
+    // openai.yaml and icon.svg sit under .agents/, on the "source" side for a
+    // reader, and are derived from the frontmatter exactly as the copy is
+    expect(rendered).toContain("agents/openai.yaml");
+    expect(rendered).toContain("assets/icon.svg");
     // "everything under .claude/" would have covered .claude/settings.json,
     // which add hook declares to be the user's: the two must not contradict
     expect(rendered).not.toContain("everything under .claude/");
@@ -72,17 +76,31 @@ describe("Given a generator that just created a skeleton", () => {
     expect(rendered).toContain("description");
     expect(rendered).toContain("delegated to");
     expect(rendered).toContain("system prompt");
+    // only some harnesses take a projection, and the silence read as a fault
+    expect(rendered).toContain("take no projection find the agent through");
     expect(rendered).toContain(CHECK_STEP.action);
   });
 
   it("When `add hook` reports, Then it says the body decides nothing yet and the registries are shared", () => {
-    const rendered = report(hookNextSteps(".agents/hooks/pretooluse-hook.mjs"));
+    const steps = hookNextSteps(".agents/hooks/pretooluse-hook.mjs");
+    const rendered = report(steps);
+    // the actions, not only the reasons: a step renamed to something vague
+    // still renders every sentence asserted below
+    expect(steps.map((step) => step.action)).toEqual([
+      "implement the TODO in .agents/hooks/pretooluse-hook.mjs",
+      "narrow it with a matcher",
+      "read the registry entries",
+      "npx agentsdir check",
+    ]);
     expect(rendered).toContain("TODO in .agents/hooks/pretooluse-hook.mjs");
     expect(rendered).toContain("blocks nothing until you do");
     // "holds it to the protocol" pointed at a contract it never named
     expect(rendered).toContain("stdin, stdout and exit-code contract");
     // the hook follows another model: registries, not copies
     expect(rendered).toContain("they are not copies of it");
+    // the scope of a hook was a decision taken in silence
+    expect(rendered).toContain("before every tool call");
+    expect(rendered).toContain("--matcher");
     expect(rendered).toContain("left anything else in them untouched");
     expect(rendered).toContain("npx agentsdir check");
   });

@@ -173,10 +173,13 @@ la première rédaction des blocs portait encore :
   est maintenant restreinte à l'artefact que chaque générateur vient d'écrire, et
   un test interdit le retour de la formulation englobante.
 
-Restent hors périmètre de la 37, notés ici plutôt que perdus : la portée d'un
-hook (`--matcher` existe et est documenté, la sortie ne le mentionne pas), le
-statut de `agents/openai.yaml` et `assets/icon.svg` dans le bloc de `add skill`,
-et le fait que `add agent` ne projette que vers Claude Code sans le dire.
+Le rejeu avait relevé trois points de plus, hors des critères de la 37 : la
+portée d'un hook, le statut de `agents/openai.yaml` et `assets/icon.svg` dans le
+bloc de `add skill`, et le fait que `add agent` ne projette pas vers tous les
+harness sans le dire. Ils ont été traités dans la foulée, sur décision de
+l'utilisateur : les trois blocs les énoncent, quatre mutations les couvrent. Le
+plus sérieux était la portée — sans matcher, un hook s'exécute avant **chaque**
+appel d'outil de chaque harness activé, et cette décision se prenait en silence.
 
 ### 9 — terrain réel
 

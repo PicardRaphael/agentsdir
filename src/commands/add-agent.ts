@@ -123,7 +123,7 @@ export function agentNextSteps(name: string): NextStep[] {
     },
     {
       action: "write Mission, Method, Boundaries",
-      why: "the body is the system prompt the agent runs under; the .claude/ copy is generated from this file and is never edited by hand",
+      why: "the body is the system prompt it runs under; the .claude/ copy is generated from this file and never edited by hand, and the harnesses that take no projection find the agent through AGENTS.md",
     },
     CHECK_STEP,
   ];

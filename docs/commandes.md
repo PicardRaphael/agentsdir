@@ -281,7 +281,7 @@ npx agentsdir add skill <name> [--description "<text>"] [--display-name "<text>"
 
    ```
    Next steps:
-     write .agents/skills/<name>/SKILL.md  — fill in the frontmatter description and the Objective, Procedure, Verification sections; the .claude/ copy of this skill is generated from it and is never edited by hand
+     write .agents/skills/<name>/SKILL.md  — fill in the frontmatter description and the Objective, Procedure, Verification sections; its agents/openai.yaml, its assets/icon.svg and its .claude/ copy are all generated from this file and never edited by hand
      /<name> · $<name>                     — invoke it once it says something (claude, codex)
      npx agentsdir check                   — verify what you wrote, and it names any `sync` you owe (CI runs this)
    ```
@@ -358,7 +358,10 @@ the `.claude/agents` projection; the other harnesses discover it through
 Closes on a **Next steps** block (see `add skill`), leading with the
 `description`: it is the field a harness reads to decide whether to delegate,
 and the generated one is generic on purpose. A sub-agent with a vague
-description is never called, and nothing ever says why.
+description is never called, and nothing ever says why. The block also says
+that only the harnesses taking projections get a copy, the others finding the
+agent through `AGENTS.md` — two files created out of three enabled harnesses
+reads as a fault when nothing explains it.
 
 ### Idempotence and exit codes
 
@@ -414,8 +417,12 @@ npx agentsdir add hook <event> [--name <slug>] [--matcher "<pattern>"] [--dry-ru
    only its own entries there and leaving everything else in them untouched. It names the script by path and
    says where its contract lives — stdin, stdout and exit codes are documented
    in the script's own header, which is the only place a reader of the terminal
-   would not think to look. `check` then runs the script once on a sample
-   payload and holds it to that contract.
+   would not think to look. It also names the **scope**: with no matcher the
+   hook runs before every tool call of every enabled harness, which was a
+   decision being taken in silence — `--matcher` sets it at creation, and
+   afterwards the `matcher` key of the `agentsdir:hook` comment plus a `sync`
+   changes it, since the matcher travels with the script. `check` then runs the
+   script once on a sample payload and holds it to that contract.
 
 ```mermaid
 flowchart LR

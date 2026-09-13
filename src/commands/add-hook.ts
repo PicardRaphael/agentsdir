@@ -149,6 +149,15 @@ export function hookNextSteps(scriptPath: string): NextStep[] {
       why: "it exits 0 and blocks nothing until you do; the stdin, stdout and exit-code contract is in the script's own header",
     },
     {
+      action: "narrow it with a matcher",
+      // without one the hook runs before EVERY tool call of every enabled
+      // harness — a scope decision that was being taken in silence. The matcher
+      // travels in the script's own metadata, so it is still changeable here:
+      // `--matcher` sets it at creation, editing the comment plus `sync`
+      // changes it afterwards.
+      why: 'without one it runs before every tool call; set "matcher" in the agentsdir:hook comment and re-run sync, or pass --matcher next time',
+    },
+    {
       action: "read the registry entries",
       why: "those files register this script, they are not copies of it; agentsdir wrote only its own entries there and left anything else in them untouched",
     },

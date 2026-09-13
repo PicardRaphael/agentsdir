@@ -326,7 +326,12 @@ resolved, on the first ordinary command.
 - **`add hook` left two things unsaid that a reader assumed the other way.** The
   script it writes is registered and runs from the next session, but its body is
   a `TODO` around `process.exit(0)`: it decides nothing, and someone expecting
-  a guard had none. And `.claude/settings.json`, `.codex/hooks.json` and
+  a guard had none. Nor did anything state its **scope** — with no matcher it
+  runs before every tool call of every enabled harness, a decision that was
+  being taken in silence; the block names it now and says how to narrow it, at
+  creation with `--matcher` and afterwards through the `matcher` key of the
+  `agentsdir:hook` comment plus a `sync`, since the matcher travels with the
+  script. And `.claude/settings.json`, `.codex/hooks.json` and
   `.cursor/hooks.json` are files the user also owns — the report distinguishes
   a creation from an update of a pre-existing one, which it now has a test for,
   but never said that agentsdir writes its own entries there and leaves the rest
