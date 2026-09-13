@@ -19,7 +19,7 @@ interface JsonReport {
   command: string;
   mode: string | null;
   changes: unknown[];
-  errors: { message: string; severity: string }[];
+  errors: { path: string; rule: string; message: string; severity: string }[];
   exitCode: number;
 }
 
@@ -58,6 +58,9 @@ async function expectSingleJsonFailure(
   expect(report.changes).toEqual([]);
   expect(report.errors.length).toBeGreaterThan(0);
   expect(report.errors[0]?.severity).toBe("error");
+  // the rule is what a script branches on: "environment" is the one name that
+  // says "this is not drift, the repository or the invocation is unusable"
+  expect(report.errors[0]?.rule).toBe("environment");
   expect(report.errors[0]?.message).not.toBe("");
   expect(report.exitCode).toBe(EXIT_CODES.environmentOrUsage);
 }
