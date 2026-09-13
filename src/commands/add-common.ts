@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import {
@@ -6,7 +6,7 @@ import {
   planClaudePermissions,
 } from "../core/claude-permissions.js";
 import { asUserFacingError, CliError } from "../core/errors.js";
-import { entryExists } from "../core/fs-utils.js";
+import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
 import { packScriptPaths } from "../packs/index.js";
 import {
   readManifest,
@@ -124,7 +124,7 @@ export async function syncClaudePermissions(
     await ensureNoLinkedParent(root, CLAUDE_SETTINGS_FILE);
     const abs = join(root, ...CLAUDE_SETTINGS_FILE.split("/"));
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, plan.content, "utf8");
+    await writeFileAtomic(abs, plan.content);
   }
   return [{ path: CLAUDE_SETTINGS_FILE, action: plan.action }];
 }

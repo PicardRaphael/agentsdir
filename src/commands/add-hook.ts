@@ -1,5 +1,5 @@
-import { entryExists } from "../core/fs-utils.js";
-import { mkdir, writeFile } from "node:fs/promises";
+import { entryExists, writeFileAtomic } from "../core/fs-utils.js";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
@@ -86,7 +86,7 @@ export async function runAddHook(
   }
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "hooks"), { recursive: true });
-    await writeFile(join(root, ...scriptPath.split("/")), script, "utf8");
+    await writeFileAtomic(join(root, ...scriptPath.split("/")), script);
     for (const plan of registries) {
       if (plan.action === "ok" || plan.content === undefined) {
         continue;
@@ -96,7 +96,7 @@ export async function runAddHook(
       await mkdir(join(root, ...plan.path.split("/").slice(0, -1)), {
         recursive: true,
       });
-      await writeFile(abs, plan.content, "utf8");
+      await writeFileAtomic(abs, plan.content);
     }
   }
   const warnings: string[] = [];

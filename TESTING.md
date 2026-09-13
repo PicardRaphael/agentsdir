@@ -108,6 +108,9 @@ verte) est collée dans le message de commit qui l'introduit.
 | Une entree `agentsdir` reste epinglee, une entree `github` est re-verrouillee | `src/core/__tests__/lock-gate.test.ts` | `relockVendored` (`src/core/lock.ts`) |
 | Le meme etat declare donne les memes octets, atteint par `init` ou par `pack add` | `src/core/__tests__/lock-gate.test.ts` | `renderLock` et son tri par cle |
 | Un verrou malforme ou non-objet est refuse, jamais relu comme vide | `src/core/__tests__/lock-gate.test.ts` | `parseLock` |
+| `add hook` interrompu laisse un etat que `check` voit et que `sync` repare | `src/core/__tests__/interrupted-sequence.test.ts` | l'invariant 17 (`hook-registration-drift`) et le replanificateur de `sync` |
+| Aucune commande n'ecrit hors de `writeFileAtomic` | `src/core/__tests__/interrupted-sequence.test.ts` | balayage de `src/commands/` |
+| Un registre tronque fait refuser `sync` sans rien ecrire | `src/core/__tests__/interrupted-sequence.test.ts` | `hook-registry-invalid`, verifie avant la premiere ecriture |
 
 Le contrat `--json` passe par la CLI compilée : une mutation dans `src/` n'y est
 visible qu'après `npm run build`. Sans ce build, le test reste vert et la preuve

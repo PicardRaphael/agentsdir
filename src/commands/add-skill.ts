@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -8,6 +8,7 @@ import {
   renderSkillIcon,
 } from "../core/codex-metadata.js";
 import { CliError } from "../core/errors.js";
+import { writeFileAtomic } from "../core/fs-utils.js";
 import { parseSkillMarkdown } from "../core/frontmatter.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { validateSkillFolder } from "../core/validate.js";
@@ -166,7 +167,7 @@ export async function runAddSkill(
     for (const [rel, content] of files) {
       const abs = join(skillDir, ...rel.split("/"));
       await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, content, "utf8");
+      await writeFileAtomic(abs, content);
     }
     const violations = (await validateSkillFolder(root, answers.name)).filter(
       (violation) => violation.severity === "error",

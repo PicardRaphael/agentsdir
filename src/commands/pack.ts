@@ -4,7 +4,7 @@ import {
   writeFileAtomic,
   walkFiles as walkTree,
 } from "../core/fs-utils.js";
-import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFile, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
@@ -169,7 +169,7 @@ export async function runPackAdd(
       await writeFileAtomic(abs, file.content, { exclusive: true });
     }
     if (agentsMd !== undefined) {
-      await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");
+      await writeFileAtomic(join(root, "AGENTS.md"), agentsMd);
     }
     await applyLockPlan(root, lock);
     // before syncClaudePermissions below, which reads .claude/settings.json
@@ -361,7 +361,7 @@ export async function runPackRemove(
     await removeIfNoFilesLeft(join(root, ".agents", "hooks", "lib"));
     await removeIfNoFilesLeft(join(root, ".agents", "hooks"));
     if (agentsMd !== undefined) {
-      await writeFile(join(root, "AGENTS.md"), agentsMd, "utf8");
+      await writeFileAtomic(join(root, "AGENTS.md"), agentsMd);
     }
     await applyLockPlan(root, lock);
     await writeManifest(root, nextManifest);
@@ -523,6 +523,6 @@ async function applyRegistries(
     await ensureNoLinkedParent(root, plan.path);
     const abs = join(root, ...plan.path.split("/"));
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, plan.content, "utf8");
+    await writeFileAtomic(abs, plan.content);
   }
 }

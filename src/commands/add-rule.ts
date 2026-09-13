@@ -1,8 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
+import { writeFileAtomic } from "../core/fs-utils.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import { renderRuleTemplate, type RuleAnswers } from "../templates/rules.js";
@@ -65,9 +66,9 @@ export async function runAddRule(
   }
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "rules"), { recursive: true });
-    await writeFile(join(root, ".agents", "rules", ruleFile), source, "utf8");
+    await writeFileAtomic(join(root, ".agents", "rules", ruleFile), source);
     if (indexPlan !== undefined) {
-      await writeFile(join(root, "AGENTS.md"), indexPlan.next, "utf8");
+      await writeFileAtomic(join(root, "AGENTS.md"), indexPlan.next);
     }
   }
   return {

@@ -1,8 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import * as prompts from "@clack/prompts";
 import { defineCommand } from "citty";
 import { CliError } from "../core/errors.js";
+import { writeFileAtomic } from "../core/fs-utils.js";
 import { resolveRepoRoot } from "../core/repo.js";
 import { EXIT_CODES } from "../exit-codes.js";
 import {
@@ -55,7 +56,7 @@ export async function runAddAgent(
   const source = renderAgentTemplate(answers);
   if (!options.dryRun) {
     await mkdir(join(root, ".agents", "agents"), { recursive: true });
-    await writeFile(join(root, ".agents", "agents", agentFile), source, "utf8");
+    await writeFileAtomic(join(root, ".agents", "agents", agentFile), source);
   }
   return {
     changes: [
