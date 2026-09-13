@@ -12,7 +12,9 @@ import {
   ensureValidName,
   ensureWritable,
   isInteractive,
+  CHECK_STEP,
   renderGeneratorReport,
+  type NextStep,
   resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
@@ -132,6 +134,28 @@ export function parsePathsFlag(raw: string | undefined): string[] {
   return globs;
 }
 
+/**
+ * What is left after `add rule`.
+ *
+ * The first line under the H1 comes first because it is the one thing about a
+ * rule nobody guesses: `sync` lifts it into the rules index of `AGENTS.md`, so
+ * it is what every agent reads to decide whether to open the rule at all. Left
+ * at the template wording, the rule is installed and never consulted.
+ */
+export function ruleNextSteps(name: string): NextStep[] {
+  return [
+    {
+      action: `rewrite the first line of .agents/rules/${name}.md`,
+      why: "AGENTS.md already points here, and that line is what tells an agent when to read the rule; until it is rewritten, the index sends them to a template",
+    },
+    {
+      action: "state the rules, and the GOOD/BAD pair",
+      why: "the rest of the body is a template; the .claude/ copy of this rule is generated from this file and is never edited by hand",
+    },
+    CHECK_STEP,
+  ];
+}
+
 export const addRuleCommand = defineCommand({
   meta: {
     name: "rule",
@@ -183,7 +207,13 @@ export const addRuleCommand = defineCommand({
         hook === undefined ? {} : { hook },
       );
       const result = await runAddRule(root, answers, { dryRun });
-      return { result, report: renderGeneratorReport(result, { dryRun }) };
+      return {
+        result,
+        report: renderGeneratorReport(result, {
+          dryRun,
+          nextSteps: ruleNextSteps(name),
+        }),
+      };
     });
   },
 });

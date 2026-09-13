@@ -16,7 +16,9 @@ import {
   ensureValidName,
   ensureWritable,
   isInteractive,
+  CHECK_STEP,
   renderGeneratorReport,
+  type NextStep,
   resyncProjections,
   runGeneratorCli,
   type GeneratorResult,
@@ -105,6 +107,28 @@ export async function collectAgentAnswers(
   return { ...defaults, description };
 }
 
+/**
+ * What is left after `add agent`.
+ *
+ * The `description` leads because it is the field that does the work: it is
+ * what a harness reads to decide whether to delegate, and the generated one is
+ * generic on purpose. A sub-agent with a vague description is never called and
+ * nothing ever says why.
+ */
+export function agentNextSteps(name: string): NextStep[] {
+  return [
+    {
+      action: `sharpen the description in .agents/agents/${name}.md`,
+      why: "it decides when this agent gets delegated to, and the generated one is deliberately generic",
+    },
+    {
+      action: "write Mission, Method, Boundaries",
+      why: "the body is the system prompt the agent runs under; the .claude/ copy is generated from this file and is never edited by hand",
+    },
+    CHECK_STEP,
+  ];
+}
+
 export const addAgentCommand = defineCommand({
   meta: {
     name: "agent",
@@ -158,7 +182,13 @@ export const addAgentCommand = defineCommand({
         description === undefined ? {} : { description },
       );
       const result = await runAddAgent(root, answers, { dryRun });
-      return { result, report: renderGeneratorReport(result, { dryRun }) };
+      return {
+        result,
+        report: renderGeneratorReport(result, {
+          dryRun,
+          nextSteps: agentNextSteps(name),
+        }),
+      };
     });
   },
 });

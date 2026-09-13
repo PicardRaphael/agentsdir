@@ -23,7 +23,10 @@ import {
   ensureValidName,
   ensureWritable,
   isInteractive,
+  CHECK_STEP,
+  invocationStep,
   renderGeneratorReport,
+  type NextStep,
   resyncProjections,
   runGeneratorCli,
   type GeneratorResult,
@@ -313,6 +316,31 @@ function definedFlags(flags: SkillFlags): Partial<SkillAnswers> {
   ) as Partial<SkillAnswers>;
 }
 
+/**
+ * What is left after `add skill`: a body to write, and the way to run it.
+ *
+ * The template is deliberately a skeleton — three sections of placeholder
+ * prose — and nothing said so. Naming the sections is the difference between
+ * "a file appeared" and "here is what to write in it".
+ */
+export function skillNextSteps(
+  name: string,
+  enabled: readonly string[],
+): NextStep[] {
+  const invocation = invocationStep(name, enabled);
+  return [
+    {
+      action: `write .agents/skills/${name}/SKILL.md`,
+      // the path, not "the body": `.claude/` holds a copy of the same file, and
+      // a reader given only "the body" has a one-in-two chance of editing the
+      // generated one and losing the work at the next sync
+      why: "fill in the frontmatter description and the Objective, Procedure, Verification sections; the .claude/ copy of this skill is generated from it and is never edited by hand",
+    },
+    ...(invocation === undefined ? [] : [invocation]),
+    CHECK_STEP,
+  ];
+}
+
 export const addSkillCommand = defineCommand({
   meta: {
     name: "skill",
@@ -382,14 +410,20 @@ export const addSkillCommand = defineCommand({
       ensureValidSkillFlags(flags, name);
       // the refusals come before the first question: retyping a taken name, or
       // running this before `init`, must not cost six answers first
-      await ensureWritable(root, skillTarget(name));
+      const manifest = await ensureWritable(root, skillTarget(name));
       const answers = await collectSkillAnswers(
         name,
         args.implicit === true,
         flags,
       );
       const result = await runAddSkill(root, answers, { dryRun });
-      return { result, report: renderGeneratorReport(result, { dryRun }) };
+      return {
+        result,
+        report: renderGeneratorReport(result, {
+          dryRun,
+          nextSteps: skillNextSteps(name, manifest.harness.enabled),
+        }),
+      };
     });
   },
 });

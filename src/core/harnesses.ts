@@ -49,6 +49,16 @@ export interface HarnessSpec {
    * the `includes("claude")` guards.
    */
   projectsFiles: boolean;
+  /**
+   * How a user invokes a skill by hand in this harness, with `<name>` where the
+   * skill name goes — or `undefined` when this repo has not verified one.
+   *
+   * It lives here for the same reason the event keys do: a generator telling
+   * the user how to run what it just created must not name a harness to know
+   * it. Only what a real agent was observed doing is recorded — an invocation
+   * printed on faith would be worse than no line at all.
+   */
+  invocation: string | undefined;
 }
 
 export const HARNESS_SPECS: Record<Harness, HarnessSpec> = {
@@ -62,6 +72,9 @@ export const HARNESS_SPECS: Record<Harness, HarnessSpec> = {
     // .claude/{rules,skills,agents}. Codex and Cursor read AGENTS.md and
     // .agents/ where they stand.
     projectsFiles: true,
+    // observed on 2026-09-12 against a real session: `/demo-flow` loaded the
+    // SKILL.md (e2e/validation-agent/rapports/2026-09-12-claude-code.md, 1)
+    invocation: "/<name>",
   },
   codex: {
     dir: ".codex",
@@ -70,6 +83,9 @@ export const HARNESS_SPECS: Record<Harness, HarnessSpec> = {
     unsupportedEvents: ["Notification"],
     eventAliases: {},
     projectsFiles: false,
+    // the `$<name>` token of `default-prompt`, which is what `openai.yaml`
+    // carries and what the whole catalog is keyed on (conventions.md §2)
+    invocation: "$<name>",
   },
   cursor: {
     dir: ".cursor",
@@ -79,6 +95,9 @@ export const HARNESS_SPECS: Record<Harness, HarnessSpec> = {
     // Cursor renames this one outright rather than recasing it
     eventAliases: { UserPromptSubmit: "beforeSubmitPrompt" },
     projectsFiles: false,
+    // never observed here, and the validation pass did not reach it: this repo
+    // will not tell a user a syntax it has not seen work
+    invocation: undefined,
   },
 };
 

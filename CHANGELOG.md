@@ -291,6 +291,48 @@ resolved, on the first ordinary command.
 
 ### Fixed
 
+- **The generators said what they had written, never what was left to do.** The
+  raw output of `add skill`, `add rule`, `add agent` and `add hook` was handed
+  to an agent with no repository and no documentation, on 2026-09-12, and asked:
+  do you know what to do next? Three noes out of three. `init` got a yes,
+  because `init` prints "Next steps" and the generators printed a file list.
+
+  A file list says the command worked. It says nothing about the fact that the
+  file is a **skeleton**, nor which parts of it are meant to be replaced, nor
+  how to run the thing once it says something. So each generator now closes on
+  two to four lines, on `init`'s own shape, naming the places to fill and
+  `agentsdir check` to verify them. `--dry-run` prints none — nothing was
+  written, so there is nothing to fill in — and `--json` is untouched.
+
+  Every step names a **path**, never just "the body", and every generator says
+  which file is the source and which is generated: a repository holds the two
+  under separate names, and a reader told to edit "the body" has one chance in
+  two of editing the generated copy and losing the work at the next `sync`.
+  Both of those came out of replaying the same observation on the fixed output —
+  the noes had become yeses, and this was the sharpest thing the reader still
+  could not tell. The replay also caught a contradiction the first draft had
+  introduced: "everything under `.claude/` is generated" would have covered
+  `.claude/settings.json`, which `add hook` declares to be the user's. The
+  claim is now narrowed to the artifact each generator just wrote.
+
+  Each says the thing its own artifact is judged on. `add rule` leads with the
+  line under the H1, because `sync` lifts that line into the rules index and it
+  is what decides whether an agent ever opens the rule. `add agent` leads with
+  the `description`, the field a harness reads to decide whether to delegate,
+  generic by default. `add skill` names **how to invoke the skill**, in the
+  syntax of each enabled harness — and a harness whose invocation this project
+  has not seen work is simply left out of the line, rather than guessed at.
+
+- **`add hook` left two things unsaid that a reader assumed the other way.** The
+  script it writes is registered and runs from the next session, but its body is
+  a `TODO` around `process.exit(0)`: it decides nothing, and someone expecting
+  a guard had none. And `.claude/settings.json`, `.codex/hooks.json` and
+  `.cursor/hooks.json` are files the user also owns — the report distinguishes
+  a creation from an update of a pre-existing one, which it now has a test for,
+  but never said that agentsdir writes its own entries there and leaves the rest
+  alone. Both are stated now, in the closing block.
+
+
 - **`check` passed green on a repository it could not read.** An unreadable
   `.agents/agents` — a permission change, a broken checkout, a path replaced by
   a file — was read as "this repository has no sub-agents", so every sub-agent

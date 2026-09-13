@@ -260,6 +260,31 @@ npx agentsdir add skill <name> [--description "<text>"] [--display-name "<text>"
    skill is usable immediately — in copy mode as it already is in symlink mode —
    and `check` stays green without a manual `sync`. The same step closes
    `add rule`, `add agent`, `add hook`, `pack add` and `pack remove`.
+7. Closes on a **Next steps** block, on the shape `init` uses: what is left to
+   write in the file it just created, and `npx agentsdir check` to verify it.
+   A generator produces a skeleton, and listing the files it wrote says the
+   command worked and nothing about what is missing. `--dry-run` prints no such
+   block — nothing was written, so there is nothing to fill in — and `--json`
+   is unchanged: the block is human output only.
+
+   Every step names a **path**, never just "the body", and every generator
+   states which file is the source and which is generated. A repository holds
+   the two under separate names, and a reader told to edit "the body" has one
+   chance in two of editing the generated copy and losing the work at the next
+   `sync`. The statement is narrowed to the artifact at hand, never to
+   `.claude/` as a whole: `.claude/settings.json` is a file the user owns, and
+   `add hook` says so — the two messages must not contradict each other. Here the block also names **how to invoke the
+   skill**, in the syntax of each enabled harness — `/<name>` for Claude Code,
+   the `$<name>` token of `default-prompt` for Codex. A harness whose
+   invocation this project has not seen work declares none and is left out: an
+   invocation printed on faith would be worse than silence.
+
+   ```
+   Next steps:
+     write .agents/skills/<name>/SKILL.md  — fill in the frontmatter description and the Objective, Procedure, Verification sections; the .claude/ copy of this skill is generated from it and is never edited by hand
+     /<name> · $<name>                     — invoke it once it says something (claude, codex)
+     npx agentsdir check                   — verify what you wrote, and it names any `sync` you owe (CI runs this)
+   ```
 
 ### Idempotence
 
@@ -294,6 +319,11 @@ npx agentsdir add rule <name> [--paths "<glob>[,<glob>]"] [--hook "<sentence>"]
    `agentsdir:rules-index` of `AGENTS.md`: `\`.agents/rules/<name>.md\` — <quand
    la lire>` (the prompt asks for the reading condition in one sentence, and
    `--hook` answers it without a terminal).
+4. Closes on a **Next steps** block (see `add skill`). It leads with the first
+   line of the rule file, because that is the one thing about a rule nobody
+   guesses: `sync` lifts it into the rules index, so it decides whether an agent
+   opens the rule at all. And the index **already points at it** — until that
+   line is rewritten, every agent is being told when to read a template.
 
 ### Idempotence
 
@@ -324,6 +354,11 @@ the file name — see invariant 14 in [conventions.md](conventions.md)),
 `inherit`), followed by the system prompt. The file is exposed to Claude Code by
 the `.claude/agents` projection; the other harnesses discover it through
 `AGENTS.md`.
+
+Closes on a **Next steps** block (see `add skill`), leading with the
+`description`: it is the field a harness reads to decide whether to delegate,
+and the generated one is generic on purpose. A sub-agent with a vague
+description is never called, and nothing ever says why.
 
 ### Idempotence and exit codes
 
@@ -369,6 +404,18 @@ npx agentsdir add hook <event> [--name <slug>] [--matcher "<pattern>"] [--dry-ru
      `preToolUse` —, flat entries `{command}`, with no matcher: its tool
      vocabulary differs, the script filters by itself).
 4. The invoked command is identical everywhere: `node .agents/hooks/<file>`.
+5. The report names, **per file**, whether it was created or updated: a registry
+   is a file the user also owns, and the two cases are not the same event.
+   It then closes on a **Next steps** block (see `add skill`) saying the two
+   things the file list cannot: the script body is a `TODO` around
+   `process.exit(0)`, so it is registered and **decides nothing** until it is
+   written; and those three files **register** the script rather than copying
+   it — a model the other three generators do not use — with agentsdir writing
+   only its own entries there and leaving everything else in them untouched. It names the script by path and
+   says where its contract lives — stdin, stdout and exit codes are documented
+   in the script's own header, which is the only place a reader of the terminal
+   would not think to look. `check` then runs the script once on a sample
+   payload and holds it to that contract.
 
 ```mermaid
 flowchart LR

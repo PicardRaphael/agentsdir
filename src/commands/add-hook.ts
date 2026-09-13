@@ -19,6 +19,7 @@ import { renderHookScript } from "../templates/hook.js";
 import {
   ensureValidName,
   renderGeneratorReport,
+  type NextStep,
   resyncProjections,
   runGeneratorCli,
   type GeneratorChange,
@@ -29,6 +30,8 @@ import { ensureNoLinkedParent } from "../core/projections.js";
 export const DEFAULT_HOOK_SLUG = "hook";
 
 export interface AddHookResult extends GeneratorResult {
+  /** The script written, so the report can name it instead of saying "the script". */
+  scriptPath: string;
   /** Human notes (partial harness support, dropped Cursor matcher) — stderr, never stdout. */
   warnings: string[];
 }
@@ -123,8 +126,37 @@ export async function runAddHook(
     ],
     exitCode: EXIT_CODES.ok,
     mode: manifest.projections.mode,
+    scriptPath,
     warnings,
   };
+}
+
+/**
+ * What is left after `add hook`, and what the report above does not say.
+ *
+ * Two things surprised a reader of the raw output. The script is registered and
+ * runs from the next session, but its body is a `TODO` around `process.exit(0)`
+ * — it decides nothing, and a user expecting a guard would have none. And the
+ * harness registries are files the user also owns: a line reading `created` or
+ * `updated` beside `.claude/settings.json` says which of the two happened, but
+ * not that agentsdir wrote its own entries there and left everything else
+ * alone.
+ */
+export function hookNextSteps(scriptPath: string): NextStep[] {
+  return [
+    {
+      action: `implement the TODO in ${scriptPath}`,
+      why: "it exits 0 and blocks nothing until you do; the stdin, stdout and exit-code contract is in the script's own header",
+    },
+    {
+      action: "read the registry entries",
+      why: "those files register this script, they are not copies of it; agentsdir wrote only its own entries there and left anything else in them untouched",
+    },
+    {
+      action: "npx agentsdir check",
+      why: "runs the script once on a sample payload and holds it to that contract",
+    },
+  ];
 }
 
 export const addHookCommand = defineCommand({
@@ -179,7 +211,13 @@ export const addHookCommand = defineCommand({
       for (const warning of result.warnings) {
         console.error(warning);
       }
-      return { result, report: renderGeneratorReport(result, { dryRun }) };
+      return {
+        result,
+        report: renderGeneratorReport(result, {
+          dryRun,
+          nextSteps: hookNextSteps(result.scriptPath),
+        }),
+      };
     });
   },
 });

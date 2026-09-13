@@ -110,6 +110,7 @@ Adding a fourth harness is a settled-decision change ([SPEC.md](SPEC.md)), not a
 | `unsupportedEvents` | Canonical names of the events it does not support | `add hook` offers an event the harness will ignore |
 | `eventAliases` | Events it spells neither canonically nor by case | Same as above, for the one event that is renamed outright rather than recased |
 | `projectsFiles` | Whether agentsdir generates files in its directory | A harness with no projections would get a `.claude`-style mirror it never reads, and `check` would then hold it to invariants about files nobody loads |
+| `invocation` | How a user invokes a skill by hand there, with `<name>` for the skill name, or `undefined` when this project has not seen one work | `add skill` closes on an invocation nobody can type — or, with `undefined`, simply leaves that harness out of the line, which is the safe default |
 
 **What you do NOT have to edit**: the twelve entries of `HOOK_EVENTS`. They carry a canonical name and nothing else. Each used to hold one field per harness, which is what made a fourth harness the most expensive change in the CLI — and the reason this was task 19.
 

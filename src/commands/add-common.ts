@@ -1,5 +1,9 @@
 import { mkdir } from "node:fs/promises";
-import { hasFileProjections } from "../core/harnesses.js";
+import {
+  HARNESS_SPECS,
+  HARNESSES,
+  hasFileProjections,
+} from "../core/harnesses.js";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import {
@@ -183,9 +187,64 @@ export function ensureAnswer<T>(value: T | symbol, command: string): T {
   return value as T;
 }
 
+/**
+ * One line of the closing block: what to do, and why in one clause.
+ *
+ * A generator writes a SKELETON. Listing the files it created says the command
+ * worked and nothing about what is left — an agent handed those three lines
+ * with no repository and no documentation could not say what came next, for any
+ * of the four (validation of 2026-09-12, observation 6). So each generator now
+ * names the places to fill, how to run what it made, and the command that
+ * checks it. Two to four lines, on the shape `init` already uses: the point is
+ * that nobody has to open `docs/`, not that everything is said.
+ */
+export interface NextStep {
+  /** The command to run, or the thing to write. */
+  action: string;
+  /** Why it matters, in one clause, without a leading dash. */
+  why: string;
+}
+
+/**
+ * How to invoke a freshly created skill, in the harnesses this repo enabled.
+ *
+ * Built from the declarations, never from a harness name: a repository on
+ * Codex alone must not be told to type a Claude Code slash command. A harness
+ * whose syntax this project has not seen work declares none, and is simply
+ * absent from the line — an invocation printed on faith is worse than silence.
+ */
+export function invocationStep(
+  name: string,
+  enabled: readonly string[],
+): NextStep | undefined {
+  const spellings = HARNESSES.filter((harness) =>
+    enabled.includes(harness),
+  ).flatMap((harness) => {
+    const syntax = HARNESS_SPECS[harness].invocation;
+    return syntax === undefined ? [] : [{ harness, syntax }];
+  });
+  if (spellings.length === 0) {
+    return undefined;
+  }
+  return {
+    action: spellings
+      .map((entry) => entry.syntax.replace("<name>", name))
+      .join(" · "),
+    why: `invoke it once it says something (${spellings.map((entry) => entry.harness).join(", ")})`,
+  };
+}
+
+/** The step every generator ends on: the invariants are the last word. */
+export const CHECK_STEP: NextStep = {
+  action: "npx agentsdir check",
+  // it names the `sync` a copy-mode edit owes, which is the one thing a user
+  // who just edited a source file has no way to know they still owe
+  why: "verify what you wrote, and it names any `sync` you owe (CI runs this)",
+};
+
 export function renderGeneratorReport(
   result: GeneratorResult,
-  options: { dryRun: boolean },
+  options: { dryRun: boolean; nextSteps?: readonly NextStep[] },
 ): string {
   const lines: string[] = [];
   lines.push(
@@ -193,6 +252,17 @@ export function renderGeneratorReport(
   );
   for (const change of result.changes) {
     lines.push(`  ${change.action.padEnd(7)}  ${change.path}`);
+  }
+  // nothing was written, so there is nothing to fill in: a dry run that told
+  // the user to edit a file it did not create would be contradicting itself
+  const steps = options.dryRun ? [] : (options.nextSteps ?? []);
+  if (steps.length > 0) {
+    const width = Math.max(...steps.map((step) => step.action.length));
+    lines.push("");
+    lines.push("Next steps:");
+    for (const step of steps) {
+      lines.push(`  ${step.action.padEnd(width)}  — ${step.why}`);
+    }
   }
   return lines.join("\n");
 }
